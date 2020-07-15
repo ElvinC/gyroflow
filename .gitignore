@@ -1,12 +1,15 @@
 
 # Video and image files for testing
-.mp4
-.AVI
-.png
-.jpg
-.json
-.csv
+*.mp4
+*.AVI
+*.png
+*.jpg
+*.json
+*.csv
 
+# camera preset folder
+!camera_presets/*.json
+!camera_presets/*/*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
