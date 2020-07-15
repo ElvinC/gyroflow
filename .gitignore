@@ -1,3 +1,13 @@
+
+# Video and image files for testing
+.mp4
+.AVI
+.png
+.jpg
+.json
+.csv
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
