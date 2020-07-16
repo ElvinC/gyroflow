@@ -1,7 +1,7 @@
 {
-	"name": "BRAND CAMERA 1920x1440 SETTING",
-	"note": "Optional short description or note or name of calibrator",
-	"gyroflow_version": "0.1",
+	"name": "BRAND CAMERA 4:3 SETTING",
+	"note": "Short optional description, note and/or name of contributer",
+	"calibrator_version": "0.1",
 	"date": "2020-07-15",
 	
 	"calib_dimension": {
@@ -9,13 +9,15 @@
 		"h": 1440
 	},
 
+	"num_images": 10,
+
 	"use_opencv_fisheye": true,
 	"fisheye_params": {
 		"RMS_error": 0.5,
 		"camera_matrix": [
-			[12.3,	0,		12.3],
-			[0,		12.3,	12.3],
-			[0,		0,		1]
+			[12.3, 0, 12.3],
+			[0, 12.3, 12.3],
+			[0, 0, 1]
 		],
 		"distortion_coeffs": [
 			0.123,
@@ -29,9 +31,9 @@
 	"calib_params": {
 		"RMS_error": 0.5,
 		"camera_matrix": [
-			[12.3,	0,		12.3],
-			[0,		12.3,	12.3],
-			[0,		0,		1]
+			[12.3, 0, 12.3],
+			[0, 12.3, 12.3],
+			[0, 0, 1]
 		],
 		"distortion_coeffs": [
 			0.123,

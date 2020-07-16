@@ -70,16 +70,16 @@ rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(N_imgs)]
 tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(N_imgs)]
 
 retval, K, D, rvecs, tvecs = cv2.fisheye.calibrate(objpoints,
-    imgpoints,
-    gray.shape[::-1],
-    K,
-    D,
-    rvecs,
-    tvecs,
-    calibration_flags,
-    (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6))
+        imgpoints,
+        gray.shape[::-1],
+        K,
+        D,
+        rvecs,
+        tvecs,
+        calibration_flags,
+        (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6))
 
-print(D)
+print(K)
 
 balance = 0
 
@@ -92,10 +92,10 @@ scaled_K = K * img_dim[0] / DIM[0]
 scaled_K[2][2] = 1.0  
 
 new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, D,
-    img_dim, np.eye(3), balance=balance)
+    img_dim, np.eye(3), balance=balance,fov_scale=1.2)
 
-new_K[0,0]=new_K[0,0]/2
-new_K[1,1]=new_K[1,1]/2
+#new_K[0,0]=new_K[0,0]/2
+#new_K[1,1]=new_K[1,1]/2
 
 map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 

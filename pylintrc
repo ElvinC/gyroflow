@@ -50,6 +50,9 @@ extension-pkg-whitelist=cv2
 # --disable=W"
 #disable=
 
+# disable space required space after comma
+disable=C0326
+
 
 [REPORTS]
 
