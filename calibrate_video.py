@@ -2,10 +2,11 @@ import json
 from datetime import date
 import numpy as np
 import cv2
+from _version import __version__
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
-__version__ = "0.1"
+import sys
 
 class FisheyeCalibrator:
     """Class for calculating camera matrix and distortion coefficients
@@ -206,6 +207,7 @@ class FisheyeCalibrator:
 
         return undistorted_image
 
+
     def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", note=""):
         """Save camera calibration parameters as JSON file
 
@@ -326,26 +328,27 @@ class FisheyeCalibrator:
 
 
 
-            
 
 
 if __name__ == "__main__":
 
     # test undistort code using images
-    import glob
+    #import glob
     #chessboard_size = (9,6)
     #images = glob.glob('calibrationImg/*.jpg')
 
     
 
-    calibrator = FisheyeCalibrator()
-    calibrator.load_calibration_prompt()
-    calibrator.undistort_image_prompt()
+    #calibrator = FisheyeCalibrator()
+    #calibrator.load_calibration_prompt()
+    #calibrator.undistort_image_prompt()
 
     #for imagepath in images:
     #    image = cv2.imread(imagepath)
 
     #    calibrator.add_calib_image(image)
 
+    #cal = CalibratorUtility()
+    pass
 
     #calibrator.save_calibration_json("lgg6_wide.json", "LG G6 4:3 wide angle", "Calibrated by yours truly")
