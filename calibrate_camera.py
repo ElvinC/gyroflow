@@ -99,6 +99,9 @@ new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, D,
 
 map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 
+print(map1[0,0,:])
+print(map2[0,0])
+
 undistorted_img = cv2.remap(img, map1, map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
 
 #newcameramtx, roi=cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(mtx,dist,(w,h),1,(w,h))
