@@ -14,7 +14,7 @@ class NonlinearStretch:
         self.map2 = np.zeros((out_size[1], out_size[0])) # y coords
 
     def set_safe_area(self, safe_area):
-        self.safe_area = safe_area
+        self.safe_area = min(safe_area, 0.999)
 
     def set_in_size(self, in_size):
         self.in_size = in_size
@@ -107,8 +107,10 @@ if __name__ == "__main__":
 
     width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'MP4V'), 20.0, (1280,720))
+    out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'MP4V'), fps, (1280,720))
     nonlin = NonlinearStretch(out_size=(1280,720))
     nonlin.set_in_size((width, height))
     nonlin.set_safe_area(0.06)
@@ -123,9 +125,9 @@ if __name__ == "__main__":
             cv2.imshow('frame',superview)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        #else:
-            #print("wait")
-            #break
+        else:
+            print(num_frames)
+            break
 
     cap.release()
     out.release()
