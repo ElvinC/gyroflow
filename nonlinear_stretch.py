@@ -99,40 +99,50 @@ class NonlinearStretch:
             cv2.line(out_img,(line2, 0),(line2,out_img.shape[0]),(255,255,0),2)
         return out_img
 
+    def stretch_save_video(self, inpath, outpath = "stretched.mp4"):
+        cap = cv2.VideoCapture(inpath)
+        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        self.set_in_size((width, height))
+        self.recompute_maps()
+        print(self.out_size)
+
+        out = cv2.VideoWriter(outpath, -1, fps, self.out_size)
+
+        # use framecount to prevent weird premature termination bug
+        frame_num = 0
+
+        while(cap.isOpened()):
+            ret, frame = cap.read()
+            frame_num += 1
+            if ret:
+                superview = self.apply_stretch(frame)
+                out.write(superview)
+
+                cv2.imshow('frame',superview)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            elif frame_num > num_frames:
+                break
+
+        cap.release()
+        out.release()
+        cv2.destroyAllWindows()
+            
+
+
+
 
 if __name__ == "__main__":
 
-
-    cap = cv2.VideoCapture("hero5.mp4")
-
-    width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-    height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-
-    out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'MP4V'), fps, (1280,720))
     nonlin = NonlinearStretch(out_size=(1280,720))
-    nonlin.set_in_size((width, height))
-    nonlin.set_safe_area(0.06)
-    nonlin.recompute_maps()
+    nonlin.set_safe_area(0.4)
+    nonlin.set_expo(1)
 
-    while(cap.isOpened()):
-        ret, frame = cap.read()
-        if ret:
-            superview = nonlin.apply_stretch(frame)
-            out.write(superview)
 
-            cv2.imshow('frame',superview)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        else:
-            print(num_frames)
-            break
-
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
-
+    nonlin.stretch_save_video("PICT0053.AVI", "outfile.mp4")
 
     # stretch testframe (4:3) to 16:8 using nonlinear stretch
     #input_img = cv2.imread("testframe.png", cv2.IMREAD_COLOR)

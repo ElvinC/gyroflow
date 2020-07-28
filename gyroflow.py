@@ -4,7 +4,6 @@ import sys
 import random
 import cv2
 from PySide2 import QtCore, QtWidgets, QtGui
-from PySide2.QtMultimediaWidgets import QVideoWidget
 from _version import __version__
 import calibrate_video
 import time
@@ -45,7 +44,7 @@ class Launcher(QtWidgets.QWidget):
         self.layout.addWidget(self.stabilizer_button)
         self.layout.addWidget(self.stretch_button)
         
-        self.layout.addWidget(self.drop)
+        #self.layout.addWidget(self.drop)
         self.setLayout(self.layout)
 
         self.layout.addWidget(self.footer)
@@ -373,9 +372,9 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         # button for recomputing image stretching maps
         self.export_button = QtWidgets.QPushButton("Export video")
-        self.export_button.clicked.connect(self.recompute_stretch)
+        self.export_button.clicked.connect(self.export_video)
         
-        self.stretch_controls_layout.addWidget(self.recompute_stretch_button)
+        self.stretch_controls_layout.addWidget(self.export_button)
 
         # add control bar to main layout
         self.layout.addWidget(self.stretch_controls)
@@ -384,6 +383,8 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.open_file = QtWidgets.QAction(QtGui.QIcon('exit24.png'), 'Open file', self)
         self.open_file.setShortcut("Ctrl+O")
         self.open_file.triggered.connect(self.open_file_func)
+
+        self.infile_path = ""
 
         self.statusBar()
 
@@ -400,10 +401,9 @@ class StretchUtility(QtWidgets.QMainWindow):
 
     def open_file_func(self):
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
-        #print(path[0])
+        self.infile_path = path[0]
         self.video_viewer.set_video_path(path[0])
 
-        
 
         # recompute non linear stretch maps
         self.recompute_stretch()
@@ -441,7 +441,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         # if checked show safe area
         if self.show_safe_check.isChecked():
             midpoint = self.nonlin.out_size[0] / 2
-            safe_dist = self.nonlin.safe_area * self.video_viewer.frame_width / 2
+            safe_dist = self.nonlin.safe_area * self.nonlin.out_size[0] / 2
             line1 = int(midpoint + safe_dist)
             line2 = int(midpoint - safe_dist)
 
@@ -450,11 +450,36 @@ class StretchUtility(QtWidgets.QMainWindow):
         
         self.video_viewer.update_frame()
 
+    def export_video(self):
+        # no input file opened
+        if self.infile_path == "":
+            self.show_error("No video file loaded")
+            return
+
+        self.video_viewer.stop()
+
+        # get file
+
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="Video (*.mp4 *.avi, *.mov)")
+        print(filename[0])
+
+        if len(filename) == 0:
+            self.show_error("No output chosen")
+            return
+        
+        self.nonlin.stretch_save_video(self.infile_path, filename[0])
+
+    def show_error(msg):
+        err_window = QtWidgets.QMessageBox(self)
+        err_window.setIcon(QtWidgets.QMessageBox.Critical)
+        err_window.setText(msg)
+        err_window.setWindowTitle("Something's gone awry")
+        err_window.show()
 
 def main():
     app = QtWidgets.QApplication([])
 
-    widget = StretchUtility()
+    widget = Launcher()
     widget.resize(500, 500)
     import time
 
@@ -467,3 +492,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Pack to exe using:
+    # pyinstaller gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll
+    # in my case:
+    # pyinstaller -F gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll;.
+    # -F == one file, -w == no command window
