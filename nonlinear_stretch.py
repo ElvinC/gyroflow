@@ -70,7 +70,7 @@ class NonlinearStretch:
         self.map2 = self.map2 / vertical_scale - 0.5
 
 
-    def compute_remap_val(tx, target_width, src_width, safe_area = 0.0, expo = 5):
+    def compute_remap_val(self, tx, target_width, src_width, safe_area = 0.0, expo = 5):
         x = (float(tx)/ target_width - 0.5) * 2
 
         blanking = (target_width - src_width) / 2

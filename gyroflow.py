@@ -53,9 +53,6 @@ class Launcher(QtWidgets.QWidget):
         self.stabilizer_button.clicked.connect(self.open_stab_util)
         self.stretch_button.clicked.connect(self.open_stretch_util)
 
-
-
-
         # Placeholder for utility windows.
         self.calibrator_utility = None
         self.stabilizer_utility = None
@@ -69,6 +66,7 @@ class Launcher(QtWidgets.QWidget):
                 return
         
         self.calibrator_utility = CalibratorWidget()
+        self.calibrator_utility.resize(500, 500)
         self.calibrator_utility.show()
 
     def open_stab_util(self):
@@ -81,6 +79,7 @@ class Launcher(QtWidgets.QWidget):
                 return
         
         self.stretch_utility = StretchUtility()
+        self.stretch_utility.resize(500, 500)
         self.stretch_utility.show()
 
     def what(self):
@@ -119,6 +118,9 @@ class VideoThread(QtCore.QThread):
             elif self.update_once:
                 self.update_once = False
                 self.update_frame()
+
+            else:
+                time.sleep(1/10)
 
 
     def update_frame(self):
@@ -257,12 +259,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
         self.calibrator_button.setMinimumSize(300,50)
         self.calibrator_button.setToolTip("Use this to generate camera calibration files")
-        #self.calibrator_button.clicked.connect(self.toggle_play)
-
-
-        #self.text = QtWidgets.QLabel("<h1>Calibrator</h1>")
-        #self.text.setAlignment(QtCore.Qt.AlignCenter)
-
         
         self.video_viewer = VideoPlayerWidget()
         self.layout.addWidget(self.video_viewer)
@@ -364,6 +360,27 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         self.stretch_controls_layout.addWidget(self.show_safe_check)
 
+        # output size choice
+        self.out_size_text = QtWidgets.QLabel("Output size: ")
+        self.stretch_controls_layout.addWidget(self.out_size_text)
+
+        self.out_width_control = QtWidgets.QSpinBox(self)
+        self.out_width_control.setMinimum(16)
+        self.out_width_control.setMaximum(7680) # 8K max is probably fine
+        self.out_width_control.setValue(1920)
+        self.out_width_control.valueChanged.connect(self.update_out_size)
+
+        self.stretch_controls_layout.addWidget(self.out_width_control)       
+
+        # output size choice
+        self.out_height_control = QtWidgets.QSpinBox(self)
+        self.out_height_control.setMinimum(9)
+        self.out_height_control.setMaximum(4320)
+        self.out_height_control.setValue(1080)
+        self.out_height_control.valueChanged.connect(self.update_out_size)
+
+        self.stretch_controls_layout.addWidget(self.out_height_control)   
+
         # button for recomputing image stretching maps
         self.recompute_stretch_button = QtWidgets.QPushButton("Apply settings")
         self.recompute_stretch_button.clicked.connect(self.recompute_stretch)
@@ -427,6 +444,10 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.nonlin.set_expo(stretch_expo_val)
         self.expo_text.setText("Stretch expo ({}):".format(stretch_expo_val))
 
+    def update_out_size(self):
+        print(self.out_width_control.value())
+        self.nonlin.set_out_size((self.out_width_control.value(), self.out_height_control.value()))
+
     def recompute_stretch(self):
         self.nonlin.set_in_size((self.video_viewer.frame_width, self.video_viewer.frame_height))
         self.nonlin.recompute_maps()
@@ -463,18 +484,19 @@ class StretchUtility(QtWidgets.QMainWindow):
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="Video (*.mp4 *.avi, *.mov)")
         print(filename[0])
 
-        if len(filename) == 0:
-            self.show_error("No output chosen")
+        if len(filename[0]) == 0:
+            self.show_error("No output file given")
             return
         
         self.nonlin.stretch_save_video(self.infile_path, filename[0])
 
-    def show_error(msg):
+    def show_error(self, msg):
         err_window = QtWidgets.QMessageBox(self)
         err_window.setIcon(QtWidgets.QMessageBox.Critical)
         err_window.setText(msg)
         err_window.setWindowTitle("Something's gone awry")
         err_window.show()
+
 
 def main():
     app = QtWidgets.QApplication([])
