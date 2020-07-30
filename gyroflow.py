@@ -89,11 +89,20 @@ class Launcher(QtWidgets.QWidget):
 
 class VideoThread(QtCore.QThread):
     changePixmap = QtCore.Signal(QtGui.QImage)
-    playing = False
-    update_once = False
-    next_frame = False
 
+    def __init__(self, parent, frame_pos_update = None):
+        """Video Thread
 
+        Args:
+            parent ([type]):
+            frame_pos_update (function, optional): Function to call for frame num update. Defaults to None.
+        """
+        super().__init__(parent)
+
+        self.playing = False
+        self.update_once = False
+        self.next_frame = False
+        self.frame_pos_update = frame_pos_update
 
     def run(self):
 
@@ -115,6 +124,7 @@ class VideoThread(QtCore.QThread):
                     time.sleep(1/24)
                     self.update_frame()
 
+
             elif self.update_once:
                 self.update_once = False
                 self.update_frame()
@@ -125,7 +135,7 @@ class VideoThread(QtCore.QThread):
 
     def update_frame(self):
 
-        if self.frame is None :
+        if self.frame is None:
             self.next_frame
             return
 
@@ -143,6 +153,11 @@ class VideoThread(QtCore.QThread):
         bytesPerLine = ch * w
         convertToQtFormat = QtGui.QImage(rgbImage.data, w, h, bytesPerLine, QtGui.QImage.Format_RGB888)
         self.changePixmap.emit(convertToQtFormat.copy())
+
+        this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        if this_frame_num % 5 == 0 and self.frame_pos_update:
+            self.frame_pos_update(this_frame_num)
+
 
 
 # based on https://robonobodojo.wordpress.com/2018/07/01/automatic-image-sizing-with-pyside/
@@ -186,7 +201,24 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.play_button = QtWidgets.QPushButton("Play")
         self.play_button.clicked.connect(self.toggle_play)
 
+
+        # seek bar with value from 0-200
         self.time_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.time_slider.setMinimum(0)
+        self.time_slider.setValue(0)
+
+        self.seek_ticks = 200
+        self.time_slider.setMaximum(self.seek_ticks)
+        self.time_slider.setSingleStep(1)
+        self.time_slider.setTickInterval(1)
+
+        self.time_slider.valueChanged.connect(self.seek)
+        self.time_slider.sliderPressed.connect(self.start_seek)
+        self.time_slider.sliderReleased.connect(self.stop_seek)
+
+        self.is_seeking = False
+        self.was_playing_before = False
+        self.last_seek_time = time.time()
 
         self.control_layout.addWidget(self.play_button)
         self.control_layout.addWidget(self.time_slider)
@@ -195,9 +227,11 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
         self.frame_width = 1920 # placeholder
         self.frame_height = 1080
+        self.num_frames = 0
         
 
-        self.thread = VideoThread(self)
+        # initialize thread for video player with frame update function
+        self.thread = VideoThread(self, self.set_seek_frame)
         self.thread.changePixmap.connect(self.setImage)
         self.thread.start()
         
@@ -226,6 +260,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.thread.cap = cv2.VideoCapture(path)
         self.frame_width = self.thread.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         self.frame_height = self.thread.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.num_frames = self.thread.cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
     def reset_maps(self):
         self.thread.map1s = []
@@ -243,6 +278,63 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
     def update_frame(self):
         self.thread.update_once = True
+    
+    def next_frame(self):
+        self.thread.next_frame = True
+
+    def start_seek(self):
+        self.is_seeking = True
+        self.was_playing_before = self.thread.playing
+        self.stop()
+    
+    def stop_seek(self):
+        self.is_seeking = False
+
+        self.seek()
+
+    def seek(self):
+        # only update when not dragging:
+        #if self.is_seeking:
+        #    return
+
+        # prevent video overread using 0.2 sec cooldown
+        timenow = time.time()
+        if (timenow - self.last_seek_time) < 0.2:
+            return
+
+        self.last_seek_time = timenow
+
+        was_playing = self.thread.playing
+        if was_playing:
+            self.stop()
+        print(self.time_slider.value())
+        selected_frame = int(self.num_frames * self.time_slider.value() / self.seek_ticks)
+        print(selected_frame)
+        self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, selected_frame)
+        
+        # restart if it was playing
+        if (was_playing or self.was_playing_before) and not self.is_seeking:
+            self.play()
+        else:
+            self.next_frame()
+
+        
+    def set_seek_frame(self, frame_pos):
+        """Set the seek bar position to match frame
+
+        Args:
+            frame (int): Frame number
+        """
+
+        # only update when slider not in use
+        if self.is_seeking:
+            return
+
+        slider_val = int(frame_pos * self.seek_ticks / self.num_frames)
+        # update slider without triggering valueChange
+        self.time_slider.blockSignals(True)
+        self.time_slider.setValue(slider_val)
+        self.time_slider.blockSignals(False)
 
 
 class CalibratorUtility(QtWidgets.QMainWindow):
@@ -481,7 +573,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         # get file
 
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="Video (*.mp4 *.avi, *.mov)")
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="mp4 (*.mp4);; Quicktime (*.mov)")
         print(filename[0])
 
         if len(filename[0]) == 0:
