@@ -1,10 +1,13 @@
 #from matplotlib import pyplot as plt
-import numpy as np
 import math
+import numpy as np
 import cv2
 
 class NonlinearStretch:
+    """Class for nonlinear stretching of images using cv2 maps
+    """
     def __init__(self, in_size = (12,9), out_size = (16,9), safe_area = 0, expo = 2):
+
         self.in_size = in_size
         self.out_size = out_size
         self.safe_area = safe_area
@@ -14,12 +17,27 @@ class NonlinearStretch:
         self.map2 = np.zeros((out_size[1], out_size[0])) # y coords
 
     def set_safe_area(self, safe_area):
+        """Set untouched safe area
+
+        Args:
+            safe_area (float): Safe area (0-1)
+        """
         self.safe_area = min(safe_area, 0.999)
 
     def set_in_size(self, in_size):
+        """Set image input size
+
+        Args:
+            in_size (int, int): (width, height)
+        """
         self.in_size = in_size
 
-    def set_expo(self, expo):
+    def set_expo(self, expo = 2):
+        """Set nonlinear stretch expo
+
+        Args:
+            expo (float): Default value of 2 works fine
+        """
         # expo<1: Gets real weird
         # expo=1: Linear stretch
         # expo=2: Similar to superview
@@ -28,11 +46,19 @@ class NonlinearStretch:
         self.expo = expo
 
     def set_out_size(self, out_size):
+        """Set image output size
+
+        Args:
+            in_size (int, int): (width, height)
+        """
         self.out_size = out_size
         self.map1 = np.zeros((out_size[1], out_size[0]))
         self.map2 = np.zeros((out_size[1], out_size[0]))
 
     def recompute_maps(self):
+        """Recompute image maps for the nonlinear stretch operation
+           required after any changes to parameters of image sizes
+        """
         vertical_scale = self.out_size[1] / self.in_size[1] # Image scaling to match height
 
         # width of side pillar with no stretching (source image scale)
@@ -88,6 +114,15 @@ class NonlinearStretch:
 
 
     def apply_stretch(self, img, show_protected = False):
+        """Apply nonlinear stretch to cv2 image
+
+        Args:
+            img (np.ndarray): cv2 image
+            show_protected (bool, optional): Show safe area. Defaults to False.
+
+        Returns:
+            np.ndarray: cv2 image
+        """
         out_img = cv2.remap(img, self.map1.astype('float32'), self.map2.astype('float32'), cv2.INTER_CUBIC )
 
         if show_protected:
@@ -100,6 +135,12 @@ class NonlinearStretch:
         return out_img
 
     def stretch_save_video(self, inpath, outpath = "stretched.mp4"):
+        """Load, stretch, and save video
+
+        Args:
+            inpath (string): Input file path
+            outpath (str, optional): Output file path. Defaults to "stretched.mp4".
+        """
         cap = cv2.VideoCapture(inpath)
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
