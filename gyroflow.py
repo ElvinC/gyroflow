@@ -9,6 +9,82 @@ import calibrate_video
 import time
 import nonlinear_stretch
 
+class Launcher(QtWidgets.QWidget):
+    """Main launcher with options to open different utilities
+    """
+    def __init__(self):
+
+        super().__init__()
+
+        self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
+
+        self.setFixedWidth(450)
+
+        self.hello = ["Hai", "Hello there", "What's up", "Hello world"]
+
+        self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
+        self.calibrator_button.setMinimumSize(300,50)
+        self.calibrator_button.setToolTip("Use this to generate camera calibration files")
+
+        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer")
+        self.stabilizer_button.setMinimumSize(300,50)
+
+        self.stretch_button = QtWidgets.QPushButton("Nonlinear Stretch")
+        self.stretch_button.setMinimumSize(300,50)
+
+        self.text = QtWidgets.QLabel("<h1>Gyroflow {}</h1>".format(__version__))
+        self.text.setAlignment(QtCore.Qt.AlignCenter)
+
+        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Contribute or support on Github</a>''')
+        self.footer.setOpenExternalLinks(True)
+        self.layout = QtWidgets.QVBoxLayout()
+        self.layout.addWidget(self.text)
+        self.layout.addWidget(self.calibrator_button)
+        self.layout.addWidget(self.stabilizer_button)
+        self.layout.addWidget(self.stretch_button)
+        
+        self.setLayout(self.layout)
+
+        self.layout.addWidget(self.footer)
+
+        self.calibrator_button.clicked.connect(self.open_calib_util)
+        self.stabilizer_button.clicked.connect(self.open_stab_util)
+        self.stretch_button.clicked.connect(self.open_stretch_util)
+
+        # Placeholder for utility windows.
+        self.calibrator_utility = None
+        self.stabilizer_utility = None
+        self.stretch_utility = None
+
+    def open_calib_util(self):
+        """Open the camera calibration utility in a new window
+        """
+
+        # Only open if not already open
+        if self.calibrator_utility:
+            if self.calibrator_utility.isVisible():
+                return
+        
+        self.calibrator_utility = CalibratorUtility()
+        self.calibrator_utility.resize(500, 500)
+        self.calibrator_utility.show()
+
+    def open_stab_util(self):
+        pass
+
+    def open_stretch_util(self):
+        """Open non-linear stretch utility in new window
+        """
+        # Only open if not already open
+        if self.stretch_utility:
+            if self.calibrator_utility.isVisible():
+                return
+        
+        self.stretch_utility = StretchUtility()
+        self.stretch_utility.resize(500, 500)
+        self.stretch_utility.show()
+
+
 class VideoThread(QtCore.QThread):
     changePixmap = QtCore.Signal(QtGui.QImage)
 
@@ -31,11 +107,15 @@ class VideoThread(QtCore.QThread):
         # Draw vertical lines at given coords
         self.vert_line_coords = []
 
+        self.cap = None
+        self.frame = None
+
+        # used for scaling
+        self.max_width = 1280
+
     def run(self):
 
-        self.cap = cv2.VideoCapture("chessboard.mp4")
-
-        self.frame = None
+        self.cap = cv2.VideoCapture()
 
         while True:
             if self.playing or self.next_frame:
@@ -59,7 +139,6 @@ class VideoThread(QtCore.QThread):
         """
 
         if self.frame is None:
-            self.next_frame
             return
 
         # https://stackoverflow.com/a/55468544/6622587
@@ -71,6 +150,10 @@ class VideoThread(QtCore.QThread):
             
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
+
+        if rgbImage.shape[1] > self.max_width:
+            new_height = int(self.max_width/rgbImage.shape[1] * rgbImage.shape[0])
+            rgbImage = cv2.resize(rgbImage, (self.max_width, new_height))
 
         h, w, ch = rgbImage.shape
         bytesPerLine = ch * w
@@ -258,11 +341,15 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         if self.is_seeking:
             return
 
-        slider_val = int(frame_pos * self.seek_ticks / self.num_frames)
+
+        slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
         # update slider without triggering valueChange
         self.time_slider.blockSignals(True)
         self.time_slider.setValue(slider_val)
         self.time_slider.blockSignals(False)
+
+    def destroy_thread(self):
+        self.thread.terminate()
 
 
 class CalibratorUtility(QtWidgets.QMainWindow):
@@ -274,30 +361,51 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         # Initialize UI
         self.setWindowTitle("Gyroflow Calibrator {}".format(__version__))
 
+
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QVBoxLayout()
         self.main_widget.setLayout(self.layout)
 
-        self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
-        self.calibrator_button.setMinimumSize(300,50)
-        self.calibrator_button.setToolTip("Use this to generate camera calibration files")
-        
+        # video player with controls
         self.video_viewer = VideoPlayerWidget()
         self.layout.addWidget(self.video_viewer)
 
-
-        # control bar init
-
-        self.add_frame_button = QtWidgets.QPushButton("Analyze current frame")
-        
-        #self.layout.addWidget(self.text)
-        self.layout.addWidget(self.calibrator_button)
-
         self.setCentralWidget(self.main_widget)
 
+        # control buttons for stretching [Safe area slider] [expo slider] [X]View safe area [recompute maps] [render to file]
+        self.calib_controls = QtWidgets.QWidget()
+        self.calib_controls_layout = QtWidgets.QHBoxLayout()
+        self.calib_controls.setLayout(self.calib_controls_layout)
+
+        self.button_height = 40
+
+        # button for recomputing image stretching maps
+        self.add_frame_button = QtWidgets.QPushButton("Add current frame")
+        self.add_frame_button.setMinimumHeight(self.button_height)
+        self.add_frame_button.clicked.connect(self.add_current_frame)
+        
+        self.calib_controls_layout.addWidget(self.add_frame_button)
+
+        # info text box
+        self.info_text = QtWidgets.QLabel("Calibration info")
+        self.calib_controls_layout.addWidget(self.info_text)
+
+        # button for recomputing image stretching maps
+        self.export_button = QtWidgets.QPushButton("Export preset file")
+        self.export_button.setMinimumHeight(self.button_height)
+        self.export_button.clicked.connect(self.save_preset_file)
+        
+        self.calib_controls_layout.addWidget(self.export_button)
+
+        # add control bar to main layout
+        self.layout.addWidget(self.calib_controls)
+
+        # file menu setup
         self.open_file = QtWidgets.QAction(QtGui.QIcon('exit24.png'), 'Open file', self)
         self.open_file.setShortcut("Ctrl+O")
         self.open_file.triggered.connect(self.open_file_func)
+
+        self.infile_path = ""
 
         self.statusBar()
 
@@ -309,25 +417,29 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.main_widget.show()
 
+
     def open_file_func(self):
         """Open file using Qt filedialog
         """
-        #print("HEY")
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi, *.mov)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
+        self.infile_path = path[0]
         self.video_viewer.set_video_path(path[0])
-        self.video_viewer.update_frame()
-        print(path[0])
+
+        self.video_viewer.next_frame()
 
     def closeEvent(self, event):
-        print("Closing")
+        print("Closing now")
+        self.video_viewer.destroy_thread()
         event.accept()
 
 
     def save_preset_file(self):
         """save camera preset file
         """
-        # TODO
-        pass
+        print("Exporting preset")
+
+    def add_current_frame(self):
+        print("Adding frame")
 
 
 
@@ -456,12 +568,13 @@ class StretchUtility(QtWidgets.QMainWindow):
         # recompute non linear stretch maps
         self.recompute_stretch()
 
-        self.video_viewer.play()
+        self.video_viewer.next_frame()
 
         
 
     def closeEvent(self, event):
-        print("Closing")
+        print("Closing now")
+        self.video_viewer.destroy_thread()
         event.accept()
 
     def safe_area_changed(self):
@@ -541,82 +654,6 @@ class StretchUtility(QtWidgets.QMainWindow):
         err_window.setWindowTitle("Something's gone awry")
         err_window.show()
 
-
-
-class Launcher(QtWidgets.QWidget):
-    """Main launcher with options to open different utilities
-    """
-    def __init__(self):
-
-        super().__init__()
-
-        self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
-
-        self.setFixedWidth(450)
-
-        self.hello = ["Hai", "Hello there", "What's up", "Hello world"]
-
-        self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
-        self.calibrator_button.setMinimumSize(300,50)
-        self.calibrator_button.setToolTip("Use this to generate camera calibration files")
-
-        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer")
-        self.stabilizer_button.setMinimumSize(300,50)
-
-        self.stretch_button = QtWidgets.QPushButton("Nonlinear Stretch")
-        self.stretch_button.setMinimumSize(300,50)
-
-        self.text = QtWidgets.QLabel("<h1>Gyroflow {}</h1>".format(__version__))
-        self.text.setAlignment(QtCore.Qt.AlignCenter)
-
-        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Contribute or support on Github</a>''')
-        self.footer.setOpenExternalLinks(True)
-        self.layout = QtWidgets.QVBoxLayout()
-        self.layout.addWidget(self.text)
-        self.layout.addWidget(self.calibrator_button)
-        self.layout.addWidget(self.stabilizer_button)
-        self.layout.addWidget(self.stretch_button)
-        
-        self.setLayout(self.layout)
-
-        self.layout.addWidget(self.footer)
-
-        self.calibrator_button.clicked.connect(self.open_calib_util)
-        self.stabilizer_button.clicked.connect(self.open_stab_util)
-        self.stretch_button.clicked.connect(self.open_stretch_util)
-
-        # Placeholder for utility windows.
-        self.calibrator_utility = None
-        self.stabilizer_utility = None
-        self.stretch_utility = None
-
-    def open_calib_util(self):
-        """Open the camera calibration utility in a new window
-        """
-
-        # Only open if not already open
-        if self.calibrator_utility:
-            if self.calibrator_utility.isVisible():
-                return
-        
-        self.calibrator_utility = CalibratorWidget()
-        self.calibrator_utility.resize(500, 500)
-        self.calibrator_utility.show()
-
-    def open_stab_util(self):
-        pass
-
-    def open_stretch_util(self):
-        """Open non-linear stretch utility in new window
-        """
-        # Only open if not already open
-        if self.stretch_utility:
-            if self.calibrator_utility.isVisible():
-                return
-        
-        self.stretch_utility = StretchUtility()
-        self.stretch_utility.resize(500, 500)
-        self.stretch_utility.show()
 
 
 def main():
