@@ -95,6 +95,10 @@ class NonlinearStretch:
         # scale and fix offset
         self.map2 = self.map2 / vertical_scale - 0.5
 
+        # convert to datatype supported by opencv
+        self.map1 = self.map1.astype('float32')
+        self.map2 = self.map2.astype('float32')
+
 
     def compute_remap_val(self, tx, target_width, src_width, safe_area = 0.0, expo = 5):
         x = (float(tx)/ target_width - 0.5) * 2

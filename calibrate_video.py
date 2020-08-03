@@ -25,8 +25,7 @@ class FisheyeCalibrator:
         self.calib_criteria = (cv2.TERM_CRITERIA_EPS +
                                cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
 
-        self.calibration_flags = (cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC +
-                                  cv2.fisheye.CALIB_CHECK_COND +
+        self.calibration_flags = (cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC + # cv2.fisheye.CALIB_CHECK_COND +
                                   cv2.fisheye.CALIB_FIX_SKEW)
 
         # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
@@ -104,6 +103,14 @@ class FisheyeCalibrator:
         #cv2.waitKey(500)
 
         return (True, "Image processed and added", corners2)
+
+    def remove_calib_image(self):
+        """Remove last added calibration image
+        """
+        if self.num_images > 0:
+            self.objpoints.pop(-1)
+            self.imgpoints.pop(-1)
+            self.num_images -= 1
 
     def compute_calibration(self):
         """Compute camera calibration from loaded images
@@ -206,6 +213,15 @@ class FisheyeCalibrator:
                                       borderMode=cv2.BORDER_CONSTANT)
 
         return undistorted_image
+
+    def get_maps(self, fov_scale = 1.0):
+
+        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(self.K, self.D,
+                self.calib_dimension, np.eye(3), fov_scale=fov_scale)
+
+        map1, map2 = cv2.fisheye.initUndistortRectifyMap(self.K, self.D, np.eye(3), new_K, self.calib_dimension, cv2.CV_16SC2)
+
+        return map1, map2
 
 
     def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", note=""):

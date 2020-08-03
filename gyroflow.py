@@ -146,7 +146,7 @@ class VideoThread(QtCore.QThread):
 
         for i in range(len(self.map1s)):
             # apply the maps using linear interpolation for now
-            rgbImage = cv2.remap(rgbImage, self.map1s[i].astype('float32'), self.map2s[i].astype('float32'), cv2.INTER_LINEAR)
+            rgbImage = cv2.remap(rgbImage, self.map1s[i], self.map2s[i], cv2.INTER_LINEAR)
             
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
@@ -379,6 +379,8 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.button_height = 40
 
+        self.calib_msg = ""
+
         # button for recomputing image stretching maps
         self.add_frame_button = QtWidgets.QPushButton("Add current frame")
         self.add_frame_button.setMinimumHeight(self.button_height)
@@ -386,9 +388,31 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         
         self.calib_controls_layout.addWidget(self.add_frame_button)
 
+        # button for recomputing image stretching maps
+        self.del_frame_button = QtWidgets.QPushButton("Remove last frame")
+        self.del_frame_button.setMinimumHeight(self.button_height)
+        self.del_frame_button.clicked.connect(self.remove_frame)
+        
+        self.calib_controls_layout.addWidget(self.del_frame_button)
+
+        # button for recomputing image stretching maps
+        self.process_frames_btn = QtWidgets.QPushButton("Process loaded frames")
+        self.process_frames_btn.setMinimumHeight(self.button_height)
+        self.process_frames_btn.setEnabled(False)
+        self.process_frames_btn.clicked.connect(self.calibrate_frames)
+        self.calib_controls_layout.addWidget(self.process_frames_btn)
+
         # info text box
-        self.info_text = QtWidgets.QLabel("Calibration info")
+        self.info_text = QtWidgets.QLabel("No frames loaded")
         self.calib_controls_layout.addWidget(self.info_text)
+
+        # checkbox to preview lens distortion correction
+        self.preview_toggle_btn = QtWidgets.QCheckBox("Toggle lens correction: ")
+        self.preview_toggle_btn.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.preview_toggle_btn.stateChanged.connect(self.update_preview)
+        self.preview_toggle_btn.setEnabled(False)
+
+        self.calib_controls_layout.addWidget(self.preview_toggle_btn)
 
         # button for recomputing image stretching maps
         self.export_button = QtWidgets.QPushButton("Export preset file")
@@ -417,6 +441,9 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.main_widget.show()
 
+        # initialize instance of calibrator class
+        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=(9,6))
+
 
     def open_file_func(self):
         """Open file using Qt filedialog
@@ -426,6 +453,11 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.video_viewer.set_video_path(path[0])
 
         self.video_viewer.next_frame()
+
+        # reset calibrator and info
+        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=(9,6))
+        self.update_calib_info()
+
 
     def closeEvent(self, event):
         print("Closing now")
@@ -440,6 +472,50 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
     def add_current_frame(self):
         print("Adding frame")
+
+        ret, self.calib_msg, corners = self.calibrator.add_calib_image(self.video_viewer.thread.frame)
+
+        self.update_calib_info()
+
+        if self.calibrator.num_images > 0:
+            self.process_frames_btn.setEnabled(True)
+
+    def remove_frame(self):
+        self.calibrator.remove_calib_image()
+
+        self.update_calib_info()
+
+        
+
+    def update_calib_info(self):
+        txt = "Good frames: {}\nProcessed frames: {}\nRMS error: {}\n{}".format(self.calibrator.num_images,
+                                                                                self.calibrator.num_images_used,
+                                                                                self.calibrator.RMS_error,
+                                                                                self.calib_msg)
+
+        self.info_text.setText(txt)
+
+        if (self.calibrator.num_images == 0):
+            self.process_frames_btn.setEnabled(True)
+            self.preview_toggle_btn.setEnabled(True)
+
+    def calibrate_frames(self):
+        self.calibrator.compute_calibration()
+        self.update_calib_info()
+        self.preview_toggle_btn.setEnabled(True)
+        self.update_preview()
+
+
+
+    def update_preview(self):
+        self.video_viewer.reset_maps()
+        if self.preview_toggle_btn.isChecked():
+            map1, map2 = self.calibrator.get_maps(fov_scale=1.4)
+            self.video_viewer.add_maps(map1, map2)
+
+        self.video_viewer.update_frame()
+
+
 
 
 
