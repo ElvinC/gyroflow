@@ -216,8 +216,10 @@ class FisheyeCalibrator:
 
     def get_maps(self, fov_scale = 1.0):
 
+
         new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(self.K, self.D,
                 self.calib_dimension, np.eye(3), fov_scale=fov_scale)
+
 
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(self.K, self.D, np.eye(3), new_K, self.calib_dimension, cv2.CV_16SC2)
 
@@ -296,8 +298,11 @@ class FisheyeCalibrator:
                     print("Warning: Versions don't match. Calibrator: {}, Preset: {}"
                         .format(__version__, presets["calibrator_version"]))
 
-                self.calib_dimension[0] = presets["calib_dimension"]["w"]
-                self.calib_dimension[1] = presets["calib_dimension"]["h"]
+                width = presets["calib_dimension"]["w"]
+                height = presets["calib_dimension"]["h"]
+
+                self.calib_dimension = (width, height)
+
                 self.num_images = self.num_images_used = presets["num_images"]
 
                 self.RMS_error = presets["fisheye_params"]["RMS_error"]

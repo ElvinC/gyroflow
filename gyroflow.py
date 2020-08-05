@@ -425,17 +425,28 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.layout.addWidget(self.calib_controls)
 
         # file menu setup
-        self.open_file = QtWidgets.QAction(QtGui.QIcon('exit24.png'), 'Open file', self)
+        menubar = self.menuBar()
+        filemenu = menubar.addMenu('&File')
+
+        # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
+
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
+        self.open_file = QtWidgets.QAction(icon, 'Open file', self)
         self.open_file.setShortcut("Ctrl+O")
         self.open_file.triggered.connect(self.open_file_func)
+        filemenu.addAction(self.open_file)
 
-        self.infile_path = ""
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
+        self.open_preset = QtWidgets.QAction(icon, 'Open calibration preset', self)
+        self.open_preset.triggered.connect(self.open_preset_func)
+        filemenu.addAction(self.open_preset)
+
+
 
         self.statusBar()
 
-        menubar = self.menuBar()
-        filemenu = menubar.addMenu('&File')
-        filemenu.addAction(self.open_file)
+        self.infile_path = ""
+
 
         self.show()
 
@@ -458,6 +469,18 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=(9,6))
         self.update_calib_info()
 
+    def open_preset_func(self):
+        """Load in calibration preset
+        """
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="JSON preset (*.json)")
+
+        if (len(path) == 0):
+            print("No file selected")
+            return
+
+        self.calibrator.load_calibration_json(path[0])
+
+        self.update_calib_info()
 
     def closeEvent(self, event):
         print("Closing now")
@@ -469,6 +492,22 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         """save camera preset file
         """
         print("Exporting preset")
+
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", filter="JSON preset (*.json)")
+        print(filename[0])
+
+        if len(filename[0]) == 0:
+            self.show_error("No output file given")
+            return
+
+        self.calibrator.save_calibration_json(filename[0])
+
+    def show_error(self, msg):
+        err_window = QtWidgets.QMessageBox(self)
+        err_window.setIcon(QtWidgets.QMessageBox.Critical)
+        err_window.setText(msg)
+        err_window.setWindowTitle("Something's gone awry")
+        err_window.show()
 
     def add_current_frame(self):
         print("Adding frame")
@@ -492,12 +531,17 @@ class CalibratorUtility(QtWidgets.QMainWindow):
                                                                                 self.calibrator.num_images_used,
                                                                                 self.calibrator.RMS_error,
                                                                                 self.calib_msg)
-
-        self.info_text.setText(txt)
-
-        if (self.calibrator.num_images == 0):
+            
+        # enable/disable buttons
+        if self.calibrator.num_images > 0:
             self.process_frames_btn.setEnabled(True)
+        else:
+            self.process_frames_btn.setEnabled(False)
+ 
+        if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
+        else:
+            self.preview_toggle_btn.setEnabled(False)
 
     def calibrate_frames(self):
         self.calibrator.compute_calibration()
@@ -614,17 +658,23 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.layout.addWidget(self.stretch_controls)
 
         # file menu setup
-        self.open_file = QtWidgets.QAction(QtGui.QIcon('exit24.png'), 'Open file', self)
+        menubar = self.menuBar()
+        filemenu = menubar.addMenu('&File')
+
+        # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
+
+        self.open_file = QtWidgets.QAction(icon, 'Open file', self)
         self.open_file.setShortcut("Ctrl+O")
         self.open_file.triggered.connect(self.open_file_func)
+        filemenu.addAction(self.open_file)
 
-        self.infile_path = ""
 
         self.statusBar()
 
-        menubar = self.menuBar()
-        filemenu = menubar.addMenu('&File')
-        filemenu.addAction(self.open_file)
+        self.infile_path = ""
+
+        
 
         self.show()
 
