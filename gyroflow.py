@@ -406,6 +406,23 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.info_text = QtWidgets.QLabel("No frames loaded")
         self.calib_controls_layout.addWidget(self.info_text)
 
+        self.fov_scale = 1.4
+        
+        # slider for adjusting FOV
+        self.fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.fov_scale))
+        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_slider.setMinimum(10)
+        self.fov_slider.setValue(14)
+        self.fov_slider.setMaximum(30)
+        self.fov_slider.setMaximumWidth(300)
+        self.fov_slider.setSingleStep(1)
+        self.fov_slider.setTickInterval(1)
+        self.fov_slider.valueChanged.connect(self.fov_changed)
+        self.fov_slider.sliderReleased.connect(self.update_preview)
+
+        self.calib_controls_layout.addWidget(self.fov_text)
+        self.calib_controls_layout.addWidget(self.fov_slider)
+
         # checkbox to preview lens distortion correction
         self.preview_toggle_btn = QtWidgets.QCheckBox("Toggle lens correction: ")
         self.preview_toggle_btn.setLayoutDirection(QtCore.Qt.RightToLeft)
@@ -523,9 +540,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         
         # VideoPlayer doubles as a autoresiznig image viewer
         chess_viewer = VideoPlayer(convertToQtFormat.copy())
-        chess_viewer.setMargin(600)
-        
-
 
         self.chess_layout.addWidget(chess_viewer)
 
@@ -537,6 +551,10 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         print("Closing now")
         self.video_viewer.destroy_thread()
         event.accept()
+
+    def fov_changed(self):
+        self.fov_scale = self.fov_slider.value()/10
+        self.fov_text.setText("FOV scale ({}):".format(self.fov_scale))
 
 
     def save_preset_file(self):
@@ -608,7 +626,8 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def update_preview(self):
         self.video_viewer.reset_maps()
         if self.preview_toggle_btn.isChecked():
-            map1, map2 = self.calibrator.get_maps(fov_scale=1.4)
+            img_dim = (int(self.video_viewer.frame_width), int(self.video_viewer.frame_height))
+            map1, map2 = self.calibrator.get_maps(fov_scale=self.fov_scale, new_img_dim=img_dim)
             self.video_viewer.add_maps(map1, map2)
 
         self.video_viewer.update_frame()
