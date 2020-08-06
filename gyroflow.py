@@ -170,7 +170,7 @@ class VideoThread(QtCore.QThread):
 # based on https://robonobodojo.wordpress.com/2018/07/01/automatic-image-sizing-with-pyside/
 # and https://stackoverflow.com/questions/44404349/pyqt-showing-video-stream-from-opencv/44404713
 class VideoPlayer(QtWidgets.QLabel):
-    def __init__(self, img = "cat_placeholder.jpg"):
+    def __init__(self, img = "placeholder.jpg"):
         super(VideoPlayer, self).__init__()
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
         self.pixmap = QtGui.QPixmap(img)
@@ -195,7 +195,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         """Widget containing videoplayer and controls
         """
         QtWidgets.QWidget.__init__(self)
-        self.player = VideoPlayer("cat_placeholder.jpg")
+        self.player = VideoPlayer("placeholder.jpg")
 
         self.layout = QtWidgets.QVBoxLayout()
         self.layout.addWidget(self.player)
@@ -411,7 +411,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         # slider for adjusting FOV
         self.fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.fov_scale))
         self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.fov_slider.setMinimum(10)
+        self.fov_slider.setMinimum(8)
         self.fov_slider.setValue(14)
         self.fov_slider.setMaximum(30)
         self.fov_slider.setMaximumWidth(300)
