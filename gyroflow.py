@@ -3,6 +3,7 @@
 import sys
 import random
 import cv2
+import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
 from _version import __version__
 import calibrate_video
@@ -169,10 +170,10 @@ class VideoThread(QtCore.QThread):
 # based on https://robonobodojo.wordpress.com/2018/07/01/automatic-image-sizing-with-pyside/
 # and https://stackoverflow.com/questions/44404349/pyqt-showing-video-stream-from-opencv/44404713
 class VideoPlayer(QtWidgets.QLabel):
-    def __init__(self, img):
+    def __init__(self, img = "cat_placeholder.jpg"):
         super(VideoPlayer, self).__init__()
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
-        self.pixmap = QtGui.QPixmap("cat_placeholder.jpg")
+        self.pixmap = QtGui.QPixmap(img)
         #self.setPixmap(self.pixmap)
         
         self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
@@ -187,7 +188,6 @@ class VideoPlayer(QtWidgets.QLabel):
         point.setY((size.height() - scaledPix.height())/2)
         # print point.x(), ' ', point.y()
         painter.drawPixmap(point, scaledPix)
-
 
 
 class VideoPlayerWidget(QtWidgets.QWidget):
@@ -441,7 +441,12 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.open_preset.triggered.connect(self.open_preset_func)
         filemenu.addAction(self.open_preset)
 
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileDialogListView)
+        self.show_chessboard = QtWidgets.QAction(icon, 'Calibration target', self)
+        self.show_chessboard.triggered.connect(self.chessboard_func)
+        filemenu.addAction(self.show_chessboard)
 
+        self.chess_window = None
 
         self.statusBar()
 
@@ -481,6 +486,52 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.calibrator.load_calibration_json(path[0])
 
         self.update_calib_info()
+
+    def chessboard_func(self):
+        print("Showing chessboard")
+
+        self.chess_window = QtWidgets.QWidget()
+        self.chess_window.setWindowTitle("Calibration target")
+        self.chess_window.setStyleSheet("background-color:white;")
+
+        self.chess_layout = QtWidgets.QVBoxLayout()
+        self.chess_window.setLayout(self.chess_layout)
+
+        # VideoPlayer class doubles as a auto resizing image viewer
+        
+
+        # generate chessboard pattern so no external images are needed
+        chess_pic = np.zeros((9,12), np.uint8)
+
+        # Set white squares
+        chess_pic[::2,::2] = 255
+        chess_pic[1::2,1::2] = 255
+
+        # Borders to white
+        chess_pic[0,:] = 255
+        chess_pic[-1,:]= 255
+        chess_pic[:,0]= 255
+        chess_pic[:,-1]= 255
+
+        # double size and reduce borders slightly
+        chess_pic = cv2.resize(chess_pic,(12*2, 9*2), interpolation=cv2.INTER_NEAREST)
+        chess_pic = chess_pic[1:-1,:]
+
+        # convert to Qt image
+        h, w = chess_pic.shape
+        convertToQtFormat = QtGui.QImage(chess_pic.data, w, h, w, QtGui.QImage.Format_Grayscale8)
+        
+        # VideoPlayer doubles as a autoresiznig image viewer
+        chess_viewer = VideoPlayer(convertToQtFormat.copy())
+        chess_viewer.setMargin(600)
+        
+
+
+        self.chess_layout.addWidget(chess_viewer)
+
+        self.chess_window.resize(500, 500)
+        self.chess_window.show()
+        
 
     def closeEvent(self, event):
         print("Closing now")
@@ -531,7 +582,9 @@ class CalibratorUtility(QtWidgets.QMainWindow):
                                                                                 self.calibrator.num_images_used,
                                                                                 self.calibrator.RMS_error,
                                                                                 self.calib_msg)
-            
+    
+        self.info_text.setText(txt)
+
         # enable/disable buttons
         if self.calibrator.num_images > 0:
             self.process_frames_btn.setEnabled(True)
@@ -541,6 +594,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
         else:
+            self.preview_toggle_btn.setChecked(False)
             self.preview_toggle_btn.setEnabled(False)
 
     def calibrate_frames(self):
