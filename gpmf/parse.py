@@ -1,6 +1,7 @@
+# Derived from:
+# https://github.com/rambo/python-gpmf
 # The MIT License (MIT)
 # Copyright (c) 2014 Eero af Heurlin
-# https://github.com/rambo/python-gpmf
 
 #!/usr/bin/env python3
 """Parses the FOURCC data in GPMF stream into fields"""
@@ -42,6 +43,9 @@ FOURCC = construct.Struct(
 
 def parse_value(element):
     """Parses element value"""
+    if not element:
+        return "HELLOWTHERE"
+
     type_parsed = TYPES.parse(bytes([element.type]))
     #print("DEBUG: type_parsed={}, element.repeat={}, element.size={}, len(element.data): {}".format(type_parsed, element.repeat, element.size, len(element.data)))
 
@@ -123,7 +127,49 @@ def recursive(data, parents=tuple()):
                 yield subyield
         else:
             yield (element, parents)
+    
+def parse_list(data, parent = []):
+    elements = construct.GreedyRange(FOURCC).parse(data)
+    
+    out_list = []
+    for element in elements:
+        if element.type == 0:
+            
+            out_list.append(parse_list(element.data, out_list))
+        else: 
+            try: 
+                value = parse_value(element)
+            except ValueError:
+                value = element.data
 
+            out_list.append(value)
+            print(element.key)
+
+    return out_list
+
+def parse_dict(data):
+    """Parse data into a dict recursively
+    """
+
+    elements = construct.GreedyRange(FOURCC).parse(data)
+    new_dict = dict()
+
+    for element in elements:
+        if element.type == 0:
+
+            if (element.key.decode('ascii') == "STRM"):
+                new_dict.setdefault("STRM", []).append(parse_dict(element.data))
+            else:
+                new_dict[element.key.decode('ascii')] = parse_dict(element.data)
+            
+        else: 
+            try: 
+                value = parse_value(element)
+            except ValueError:
+                value = element.data
+            new_dict[element.key.decode('ascii')] = value
+
+    return new_dict
 
 if __name__ == '__main__':
     import sys

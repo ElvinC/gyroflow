@@ -4,7 +4,8 @@
 import gpmf.parse as gpmf_parse
 from gpmf.extract import get_gpmf_payloads_from_file
 import sys
-    
+import numpy as np
+from matplotlib import pyplot as plt
 
 class Extractor:
     def __init__(self, videopath = "hero5.mp4"):
@@ -12,21 +13,30 @@ class Extractor:
 
         payloads, parser = get_gpmf_payloads_from_file(videopath)
 
+        self.parsed = []
+
         for gpmf_data, timestamps in payloads:
-            for element, parents in gpmf_parse.recursive(gpmf_data):
-                try:
-                    value = gpmf_parse.parse_value(element)
-                except ValueError:
-                    value = element.data
-                print("{} {} > {}: {}".format(
-                    timestamps,
-                    ' > '.join([x.decode('ascii') for x in parents]),
-                    element.key.decode('ascii'),
-                    value
-                ))
+            self.parsed.append(gpmf_parse.parse_dict(gpmf_data))
+
+            
+
+                
 
     def get_gyro(self):
-        return 1
+        self.gyro = []
+        self.scal = 0
+        for frame in self.parsed:
+            for stream in frame["DEVC"]["STRM"]:
+                if "GYRO" in stream:
+                    self.gyro += stream["GYRO"]
+                    self.scal = stream["SCAL"]
+        
+        
+        
+        omega = np.array(self.gyro) / self.scal
+
+        plt.plot(omega[:,0])
+        plt.show()
 
     def get_accl(self):
         return 1
@@ -37,3 +47,4 @@ class Extractor:
 
 if __name__ == "__main__":
     testing = Extractor()
+    testing.get_gyro()
