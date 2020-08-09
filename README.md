@@ -6,6 +6,8 @@ The project consists of three core parts: A utility for the generation of lens u
 
 This is very much a work in progress project, but the goal is to use the gyro data logged on drone flight controllers for stabilizing the onboard HD camera. Furthermore, the gyro data embedded in newer GoPro cameras should also be usable for stabilization purposes.
 
+The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a (possibly outdated and/or buggy) binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases).
+
 ### Status
 
 Working:
@@ -14,10 +16,10 @@ Working:
 * Non-linear stretch utility
 * Basic video import/export
 * Camera calibration utility with preset import/export
-
+* GoPro metadata import
 
 Not working (yet):
-* GoPro/blackbox data import
+* Blackbox data import
 * Symmetrical quaternion low-pass filter
 * Camera rotation perspective transform
 * Automatic gyro/video sync

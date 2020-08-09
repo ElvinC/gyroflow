@@ -14,14 +14,20 @@ with open("hero5.json", 'r') as f:
 CAL = GPMF_data["DEVC"][0]["STRM"][1]["SCAL"]
 #gyro = np.array(GPMF_data["DEVC"][0]["STRM"][1]["GYRO"]) / CAL
 
-gyro = []
+#gyro = []
 
-for DEVC in GPMF_data["DEVC"]:
-    for STRM in DEVC["STRM"]:
-        if STRM["interpretSamples"] == "GYRO":
-            gyro += STRM["GYRO"]
+#for DEVC in GPMF_data["DEVC"]:
+#    for STRM in DEVC["STRM"]:
+#        if STRM["interpretSamples"] == "GYRO":
+#            gyro += STRM["GYRO"]
 
-gyro = np.array(gyro) / CAL
+#gyro = np.array(gyro) / CAL
+
+import GPMF_gyro
+
+extrac = GPMF_gyro.Extractor()
+
+gyro = extrac.get_gyro()
 
 print(gyro.shape)
 

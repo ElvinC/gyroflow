@@ -1,5 +1,5 @@
 # Script to extract gopro metadata into a useful format.
-# Uses python-gpmf by  from https://github.com/rambo/python-gpmf
+# Uses a modified python-gpmf from https://github.com/rambo/python-gpmf
 
 import gpmf.parse as gpmf_parse
 from gpmf.extract import get_gpmf_payloads_from_file
@@ -18,9 +18,6 @@ class Extractor:
         for gpmf_data, timestamps in payloads:
             self.parsed.append(gpmf_parse.parse_dict(gpmf_data))
 
-            
-
-                
 
     def get_gyro(self):
         self.gyro = []
@@ -28,12 +25,15 @@ class Extractor:
         for frame in self.parsed:
             for stream in frame["DEVC"]["STRM"]:
                 if "GYRO" in stream:
+                    #print(stream["STNM"])
                     self.gyro += stream["GYRO"]
+                    
+                    # Calibration scale shouldn't change
                     self.scal = stream["SCAL"]
         
         
-        
         omega = np.array(self.gyro) / self.scal
+        return omega
 
         plt.plot(omega[:,0])
         plt.show()
