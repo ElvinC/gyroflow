@@ -30,7 +30,7 @@ class Launcher(QtWidgets.QWidget):
         self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer")
         self.stabilizer_button.setMinimumSize(300,50)
 
-        self.stretch_button = QtWidgets.QPushButton("Nonlinear Stretch")
+        self.stretch_button = QtWidgets.QPushButton("Non-linear Stretch")
         self.stretch_button.setMinimumSize(300,50)
 
         self.text = QtWidgets.QLabel("<h1>Gyroflow {}</h1>".format(__version__))

@@ -1,50 +1,15 @@
 import json
 from gyro_integrator import *
-
-
-
-#time_list, orientation_list = gyro_integration(testGyroData)
-
-GPMF_data = False
-
-with open("hero5.json", 'r') as f:
-        GPMF_data = json.load(f)
-
-
-CAL = GPMF_data["DEVC"][0]["STRM"][1]["SCAL"]
-#gyro = np.array(GPMF_data["DEVC"][0]["STRM"][1]["GYRO"]) / CAL
-
-#gyro = []
-
-#for DEVC in GPMF_data["DEVC"]:
-#    for STRM in DEVC["STRM"]:
-#        if STRM["interpretSamples"] == "GYRO":
-#            gyro += STRM["GYRO"]
-
-#gyro = np.array(gyro) / CAL
-
 import GPMF_gyro
 
-extrac = GPMF_gyro.Extractor()
+extrac = GPMF_gyro.Extractor("chessboard.mp4")
+realGyroData = extrac.get_gyro(True)
 
-gyro = extrac.get_gyro()
-
-print(gyro.shape)
-
-N = gyro.shape[0]
-
-
-realGyroData = np.ones((N, 4))
-
-realGyroData[:,0] = np.arange(N) * 1/400
-
-realGyroData[:,3] = gyro[:,0] # z
-realGyroData[:,1] = gyro[:,1] # x
-realGyroData[:,2] = gyro[:,2] # y
+print(realGyroData.shape)
 
 from matplotlib import pyplot as plt
 
-FPS = 23.976 # framerate of video to stabilize
+FPS = 29.97 # framerate of video to stabilize
 SAMPLE_RATE = 400 # sample per second
 
 dat = list(realGyroData[:,2])
@@ -75,7 +40,7 @@ CSV_header = "\t".join(["Time","q0","q1","q2","q3"])
 
 
 
-print(output_data)
+#print(output_data)
 
 # save orientation data as CSV file
 np.savetxt('hero5_orientation.csv',output_data ,delimiter='\t',header=CSV_header,comments='')
@@ -155,7 +120,7 @@ class RenderGyroIntegration:
                     pygame.quit()
                     sys.exit()
 
-            self.clock.tick(450)
+            self.clock.tick(234)
             self.screen.fill((0, 32, 0))
 
             # It will hold transformed vertices.
