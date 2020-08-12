@@ -8,6 +8,25 @@ from tkinter.filedialog import askopenfilename
 
 import sys
 
+# https://www.imatest.com/support/docs/pre-5-2/geometric-calibration/projective-camera
+def inverse_cam_mtx(K):
+    # inverse for zero skew case
+    if K.shape != (3,3):
+        raise ValueError("Not 3x3 matrix")
+    
+    fx = K[0,0]
+    fy = K[1,1]
+    px = K[0,2]
+    py = K[1,2]
+
+    Kinv = np.array([[fy, 0,  -px*fy],
+                     [0,  fx, -py*fx],
+                     [0,  0,  fx*fy]])
+
+    Kinv /= fx * fy
+
+    return Kinv
+
 class FisheyeCalibrator:
     """Class for calculating camera matrix and distortion coefficients
        from images or videoframes
@@ -166,6 +185,11 @@ class FisheyeCalibrator:
 
         return self.K
 
+    def get_inverse_camera_matrix(self):
+        self.compute_calibration
+
+        return inverse_cam_mtx(self.K)
+
     def get_distortion_coefficients(self):
         """Get distortion coefficients from calibration
 
@@ -230,6 +254,57 @@ class FisheyeCalibrator:
 
         return map1, map2
 
+
+    def get_rotation_map(self, img, ang=0):
+        # https://stackoverflow.com/a/12293128
+        # https://en.wikipedia.org/wiki/Homography_(computer_vision)
+
+        rotXval = ang
+        rotYval = ang
+        rotZval = 0
+
+        rotX = (rotXval)*np.pi/180
+        rotY = (rotYval)*np.pi/180
+        rotZ = (rotZval)*np.pi/180
+        rot_mat = np.eye(4)
+
+
+        rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
+        
+        #rot_mat[0,1] = 0
+        #rot_mat[1,2] = 0
+        #rot_mat[2,2] = 1
+
+
+        # 3x4 camera matrix
+        K = np.zeros((3,4))
+        K[0:3,0:3] = self.K
+
+        Kinv = np.zeros((4,3))
+        Kinv[0:3,0:3] = self.get_inverse_camera_matrix()
+        Kinv[3,:] = [0, 0, 1]
+
+        print(Kinv)
+
+        distX = 0
+        distY = 0
+        distZ = 0
+        
+        translation = np.array([[1,0,0,distX],
+                                [0,1,0,distY],
+                                [0,0,1,distZ],
+                                [0,0,0,1]])
+
+        
+        H = np.linalg.multi_dot([K, rot_mat, Kinv])
+
+        #trans = rot_mat * translation
+        #trans[2,2] += self.calib_dimension[1]/2
+        
+        #transform = self.K * trans
+        outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
+
+        return outimg
 
     def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", note=""):
         """Save camera calibration parameters as JSON file
@@ -342,15 +417,17 @@ class FisheyeCalibrator:
         Tk().withdraw()
 
         filename = askopenfilename(title = "Select image to undistort",
-                                   filetypes = (("jpeg images","*.jpg"),))
+                                   filetypes = (("jpeg images","*.jpg"),("png images","*.png")))
 
         raw_img = cv2.imread(filename)
 
         undistorted_img = self.undistort_image(raw_img, fov_scale)
 
-        scaled = cv2.resize(undistorted_img, (960,720))
-        cv2.imshow('img',scaled)
-        cv2.waitKey(0)
+        for i in range(500):
+            rotated_img = self.get_rotation_map(undistorted_img, i)
+            scaled = cv2.resize(rotated_img, (960,720))
+            cv2.imshow('img',scaled)
+            cv2.waitKey(50)
 
 
 
@@ -365,16 +442,14 @@ if __name__ == "__main__":
 
     
 
-    #calibrator = FisheyeCalibrator()
-    #calibrator.load_calibration_prompt()
-    #calibrator.undistort_image_prompt()
+    calibrator = FisheyeCalibrator()
+    calibrator.load_calibration_json("camera_presets/gopro_calib.JSON")
+    calibrator.undistort_image_prompt()
 
     #for imagepath in images:
     #    image = cv2.imread(imagepath)
 
     #    calibrator.add_calib_image(image)
 
-    #cal = CalibratorUtility()
-    pass
 
     #calibrator.save_calibration_json("lgg6_wide.json", "LG G6 4:3 wide angle", "Calibrated by yours truly")

@@ -15,6 +15,7 @@ class Extractor:
         payloads, parser = get_gpmf_payloads_from_file(videopath)
 
         self.parsed = []
+        print(payloads)
 
         for gpmf_data, timestamps in payloads:
             self.parsed.append(gpmf_parse.parse_dict(gpmf_data))
@@ -52,6 +53,7 @@ class Extractor:
                     
                     # Calibration scale shouldn't change
                     self.gyro_scal = stream["SCAL"]
+                    print(self.gyro_scal)
         
         
         # Convert to angular vel. vector in rad/s
@@ -60,7 +62,7 @@ class Extractor:
 
 
         self.gyro_rate = self.num_gyro_samples / self.video_length 
-        print("Gyro rate: {} Hz, should be close to 400 Hz".format(self.gyro_rate))
+        print("Gyro rate: {} Hz, should be close to 200 or 400 Hz".format(self.gyro_rate))
 
 
         self.parsed_gyro = np.zeros((self.num_gyro_samples, 4))
@@ -78,10 +80,10 @@ class Extractor:
         return self.parsed_gyro[:,1:]
 
     def get_accl(self):
-        return 1
+        return 0
 
     def get_video_length(self):
-        return 1
+        return self.video_length
 
 
 if __name__ == "__main__":

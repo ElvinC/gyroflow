@@ -5,26 +5,7 @@ This module uses gyroscope data to compute quaternion orientations over time
 """
 
 import numpy as np
-
-def quaternion(q0,q1,q2,q3):
-    return np.array([q0,q1,q2,q3])
-
-def vector(x,y,z):
-    return np.array([x,y,z])
-
-def normalize_quaternion(q):
-    return q/np.sqrt(q.dot(q)) # q/|q|
-
-# https://stackoverflow.com/questions/39000758/how-to-multiply-two-quaternions-by-python-or-numpy
-def quaternion_multiply(Q1, Q2):
-    w0, x0, y0, z0 = Q2
-    w1, x1, y1, z1 = Q1
-    return np.array([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
-                     x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
-                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
-                     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0])
-
-
+import quaternion as quart
 
 class gyroIntegrator:
     def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None):
@@ -61,9 +42,9 @@ class gyroIntegrator:
         self.time_list = None
 
         # IMU reference vectors
-        self.imuRefX = vector(1,0,0)
-        self.imuRefY = vector(0,1,0)
-        self.imuRefY = vector(0,0,1)
+        self.imuRefX = quart.vector(1,0,0)
+        self.imuRefY = quart.vector(0,1,0)
+        self.imuRefY = quart.vector(0,0,1)
 
         self.already_integrated = False
 
@@ -102,9 +83,9 @@ class gyroIntegrator:
                 delta_q = self.rate_to_quart(omega, delta_time)
 
                 # rotate orientation by this quaternion
-                self.orientation = quaternion_multiply(self.orientation, delta_q)
+                self.orientation = quart.quaternion_multiply(self.orientation, delta_q)
 
-                self.orientation = normalize_quaternion(self.orientation)
+                self.orientation = quart.normalize(self.orientation)
 
             temp_orientation_list.append(np.copy(self.orientation))
             temp_time_list.append(this_time)
@@ -127,6 +108,48 @@ class gyroIntegrator:
             return (self.time_list, self.orientation_list)
 
         return None
+
+
+    def get_smoothed_orientation(self, smooth = 0.94):
+
+        smothness = smooth**(1/6)
+
+
+        smoothed_orientation = np.zeros(self.orientation_list.shape)
+
+        value = self.orientation_list[0,:]
+
+
+        for i in range(self.num_data_points):
+            value = quart.slerp(value, self.orientation_list[i,:],[1-smothness])[0]
+            smoothed_orientation[i] = value
+
+        # reverse pass
+        smoothed_orientation2 = np.zeros(self.orientation_list.shape)
+
+        value2 = smoothed_orientation[-1,:]
+
+        for i in range(self.num_data_points-1, -1, -1):
+            value2 = quart.slerp(value2, self.orientation_list[i,:],[1-smothness])[0]
+            smoothed_orientation2[i] = value2
+
+        return (self.time_list, smoothed_orientation2)
+
+        #
+
+    def get_stabilize_transform(self,smooth=0.94):
+        time_list, smoothed_orientation = self.get_smoothed_orientation(smooth)
+
+        # rotations that'll stabilize the camera
+        stab_rotations = np.zeros(self.orientation_list.shape)
+
+        for i in range(self.num_data_points):
+            # rotation quaternion from smooth motion -> raw motion to counteract it
+            stab_rotations[i,:] = quart.rot_between(smoothed_orientation[i],self.orientation_list[i])
+
+        return (self.time_list, stab_rotations) 
+
+        
 
 
     def get_raw_data(self, axis):
@@ -175,4 +198,4 @@ class gyroIntegrator:
         q2 = ha[1]
         q3 = ha[2]
 
-        return quaternion(q0,q1,q2,q3)
+        return quart.quaternion(q0,q1,q2,q3)

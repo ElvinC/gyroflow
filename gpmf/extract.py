@@ -31,14 +31,17 @@ def get_gpmf_payloads(parser):
 def get_payloads(stbl):
     """Get payloads by chunk from stbl, with timing info"""
     # Locate needed subatoms
-    for subatom in stbl:
-        tag = subatom['tag']
-        if tag.value == 'stsz':
-            stsz = subatom['stsz']
-        if tag.value == 'stco':
-            stco = subatom['stco']
-        if tag.value == 'stts':
-            stts = subatom['stts']
+    try:
+        for subatom in stbl:
+            tag = subatom['tag']
+            if tag.value == 'stsz':
+                stsz = subatom['stsz']
+            if tag.value == 'stco':
+                stco = subatom['stco']
+            if tag.value == 'stts':
+                stts = subatom['stts']
+    except TypeError:
+        raise Exception("Problem parsing metadata")
 
     # Generate start and end timestamps for all chunks
     timestamps = []

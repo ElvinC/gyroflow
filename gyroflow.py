@@ -630,6 +630,9 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             map1, map2 = self.calibrator.get_maps(fov_scale=self.fov_scale, new_img_dim=img_dim)
             self.video_viewer.add_maps(map1, map2)
 
+            map1, map2 = self.calibrator.get_rotation_map()
+            self.video_viewer.add_maps(map1, map2)
+
         self.video_viewer.update_frame()
 
 
@@ -858,7 +861,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 def main():
     app = QtWidgets.QApplication([])
 
-    widget = Launcher()
+    widget = CalibratorUtility()
     widget.resize(500, 500)
     import time
 

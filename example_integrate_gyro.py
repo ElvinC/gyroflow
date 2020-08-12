@@ -2,7 +2,7 @@ import json
 from gyro_integrator import *
 import GPMF_gyro
 
-extrac = GPMF_gyro.Extractor("chessboard.mp4")
+extrac = GPMF_gyro.Extractor("test_vids/hero5.mp4")
 realGyroData = extrac.get_gyro(True)
 
 print(realGyroData.shape)
@@ -33,6 +33,8 @@ plt.plot(integrator.get_raw_data("t") * FPS,integrator.get_raw_data("y"))
 plt.show()
 
 time_list, orientation_list = integrator.integrate_all()
+
+time_list, orientation_list = integrator.get_stabilize_transform()
 
 output_data = np.column_stack((time_list, orientation_list))
 

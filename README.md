@@ -17,10 +17,10 @@ Working:
 * Basic video import/export
 * Camera calibration utility with preset import/export
 * GoPro metadata import
+* Symmetrical quaternion low-pass filter (more or less)
 
 Not working (yet):
 * Blackbox data import
-* Symmetrical quaternion low-pass filter
 * Camera rotation perspective transform
 * Automatic gyro/video sync
 * Stabilization UI
