@@ -107,9 +107,8 @@ if __name__ == '__main__':
         # Overall homography matrix
         H = np.linalg.multi_dot([K, R, T, Kinv])
 
-        print(Kinv)
+        #print(Kinv)
 
-        quit()
 
         # Apply matrix transformation
         cv2.warpPerspective(src, H, (w, h), dst, cv2.INTER_CUBIC, cv2.BORDER_CONSTANT, 0)

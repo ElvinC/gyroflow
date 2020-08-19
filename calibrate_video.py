@@ -131,8 +131,11 @@ class FisheyeCalibrator:
             self.imgpoints.pop(-1)
             self.num_images -= 1
 
-    def compute_calibration(self):
+    def compute_calibration(self, center_camera=True):
         """Compute camera calibration from loaded images
+
+        Args:
+            center_camera (bool): center camera matrix after calib.
 
         Raises:
             Exception: No calibration frames/data
@@ -168,6 +171,10 @@ class FisheyeCalibrator:
                 tvecs,
                 self.calibration_flags,
                 self.calib_criteria)
+
+        if center_camera:
+            self.K[0,2] = self.calib_dimension[0]/2
+            self.K[1,2] = self.calib_dimension[1]/2
 
         self.RMS_error = retval
         self.num_images_used = self.num_images
@@ -230,6 +237,11 @@ class FisheyeCalibrator:
         new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
                 img_dim, np.eye(3), fov_scale=fov_scale)
 
+        self.new_K = new_K
+
+        print("FOV BEFORE: {}".format(scaled_K[0,0]))
+        print("FOV EFTER: {}".format(new_K[0,0]))
+
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 
 
@@ -260,7 +272,7 @@ class FisheyeCalibrator:
         # https://en.wikipedia.org/wiki/Homography_(computer_vision)
 
         rotXval = ang
-        rotYval = ang
+        rotYval = 0
         rotZval = 0
 
         rotX = (rotXval)*np.pi/180
@@ -275,13 +287,30 @@ class FisheyeCalibrator:
         #rot_mat[1,2] = 0
         #rot_mat[2,2] = 1
 
+        img_dim = img.shape[:2][::-1]
 
-        # 3x4 camera matrix
+        # Scaled 3x4 camera matrix
         K = np.zeros((3,4))
-        K[0:3,0:3] = self.K
+        K[:3,:3] = self.K
 
+        # should make the rotation match fov change
+        # Might not work, idk
+        print(K)
+        K[0,0] = self.new_K[0,0]
+        K[1,1] = self.new_K[1,1]
+
+        print(K)
+
+        print("")
+
+        K *= img_dim[0] / self.calib_dimension[0]
+
+        K[2][2] = 1.0
+
+
+        # compute inverse camera matrix using scaled K
         Kinv = np.zeros((4,3))
-        Kinv[0:3,0:3] = self.get_inverse_camera_matrix()
+        Kinv[0:3,0:3] = inverse_cam_mtx(K[:3,:3])
         Kinv[3,:] = [0, 0, 1]
 
         print(Kinv)
@@ -421,13 +450,21 @@ class FisheyeCalibrator:
 
         raw_img = cv2.imread(filename)
 
-        undistorted_img = self.undistort_image(raw_img, fov_scale)
+        undistorted_img = self.undistort_image(raw_img, fov_scale=1)
 
-        for i in range(500):
-            rotated_img = self.get_rotation_map(undistorted_img, i)
+
+        for i in range(5):
+
+            rotated_img = self.get_rotation_map(undistorted_img,30)
             scaled = cv2.resize(rotated_img, (960,720))
-            cv2.imshow('img',scaled)
-            cv2.waitKey(50)
+            cv2.imshow('OpenCV image viewer',scaled)
+            cv2.waitKey(500)
+
+
+            rotated_img = self.get_rotation_map(undistorted_img,0)
+            scaled = cv2.resize(rotated_img, (960,720))
+            cv2.imshow('OpenCV image viewer',scaled)
+            cv2.waitKey(500)
 
 
 
@@ -443,7 +480,7 @@ if __name__ == "__main__":
     
 
     calibrator = FisheyeCalibrator()
-    calibrator.load_calibration_json("camera_presets/gopro_calib.JSON")
+    calibrator.load_calibration_json("camera_presets/gopro_calib2.JSON")
     calibrator.undistort_image_prompt()
 
     #for imagepath in images:
