@@ -1,3 +1,5 @@
+# File for testing single-variable low pass filtering.
+
 import numpy as np
 from matplotlib import pyplot as plt
 

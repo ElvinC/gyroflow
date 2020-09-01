@@ -251,7 +251,15 @@ class FisheyeCalibrator:
         return undistorted_image
 
     def get_maps(self, fov_scale = 1.0, new_img_dim = None):
+        """Get undistortion maps
 
+        Args:
+            fov_scale (float, optional): Virtual camera focal length divider. Defaults to 1.
+            new_img_dim (tuple, optional): Dimension of new image
+
+        Returns:
+            (np.ndarray,np.ndarray): Undistortion maps
+        """
         
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
 
@@ -268,6 +276,11 @@ class FisheyeCalibrator:
 
 
     def get_rotation_map(self, img, ang=0):
+        """Get maps for doing perspective rotations
+        
+            WORK IN PROGRESS. Currently for testing
+        """
+
         # https://stackoverflow.com/a/12293128
         # https://en.wikipedia.org/wiki/Homography_(computer_vision)
 

@@ -21,7 +21,6 @@ class Launcher(QtWidgets.QWidget):
 
         self.setFixedWidth(450)
 
-        self.hello = ["Hai", "Hello there", "What's up", "Hello world"]
 
         self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
         self.calibrator_button.setMinimumSize(300,50)
@@ -115,6 +114,9 @@ class VideoThread(QtCore.QThread):
         self.max_width = 1280
 
     def run(self):
+        """
+        Run the videoplayer using the thread
+        """
 
         self.cap = cv2.VideoCapture()
 
@@ -505,6 +507,8 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.update_calib_info()
 
     def chessboard_func(self):
+        """Function to show the calibration chessboard in a new window
+        """
         print("Showing chessboard")
 
         self.chess_window = QtWidgets.QWidget()
@@ -589,6 +593,8 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             self.process_frames_btn.setEnabled(True)
 
     def remove_frame(self):
+        """Remove last calibration frame
+        """
         self.calibrator.remove_calib_image()
 
         self.update_calib_info()
@@ -596,6 +602,9 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         
 
     def update_calib_info(self):
+        """ Update the status text in the utility
+        """
+
         txt = "Good frames: {}\nProcessed frames: {}\nRMS error: {}\n{}".format(self.calibrator.num_images,
                                                                                 self.calibrator.num_images_used,
                                                                                 self.calibrator.RMS_error,
