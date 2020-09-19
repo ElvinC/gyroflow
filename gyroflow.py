@@ -870,7 +870,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 def main():
     app = QtWidgets.QApplication([])
 
-    widget = CalibratorUtility()
+    widget = Launcher()
     widget.resize(500, 500)
     import time
 

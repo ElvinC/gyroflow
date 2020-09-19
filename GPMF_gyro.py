@@ -42,6 +42,8 @@ class Extractor:
         self.video_length =  num_frames / self.fps
         print("Video length: {} s, framerate: {} FPS".format(self.video_length,self.fps))
 
+        self.size = int(video.get(cv2.CAP_PROP_FRAME_WIDTH)), int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
         video.release()
 
     def parse_gyro(self):

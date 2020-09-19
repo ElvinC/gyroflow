@@ -1,6 +1,6 @@
 # Gyroflow - Video stabilization using gyroscope data targeting drone footage (WIP)
 
-A program built around Python, OpenCV, and PySide2 for video stabilization using gyroscope data. 
+A program built around Python, OpenCV, and PySide2 for video stabilization using gyroscope data. The crisp library will be used for gyroscope synchronization.
 
 The project consists of three core parts: A utility for the generation of lens undistortion preset, a utility for stabilizing footage using gyro data, and a utility for stretching 4:3 video to 16:9 using non-linear horizontal stretching (similar to GoPro's superview).
 
