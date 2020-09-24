@@ -18,12 +18,12 @@ Working:
 * Camera calibration utility with preset import/export
 * GoPro metadata import
 * Symmetrical quaternion low-pass filter (more or less)
+* Blackbox data import
 
 Work in progress:
+* Camera orientation with respect to gyro (using Crisp)
+* Automatic temporal gyro/video sync (using Crisp)
 * Camera rotation perspective transform
 
 Not working (yet):
-* Blackbox data import
-* Camera orientation with respect to gyro (Manual/semi-automatic?)
-* Automatic temporal gyro/video sync
 * Stabilization UI

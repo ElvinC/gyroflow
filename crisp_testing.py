@@ -11,6 +11,7 @@ from crisp.l3g4200d import post_process_L3G4200D_data
 import crisp.rotations
 from crisp.calibration import PARAM_ORDER
 import crisp.videoslice
+import cv2
 
 video_file_path = "test_clips/hero6.mp4"
 
@@ -72,76 +73,7 @@ GYRO_RATE_GUESS = gyro_rate
 
 
 
-class OpenCVFishCameraModel(crisp.CameraModel):
-    """OpenCV camera model
-    This implements the camera model as defined in OpenCV.
-    For details, see the OpenCV documentation.
-    """
-    def __init__(self, image_size, frame_rate, readout, camera_matrix, dist_coefs):
-        """Create camera model
-        Parameters
-        -------------------
-        image_size : tuple (rows, columns)
-            The size of the image in pixels
-        frame_rate : float
-            The frame rate of the camera
-        readout : float
-            Rolling shutter readout time. Set to 0 for global shutter cameras.
-        camera_matrix : (3, 3) ndarray
-            The internal camera calibration matrix
-        dist_coefs : ndarray
-            Distortion coefficients [k1, k2, p1, p2 [,k3 [,k4, k5, k6]] of 4, 5, or 8 elements.
-            Can be set to None to use zero parameters
-        """
-        super(OpenCVFishCameraModel, self).__init__(image_size, frame_rate, readout)
-        self.camera_matrix = camera_matrix
-        self.inv_camera_matrix = np.linalg.inv(self.camera_matrix)
-        self.dist_coefs = dist_coefs
 
-    def project(self, points):
-        """Project 3D points to image coordinates.
-        This projects 3D points expressed in the camera coordinate system to image points.
-        Parameters
-        --------------------
-        points : (3, N) ndarray
-            3D points
-        Returns
-        --------------------
-        image_points : (2, N) ndarray
-            The world points projected to the image plane
-        """
-        rvec = tvec = np.zeros(3)
-        image_points, jac = cv2.fisheye.projectPoints(points.T.reshape(-1,1,3), rvec, tvec, self.camera_matrix, self.dist_coefs)
-        return image_points.reshape(-1,2).T
-
-    def unproject(self, image_points):
-        """Find (up to scale) 3D coordinate of an image point
-        This is the inverse of the `project` function.
-        The resulting 3D points are only valid up to an unknown scale.
-        Parameters
-        ----------------------
-        image_points : (2, N) ndarray
-            Image points
-        Returns
-        ----------------------
-        points : (3, N) ndarray
-            3D coordinates (valid up to scale)
-        """
-        undist_image_points = cv2.fisheye.undistortPoints(image_points.T.reshape(1,-1,2), self.camera_matrix, self.dist_coefs, P=self.camera_matrix)
-        world_points = np.dot(self.inv_camera_matrix, to_homogeneous(undist_image_points.reshape(-1,2).T))
-        return world_points
-    
-    @classmethod
-    def from_hdf(cls, filepath):
-        import h5py
-        with h5py.File(filepath, 'r') as f:
-            dist_coef = f["dist_coef"].value
-            K = f["K"].value
-            readout = f["readout"].value
-            image_size = f["size"].value
-            fps = f["fps"].value
-            instance = cls(image_size, fps, readout, K, dist_coef)
-            return instance
 
 
 def to_homogeneous(X):
@@ -166,15 +98,15 @@ def to_rot_matrix(r):
 
 if __name__ == "__main__":
 
-    camera = OpenCVFishCameraModel(CAMERA_IMAGE_SIZE, CAMERA_FRAME_RATE, CAMERA_READOUT, CAMERA_MATRIX,
+    camera = crisp.OpenCVFisheyeCameraModel(CAMERA_IMAGE_SIZE, CAMERA_FRAME_RATE, CAMERA_READOUT, CAMERA_MATRIX,
                                    CAMERA_DIST_COEFS)
 
-    print('Creating video stream from {}'.format("test_clips/hero5.mp4"))
-    video = crisp.VideoStream.from_file(camera, "test_clips/hero5.MP4")
+    print('Creating video stream from {}'.format(video_file_path))
+    video = crisp.VideoStream.from_file(camera, video_file_path)
 
     # Problem with creating videoslices
-    slices = crisp.videoslice.Slice.from_stream_randomly(video)
-    print(slices)
+    #slices = crisp.videoslice.Slice.from_stream_randomly(video, step_bounds=(1, 1), length_bounds=(10,10 ), max_start=None, min_distance=1, min_slice_points=10)
+    #print(slices)
 
 
     print('Creating gyro stream from {}'.format("Gopro gpmf"))

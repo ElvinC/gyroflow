@@ -35,7 +35,7 @@ def fixBorder(frame):
 
 # Read input video
 
-cp = cv2.VideoCapture('hero5.MP4')
+cp = cv2.VideoCapture('../test_clips/hero5.MP4')
 
 # To get number of frames
 n_frames = int(cp.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -72,7 +72,7 @@ for i in range(n_frames-2):
 	succ, curr = cp.read()
 
 	if succ:
-		print("NO")
+		print("Works?")
 
 		curr_gray = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
 
