@@ -14,16 +14,16 @@ class BlackboxExtractor:
         for lg in range(1,self.n_of_logs+1):
             self.parser.set_log_index(lg)
             t  = self.parser.field_names.index('time')
-            gx = self.parser.field_names.index('gyroADC[0]')
-            gy = self.parser.field_names.index('gyroADC[1]')
-            gz = self.parser.field_names.index('gyroADC[2]')
+            gx = self.parser.field_names.index('gyroADC[1]')
+            gy = self.parser.field_names.index('gyroADC[2]')
+            gz = self.parser.field_names.index('gyroADC[0]')
 
             data_frames = []
             for frame in self.parser.frames():
                 f = [frame.data[t]/1000000,
-                     math.radians(frame.data[gx]),
+                     -math.radians(frame.data[gx]),
                      math.radians(frame.data[gy]),
-                     math.radians(frame.data[gz])]
+                     -math.radians(frame.data[gz])]
                 data_frames.append(f)
 
             self.final_gyro_data.extend(data_frames)    
