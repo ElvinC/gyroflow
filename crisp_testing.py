@@ -8,31 +8,27 @@ import numpy as np
 
 import crisp
 from crisp.l3g4200d import post_process_L3G4200D_data
+
+# Note: currently uses a modified crisp package with support for the OpenCV Fisheye module
 import crisp.rotations
 from crisp.calibration import PARAM_ORDER
 import crisp.videoslice
 import cv2
+import logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
-video_file_path = "test_clips/hero6.mp4"
+
+video_file_path = "test_clips/chessboard.mp4"
 
 testgyro = Extractor(video_file_path)
 
 gyro_data = testgyro.get_gyro()
 gyro_rate = testgyro.gyro_rate
+print("Rate: {}".format(gyro_rate))
 fps = testgyro.fps
 img_size = testgyro.size
-
-print(img_size)
-
-"""
-This is an example script that shows how to run the calibrator on our dataset.
-The dataset can be found here:
-    http://www.cvl.isy.liu.se/research/datasets/gopro-gyro-dataset/
-To run, simply point the script to one of the video files in the directory
-    $ python gopro_gyro_dataset_example.py /path/to/dataset/video.MP4
-
-    Original code by Hannes Ovrén
-"""
 
 
 CAMERA_MATRIX = np.array(
@@ -59,34 +55,30 @@ CAMERA_MATRIX = np.array(
 CAMERA_MATRIX *= img_size[0] / 1920
 CAMERA_MATRIX[2][2] = 1.0
 
-
 CAMERA_DIST_COEFS = [
             0.01945104325838463,
             0.1093842438193295,
             -0.10977045532092518,
             0.037924531473717875
         ]
+
+CAMERA_DIST_CENTER = (0.00291108,  0.00041897)
+CAMERA_DIST_PARAM = 0.8894355
 CAMERA_FRAME_RATE = fps
 CAMERA_IMAGE_SIZE = img_size
-CAMERA_READOUT = 0.0316734
-GYRO_RATE_GUESS = gyro_rate
+CAMERA_READOUT = 0.01
+GYRO_RATE_GUESS = 200 #  201.36990694913803
 
+print(gyro_rate)
+Agyro_rate = 397.78157803740754
+Atime_offset = 0.33307650572986625
+Agbias_x = 0.016650717817938553
+Agbias_y = -0.0021448905951827954
+Agbias_z = 0.021890920496554694
+Arot_x = 0.17130769254650785
+Arot_y = -2.209085060212493
+Arot_z = 2.0331306863346486
 
-
-
-
-
-def to_homogeneous(X):
-    if X.ndim == 1:
-        return np.append(X, 1)
-    else:
-        _, N = X.shape
-        Y = np.ones((3, N))
-        return np.vstack((X, np.ones((N, ))))
-
-def from_homogeneous(X):
-    Y = X / X[2]
-    return Y[:2]
 
 
 def to_rot_matrix(r):
@@ -101,15 +93,15 @@ if __name__ == "__main__":
     camera = crisp.OpenCVFisheyeCameraModel(CAMERA_IMAGE_SIZE, CAMERA_FRAME_RATE, CAMERA_READOUT, CAMERA_MATRIX,
                                    CAMERA_DIST_COEFS)
 
+    #camera = crisp.AtanCameraModel(CAMERA_IMAGE_SIZE, CAMERA_FRAME_RATE, CAMERA_READOUT, CAMERA_MATRIX,
+    #                               CAMERA_DIST_CENTER, CAMERA_DIST_PARAM)
+
     print('Creating video stream from {}'.format(video_file_path))
     video = crisp.VideoStream.from_file(camera, video_file_path)
 
-    # Problem with creating videoslices
-    #slices = crisp.videoslice.Slice.from_stream_randomly(video, step_bounds=(1, 1), length_bounds=(10,10 ), max_start=None, min_distance=1, min_slice_points=10)
-    #print(slices)
 
-
-    print('Creating gyro stream from {}'.format("Gopro gpmf"))
+    print('Creating gyro stream from {}'.format("test_clips/walk_gyro.csv"))
+    #gyro = crisp.GyroStream.from_csv("test_clips/walk_gyro.csv")
     gyro = crisp.GyroStream.from_data(gyro_data)
 
     print('Post processing L3G4200D gyroscope data to remove frequency spike noise')
@@ -132,4 +124,3 @@ if __name__ == "__main__":
     except crisp.CalibrationError as e:
         print('Calibration failed. Reason "{}"'.format(e.message))
         sys.exit(-2)
-
