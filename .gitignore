@@ -7,6 +7,9 @@
 *.jpg
 *.json
 *.csv
+*.bbl
+
+test_clips/*
 
 # camera preset folder
 !camera_presets/*.json
