@@ -239,8 +239,8 @@ class FisheyeCalibrator:
 
         self.new_K = new_K
 
-        print("FOV BEFORE: {}".format(scaled_K[0,0]))
-        print("FOV EFTER: {}".format(new_K[0,0]))
+        #print("FOV BEFORE: {}".format(scaled_K[0,0]))
+        #print("FOV EFTER: {}".format(new_K[0,0]))
 
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 
@@ -270,12 +270,31 @@ class FisheyeCalibrator:
                 img_dim, np.eye(3), fov_scale=fov_scale)
 
 
+        self.new_K = new_K
+
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 
         return map1, map2
 
 
-    def get_rotation_map(self, img, ang=0):
+    def undistort_points(self, distorted_points,new_img_dim = None):
+        img_dim = new_img_dim if new_img_dim else self.calib_dimension
+
+        scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
+        scaled_K[2][2] = 1.0
+
+
+        return cv2.fisheye.undistortPoints(distorted_points, scaled_K, self.D)
+
+    def decompose_homography(self, H, new_img_dim = None):
+        img_dim = new_img_dim if new_img_dim else self.calib_dimension
+
+        scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
+        scaled_K[2][2] = 1.0
+        return cv2.decomposeHomographyMat(H, scaled_K)
+
+
+    def get_rotation_map(self, img, quart):
         """Get maps for doing perspective rotations
         
             WORK IN PROGRESS. Currently for testing
@@ -284,7 +303,7 @@ class FisheyeCalibrator:
         # https://stackoverflow.com/a/12293128
         # https://en.wikipedia.org/wiki/Homography_(computer_vision)
 
-        rotXval = ang
+        rotXval = 0
         rotYval = 0
         rotZval = 0
 
@@ -293,8 +312,31 @@ class FisheyeCalibrator:
         rotZ = (rotZval)*np.pi/180
         rot_mat = np.eye(4)
 
+        from scipy.spatial.transform import Rotation
+        #print(Rotation([quart[0,1],quart[0,2],quart[0,3],quart[0,0]]).as_euler('xyz'))
+        quart = quart.flatten()
+        eul = Rotation([quart[1],quart[2],quart[3],quart[0]]).as_euler('xyz')
 
-        rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
+        combined_rotation = np.eye(4)
+        #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
+        combined_rotation[0:3,0:3] = Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
+        #eul = Rotation(quart).as_euler('xyz')[0]
+
+        #rot1 = np.eye(4)
+        #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
+
+        #rot2 = np.eye(4)
+        #rot2[0:3,0:3] = Rotation.from_euler('xyz', [eul[2], 0, 0], degrees=False).as_matrix()
+
+        #rot3 = np.eye(4)
+        #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
+        
+        #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
+        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quart)
+
+        rot_mat = combined_rotation
+
+        #rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
         
         #rot_mat[0,1] = 0
         #rot_mat[1,2] = 0
@@ -308,14 +350,12 @@ class FisheyeCalibrator:
 
         # should make the rotation match fov change
         # Might not work, idk
-        print(K)
         K[0,0] = self.new_K[0,0]
         K[1,1] = self.new_K[1,1]
 
-        print(K)
+        #print(K)
 
-        print("")
-
+        
         K *= img_dim[0] / self.calib_dimension[0]
 
         K[2][2] = 1.0
@@ -325,8 +365,6 @@ class FisheyeCalibrator:
         Kinv = np.zeros((4,3))
         Kinv[0:3,0:3] = inverse_cam_mtx(K[:3,:3])
         Kinv[3,:] = [0, 0, 1]
-
-        print(Kinv)
 
         distX = 0
         distY = 0
@@ -347,6 +385,8 @@ class FisheyeCalibrator:
         outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
 
         return outimg
+
+
 
     def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", note=""):
         """Save camera calibration parameters as JSON file

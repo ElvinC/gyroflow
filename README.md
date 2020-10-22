@@ -12,6 +12,8 @@ Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) p
 
 ### Status
 
+[Latest test clip](https://youtu.be/dUTZb5qWsaU)
+
 Working:
 * Videoplayer based on OpenCV and Pyside2
 * Gyro integration using quaternions
@@ -24,8 +26,8 @@ Working:
 * Undistort and rotation perspective transform
 
 Work in progress:
-* Automatic/semi-automatic temporal gyro/video sync (using Crisp?)
-* Camera orientation determination with respect to gyro (using Crisp?)
+* Automatic/semi-automatic temporal gyro/video sync. Rough sync working (+/- 0.5 frame accuracy).
+* Camera orientation determination with respect to gyro.
 
 Not working (yet) and potential future additions:
 * Stabilization UI

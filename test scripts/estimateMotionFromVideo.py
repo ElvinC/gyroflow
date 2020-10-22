@@ -35,7 +35,9 @@ def fixBorder(frame):
 
 # Read input video
 
-cp = cv2.VideoCapture('../test_clips/hero5.MP4')
+filename = '../test_clips/GX016017.MP4'
+
+cp = cv2.VideoCapture(filename)
 
 # To get number of frames
 n_frames = int(cp.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -56,7 +58,7 @@ fourcc = cv2.VideoWriter_fourcc(*'MJPG')
 print(fourcc)
 
 # Try doing 2*width
-out = cv2.VideoWriter('hero5_stabilized.mp4',0x7634706d, fps, (width, height))
+out = cv2.VideoWriter('hero6stab.MP4',0x7634706d, fps, (width, height))
 
 # read the first frame
 _, prev = cp.read()
@@ -72,7 +74,7 @@ for i in range(n_frames-2):
 	succ, curr = cp.read()
 
 	if succ:
-		print("Works?")
+		print("Works? {}".format(i))
 
 		curr_gray = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
 
@@ -118,6 +120,9 @@ f_s = 23.97
 
 #X = fftpack.fft(dxlst)
 #freqs = fftpack.fftfreq(len(dxlst)) * f_s
+
+
+np.savetxt(filename + "opticalflowH6.csv", transforms, delimiter=",")
 
 #plt.plot(freqs, X)
 plt.plot(dxlst)
@@ -167,11 +172,11 @@ for i in range(n_frames-2):
 		if(frame_out.shape[1] > 1920): 
 			frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
 		
-		cv2.imshow("Before and After", frame_out)
+		cv2.imshow("Before and After", frame_stabilized)
 		cv2.waitKey(10)
 
 
-out.write(frame_out)
+		out.write(frame_out)
 
 # Release video
 cp.release()

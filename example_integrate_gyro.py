@@ -2,8 +2,16 @@ import json
 from gyro_integrator import *
 import GPMF_gyro
 
-extrac = GPMF_gyro.Extractor("test_vids/hero5.mp4")
+from blackbox_extract import BlackboxExtractor
+
+
+extrac = GPMF_gyro.Extractor("test_clips/GX016017.MP4")
 realGyroData = extrac.get_gyro(True)
+
+
+#bb = BlackboxExtractor("test_clips/GX015563.MP4_emuf_004.bbl")
+#realGyroData = bb.get_gyro_data(cam_angle_degrees=2)
+
 
 print(realGyroData.shape)
 
@@ -27,25 +35,25 @@ freqs = fftpack.fftfreq(len(dat)) * f_s
 #plt.plot(times,dat)
 #plt.show()
 
-integrator = gyroIntegrator(realGyroData)
+integrator = GyroIntegrator(realGyroData)
 
 plt.plot(integrator.get_raw_data("t") * FPS,integrator.get_raw_data("y"))
 plt.show()
 
 time_list, orientation_list = integrator.integrate_all()
 
-time_list, orientation_list = integrator.get_stabilize_transform()
+time_list, orientation_list = integrator.get_orientations()
 
 output_data = np.column_stack((time_list, orientation_list))
 
 CSV_header = "\t".join(["Time","q0","q1","q2","q3"])
 
-
+orientation_list = orientation_list[::10,:]
 
 #print(output_data)
 
 # save orientation data as CSV file
-np.savetxt('hero5_orientation.csv',output_data ,delimiter='\t',header=CSV_header,comments='')
+#np.savetxt('hero5_orientation.csv',output_data ,delimiter='\t',header=CSV_header,comments='')
 
 #print(realGyroData)
 
@@ -122,7 +130,7 @@ class RenderGyroIntegration:
                     pygame.quit()
                     sys.exit()
 
-            self.clock.tick(234)
+            self.clock.tick(54)
             self.screen.fill((0, 32, 0))
 
             # It will hold transformed vertices.

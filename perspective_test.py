@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 
 f = 500
-rotXval = 45
+rotXval = 90
 rotYval = 90
 rotZval = 90
 distXval = 500
@@ -32,10 +32,12 @@ def onDistZChange(val):
     global distZval
     distZval = val
 
+
+from scipy.spatial.transform import Rotation
 if __name__ == '__main__':
 
     #Read input image, and create output image
-    src = cv2.imread('chessboard.png')
+    src = cv2.imread('goldstone.jpg')
     src = cv2.resize(src,(640,480))
     dst = np.zeros_like(src)
     h, w = src.shape[:2]
@@ -94,8 +96,11 @@ if __name__ == '__main__':
                     [            0,            0, 0, 1]])
 
         # Composed rotation matrix with (RX,RY,RZ)
+        R = np.eye(4,4)
         R = np.linalg.multi_dot([ RX , RY , RZ ])
 
+        
+        
         
 
         # Translation matrix

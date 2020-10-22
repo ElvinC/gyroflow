@@ -8,11 +8,18 @@ class BlackboxExtractor:
         print("Opening {}".format(path))
         self.parser = Parser.load(path)
         self.n_of_logs = self.parser.reader.log_count
+
         self.gyro_scale = self.parser.headers["gyro_scale"] #should be already scaled in the fc
         self.final_gyro_data = []
+        self.extracted = False
         self.camera_angle = None
 
-    def get_gyro_data(self,cam_angle_degrees):
+        self.gyro_rate = 0
+
+    def get_gyro_data(self,cam_angle_degrees=0):
+
+        if self.extracted:
+            return np.array(self.final_gyro_data)
         
         self.camera_angle = cam_angle_degrees
         r  = Rotation.from_euler('x', self.camera_angle, degrees=True)
@@ -36,14 +43,29 @@ class BlackboxExtractor:
                      rotated[0],
                      rotated[1],
                      rotated[2]]
+                #f = [frame.data[t]/1000000,
+                #     math.radians(frame.data[gx]),
+                #     math.radians(frame.data[gz]),
+                #     -math.radians(frame.data[gy])]
                 data_frames.append(f)
                 
-            self.final_gyro_data.extend(data_frames)    
-        return np.array(self.final_gyro_data)
+            self.final_gyro_data.extend(data_frames)
+
+
+        self.final_gyro_data = np.array(self.final_gyro_data)
+
+
+        # rough gyro rate assumed to be constant
+        self.gyro_rate = self.final_gyro_data.shape[0]/(self.final_gyro_data[-1,0] - self.final_gyro_data[0,0])
+
+
+        self.extracted = True
+
+        return self.final_gyro_data
 
 #testing
 if __name__ == "__main__":
-    bbe = BlackboxExtractor("btfl_all.bbl")
+    bbe = BlackboxExtractor("test_clips/GX015563.MP4_emuf_004.bbl") # btfl_all.bbl
     gyro_data = bbe.get_gyro_data()
     print(gyro_data)
     print(bbe.n_of_logs)

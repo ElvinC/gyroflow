@@ -132,12 +132,20 @@ class GyroIntegrator:
         value2 = smoothed_orientation[-1,:]
 
         for i in range(self.num_data_points-1, -1, -1):
-            value2 = quart.slerp(value2, smoothed_orientation[i,:],[(1-smothness)*1.9])[0]
+            value2 = quart.slerp(value2, smoothed_orientation[i,:],[(1-smothness)])[0]
             smoothed_orientation2[i] = value2
+
+        # Test rotation lock (doesn't work)
+        #if test:
+        #    from scipy.spatial.transform import Rotation
+        #    for i in range(self.num_data_points):
+        #        quat = smoothed_orientation2[i,:]
+        #        eul = Rotation([quat[1], quat[2], quat[3], quat[0]]).as_euler("xyz")
+        #        new_quat = Rotation.from_euler('xyz', [eul[0], eul[1], np.pi]).as_quat()
+        #        smoothed_orientation2[i,:] = [new_quat[3], new_quat[0], new_quat[1], new_quat[2]]
 
         return (self.time_list, smoothed_orientation2)
 
-        #
 
     def get_stabilize_transform(self,smooth=0.94):
         time_list, smoothed_orientation = self.get_smoothed_orientation(smooth)
@@ -160,6 +168,11 @@ class GyroIntegrator:
 
         out_times = []
         slerped_rotations = []
+
+        while time < 0:
+            slerped_rotations.append(smoothed_orientation[0])
+            out_times.append(time)
+            time += interval
 
         while time_list[0] >= time:
             slerped_rotations.append(smoothed_orientation[0])

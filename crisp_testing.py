@@ -19,16 +19,19 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+from blackbox_extract import BlackboxExtractor
 
-video_file_path = "test_clips/chessboard.mp4"
+video_file_path = "test_clips/GX015563.MP4"
 
-testgyro = Extractor(video_file_path)
+#testgyro = Extractor(video_file_path)
+bb = BlackboxExtractor("test_clips/GX015563.MP4_emuf_004.bbl")
 
-gyro_data = testgyro.get_gyro()
-gyro_rate = testgyro.gyro_rate
+gyro_data = bb.get_gyro_data()[:,1:4]
+print(gyro_data)
+gyro_rate = bb.gyro_rate
 print("Rate: {}".format(gyro_rate))
-fps = testgyro.fps
-img_size = testgyro.size
+fps = 59.94
+img_size = (2704,2032)
 
 
 CAMERA_MATRIX = np.array(
@@ -67,7 +70,7 @@ CAMERA_DIST_PARAM = 0.8894355
 CAMERA_FRAME_RATE = fps
 CAMERA_IMAGE_SIZE = img_size
 CAMERA_READOUT = 0.01
-GYRO_RATE_GUESS = 200 #  201.36990694913803
+GYRO_RATE_GUESS = gyro_rate #  201.36990694913803
 
 print(gyro_rate)
 Agyro_rate = 397.78157803740754
