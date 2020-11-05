@@ -63,40 +63,40 @@ times, stab_transform = integrator.get_interpolated_stab_transform(smooth=0.985,
 
 i = 0
 while(True):
-	# Read next frame
-	success, frame = cap.read() 
-	if success:
-		i +=1
+    # Read next frame
+    success, frame = cap.read() 
+    if success:
+        i +=1
 
-	if i > 2000:
-		break
+    if i > 2000:
+        break
 
-	if success and i > 300:
+    if success and i > 300:
 
-		frame_undistort = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR,
+        frame_undistort = cv2.remap(frame, map1, map2, interpolation=cv2.INTER_LINEAR,
                                       borderMode=cv2.BORDER_CONSTANT)
 
 
 
-		# Apply affine wrapping to the given frame
-		frame_stabilized = undistort.get_rotation_map(frame_undistort, stab_transform[i])
-		
-		# crop edges
+        # Apply affine wrapping to the given frame
+        frame_stabilized = undistort.get_rotation_map(frame_undistort, stab_transform[i])
+        
+        # crop edges
 
 
-		frame_out = crop_img = frame_stabilized[crop_start[1]:crop_start[1]+out_size[1], crop_start[0]:crop_start[0]+out_size[0]]
-		out.write(frame_out)
-		#print(frame_out.shape)
+        frame_out = crop_img = frame_stabilized[crop_start[1]:crop_start[1]+out_size[1], crop_start[0]:crop_start[0]+out_size[0]]
+        out.write(frame_out)
+        #print(frame_out.shape)
 
-		# If the image is too big, resize it.
-	#%if(frame_out.shape[1] > 1920): 
-	#		frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
-		
-		if(frame_out.shape[1] > 1920): 
-			frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
+        # If the image is too big, resize it.
+    #%if(frame_out.shape[1] > 1920): 
+    #		frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
+        
+        if(frame_out.shape[1] > 1920): 
+            frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
 
-		cv2.imshow("Before and After", frame_out)
-		cv2.waitKey(10)
+        cv2.imshow("Before and After", frame_out)
+        cv2.waitKey(10)
 
 # When everything done, release the capture
 cap.release()

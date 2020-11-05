@@ -284,7 +284,7 @@ class FisheyeCalibrator:
         scaled_K[2][2] = 1.0
 
 
-        return cv2.fisheye.undistortPoints(distorted_points, scaled_K, self.D)
+        return cv2.fisheye.undistortPoints(distorted_points, scaled_K, self.D, None, scaled_K)
 
     def decompose_homography(self, H, new_img_dim = None):
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
