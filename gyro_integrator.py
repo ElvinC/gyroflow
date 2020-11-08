@@ -207,7 +207,8 @@ class GyroIntegrator:
             "t": 0,
             "x": 1,
             "y": 2,
-            "z": 3
+            "z": 3,
+            "xyz": slice(1,4)
         }[axis]
 
         return np.copy(self.data[:,idx])

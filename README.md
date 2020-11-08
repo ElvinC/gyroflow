@@ -12,7 +12,7 @@ Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) p
 
 ### Status
 
-[Latest test clip.](https://youtu.be/uee1IgD7QWs)
+[Latest test clip.](https://youtu.be/SiHCn3GzLpM)
 
 Working:
 * Videoplayer based on OpenCV and Pyside2

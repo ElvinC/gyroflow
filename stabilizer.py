@@ -93,7 +93,7 @@ class GPMFStabilizer:
 
         err_slope = (d2-d1)/(v2-v1)
         correction_slope = err_slope + 1
-        gyro_start = (d1 - err_slope*v1)  + 1.5/self.fps
+        gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
 
         interval = 1/(correction_slope * self.fps)
 
@@ -106,8 +106,19 @@ class GPMFStabilizer:
         plt.plot(times1, transforms1[:,2])
         plt.plot(times2, transforms2[:,2])
         plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("z"))
-        plt.plot((self.integrator.get_raw_data("t") + d2), self.integrator.get_raw_data("z"))
-        plt.plot((self.integrator.get_raw_data("t") + d1), self.integrator.get_raw_data("z"))
+        #plt.plot((self.integrator.get_raw_data("t") + d2), self.integrator.get_raw_data("z"))
+        #plt.plot((self.integrator.get_raw_data("t") + d1), self.integrator.get_raw_data("z"))
+        plt.figure()
+        plt.plot(times1, -transforms1[:,0])
+        plt.plot(times2, -transforms2[:,0])
+        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("x"))
+        
+        plt.figure()
+        
+        plt.plot(times1, -transforms1[:,1])
+        plt.plot(times2, -transforms2[:,1])
+        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("y"))
+
         plt.show()
 
         # Temp new integrator with corrected time scale
@@ -119,11 +130,11 @@ class GPMFStabilizer:
         # Correct time scale
         new_gyro_data[:,0] = (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,initial_orientation=initial_orientation)
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
 
-        #self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+        #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
     def optical_flow_comparison(self, start_frame=0, analyze_length = 50):
         frame_times = []
@@ -239,15 +250,16 @@ class GPMFStabilizer:
         # Estimate offset between small optical flow slice and gyro data
 
         gyro_times = self.integrator.get_raw_data("t")
-        gyro_roll = self.integrator.get_raw_data("z")
-        OF_roll = OF_transforms[:,2]
+        gyro_data = self.integrator.get_raw_data("xyz")
+        print(gyro_data)
+
 
         costs = []
         offsets = []
 
         for i in range(800):
             offset = 0.8 - i/500
-            cost = self.gyro_cost_func(OF_times, OF_roll, gyro_times + offset, gyro_roll)
+            cost = self.gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
 
@@ -258,7 +270,7 @@ class GPMFStabilizer:
         start_idx = int((slice_length - new_slice_length)/2)
 
         OF_times = OF_times[start_idx:start_idx + new_slice_length]
-        OF_roll = OF_roll[start_idx:start_idx + new_slice_length]
+        OF_transforms = OF_transforms[start_idx:start_idx + new_slice_length,:]
 
         rough_offset = offsets[np.argmin(costs)]
 
@@ -271,12 +283,12 @@ class GPMFStabilizer:
         costs = []
         offsets = []
 
-        N = 500
+        N = 800
         dt = 0.1
 
         for i in range(N):
             offset = dt/2 - i * (dt/N) + rough_offset
-            cost = self.better_gyro_cost_func(OF_times, OF_roll, gyro_times + offset, gyro_roll)
+            cost = self.better_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
 
@@ -289,7 +301,15 @@ class GPMFStabilizer:
 
         return better_offset
 
-    def gyro_cost_func(self, OF_times, OF_roll, gyro_times, gyro_roll):
+    def gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
+
+        # Estimate time delay using only roll direction
+
+        gyro_roll = gyro_data[:,2]
+        OF_roll = OF_transforms[:,2]
+
+
+
         sum_squared_diff = 0
         gyro_idx = 0
 
@@ -308,11 +328,28 @@ class GPMFStabilizer:
         #plt.show()
         return sum_squared_diff
 
-    def better_gyro_cost_func(self, OF_times, OF_roll, gyro_times, gyro_roll):
+    def better_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
+
+
+        new_OF_transforms = np.copy(OF_transforms)
+        new_OF_transforms[0] = -new_OF_transforms[0]
+        new_OF_transforms[1] = -new_OF_transforms[1]
+
+        #gyro_x = gyro_data[:,0]
+        #OF_x = -OF_transforms[:,0]
+
+        #gyro_y = gyro_data[:,1]
+        #OF_y = -OF_transforms[:,1]
+
+        #gyro_z = gyro_data[:,2]
+        #OF_z = OF_transforms[:,2]
+
+        axes_weight = np.array([0.0,0.2,1]) # Weight of the xyz in the cost function
+
         sum_squared_diff = 0
         gyro_idx = 1
 
-        next_gyro_snip = 0
+        next_gyro_snip = np.array([0, 0, 0], dtype=np.float64)
         next_cumulative_time = 0
 
         for OF_idx in range(len(OF_times)):			
@@ -322,22 +359,23 @@ class GPMFStabilizer:
             while gyro_times[gyro_idx] < OF_times[OF_idx]:
                 delta_time = gyro_times[gyro_idx] - gyro_times[gyro_idx-1]
                 cumulative_time += delta_time
-                cumulative += gyro_roll[gyro_idx] * delta_time
+
+                cumulative += gyro_data[gyro_idx,:] * delta_time
                 gyro_idx += 1
 
             time_delta = OF_times[OF_idx] - gyro_times[gyro_idx-2]
             time_weight = time_delta / (gyro_times[gyro_idx] - gyro_times[gyro_idx-1])
-            cumulative += gyro_roll[gyro_idx-1] * time_delta
+            cumulative += gyro_data[gyro_idx-1,:] * time_delta
             cumulative_time  += time_delta
 
             time_delta = gyro_times[gyro_idx-1] - OF_times[OF_idx]
-            next_gyro_snip = gyro_roll[gyro_idx-1] * time_delta
+            next_gyro_snip = gyro_data[gyro_idx-1,:] * time_delta
             next_cumulative_time = time_delta
 
             cumulative /= cumulative_time
 
-            diff = cumulative - OF_roll[OF_idx]
-            sum_squared_diff += diff ** 2
+            diff = cumulative - new_OF_transforms[OF_idx,:]
+            sum_squared_diff += np.sum(np.multiply(diff ** 2, axes_weight))
             #print("Gyro {}, OF {}".format(gyro_times[gyro_idx], OF_times[OF_idx]))
 
         #print("DIFF^2: {}".format(sum_squared_diff))
@@ -365,7 +403,7 @@ class GPMFStabilizer:
             if success:
                 i +=1
 
-            if i > 1000:
+            if i > 1300:
                 break
 
             if success and i > 0:
@@ -409,7 +447,7 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json")
     stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/gopro_calib2.JSON")
     #stab.stabilization_settings(smooth = 0.8)
-    stab.auto_sync_stab(0.85,5*30, 30 * 30, 40)
+    stab.auto_sync_stab(0.85,5*30, 34 * 30, 60)
     #stab.optical_flow_comparison(start_frame=1300, analyze_length = 50)
     
 
