@@ -245,3 +245,86 @@ class GyroIntegrator:
 
         else:
             return quart.quaternion(1,0,0,0)
+
+
+class FrameRotationIntegrator(GyroIntegrator):
+    def __init__(self, input_data, initial_orientation=None):
+        """Initialize instance of FrameRotationIntegrator for getting orientation from frame change data
+
+        Args:
+            input_data (numpy.ndarray): Nx4 array, where each row is [frame num, gyroX,gyroY,gyroZ]
+            initial_orientation (float[4]): Quaternion representing the starting orientation, Defaults to [1, 0.0001, 0.0001, 0.0001].
+        """
+
+            
+        self.data = np.copy(input_data)
+
+        self.num_data_points = self.data.shape[0]
+
+        # initial orientation quaternion
+        if type(initial_orientation) != type(None):
+            self.orientation = np.array(initial_orientation)
+        else:
+            self.orientation = np.array([1, 0.0001, 0.0001, 0.0001])
+
+        # Variables to save integration data
+        self.orientation_list = None
+        self.time_list = None
+
+        # IMU reference vectors
+        self.imuRefX = quart.vector(1,0,0)
+        self.imuRefY = quart.vector(0,1,0)
+        self.imuRefY = quart.vector(0,0,1)
+
+        self.already_integrated = False
+
+
+    def integrate_all(self):
+        """go through each sample and integrate to find orientation. Assumes sample N contains change between N and N-1
+
+        Returns:
+            (np.ndarray, np.ndarray): tuple (time_list, quaternion orientation array)
+        """
+
+        if self.already_integrated:
+            return (self.time_list, self.orientation_list)
+
+
+        # temp lists to save data
+        temp_orientation_list = []
+        temp_time_list = []
+        
+
+        temp_orientation_list.append(np.copy(self.orientation))
+        temp_time_list.append(self.data[0][0] - 1)
+
+
+        for i in range(self.num_data_points):
+
+            # angular velocity vector
+            omega = self.data[i][1:]
+
+            # get current time
+            this_time = self.data[i][0]
+            # symmetrical dt calculation. Should give slightly better results when missing data
+            delta_time = 1 # frame
+
+            # Only calculate if angular velocity is present
+            if np.any(omega):
+                # calculate rotation quaternion
+                delta_q = self.rate_to_quart(omega, delta_time)
+
+                # rotate orientation by this quaternion
+                self.orientation = quart.quaternion_multiply(self.orientation, delta_q) # Maybe change order
+
+                self.orientation = quart.normalize(self.orientation)
+
+            temp_orientation_list.append(np.copy(self.orientation))
+            temp_time_list.append(this_time)
+
+        self.orientation_list = np.array(temp_orientation_list)
+        self.time_list = np.array(temp_time_list)
+
+        self.already_integrated = True
+
+        return (self.time_list, self.orientation_list)
