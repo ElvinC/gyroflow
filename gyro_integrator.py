@@ -6,10 +6,10 @@ This module uses gyroscope data to compute quaternion orientations over time
 
 
 import numpy as np
-import quaternion as quart
+import quaternion as quat
 
 class GyroIntegrator:
-    def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None):
+    def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None):
         """Initialize instance of gyroIntegrator for getting orientation from gyro data
 
         Args:
@@ -18,6 +18,7 @@ class GyroIntegrator:
             gyro_scaling (int, optional): gyro<xyz> * gyro_scaling should give angular velocity in rad/s. Defaults to 1.
             zero_out_time (bool, optional): Always start time at 0 in the output data. Defaults to True.
             initial_orientation (float[4]): Quaternion representing the starting orientation, Defaults to [1, 0.0001, 0.0001, 0.0001].
+            acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
         """
 
     
@@ -43,9 +44,9 @@ class GyroIntegrator:
         self.time_list = None
 
         # IMU reference vectors
-        self.imuRefX = quart.vector(1,0,0)
-        self.imuRefY = quart.vector(0,1,0)
-        self.imuRefY = quart.vector(0,0,1)
+        self.imuRefX = quat.vector(1,0,0)
+        self.imuRefY = quat.vector(0,1,0)
+        self.imuRefY = quat.vector(0,0,1)
 
         self.already_integrated = False
 
@@ -81,12 +82,12 @@ class GyroIntegrator:
             # Only calculate if angular velocity is present
             if np.any(omega):
                 # calculate rotation quaternion
-                delta_q = self.rate_to_quart(omega, delta_time)
+                delta_q = self.rate_to_quat(omega, delta_time)
 
                 # rotate orientation by this quaternion
-                self.orientation = quart.quaternion_multiply(self.orientation, delta_q) # Maybe change order
+                self.orientation = quat.quaternion_multiply(self.orientation, delta_q) # Maybe change order
 
-                self.orientation = quart.normalize(self.orientation)
+                self.orientation = quat.normalize(self.orientation)
 
             temp_orientation_list.append(np.copy(self.orientation))
             temp_time_list.append(this_time)
@@ -123,7 +124,7 @@ class GyroIntegrator:
 
 
         for i in range(self.num_data_points):
-            value = quart.slerp(value, self.orientation_list[i,:],[1-smothness])[0]
+            value = quat.slerp(value, self.orientation_list[i,:],[1-smothness])[0]
             smoothed_orientation[i] = value
 
         # reverse pass
@@ -132,7 +133,7 @@ class GyroIntegrator:
         value2 = smoothed_orientation[-1,:]
 
         for i in range(self.num_data_points-1, -1, -1):
-            value2 = quart.slerp(value2, smoothed_orientation[i,:],[(1-smothness)])[0]
+            value2 = quat.slerp(value2, smoothed_orientation[i,:],[(1-smothness)])[0]
             smoothed_orientation2[i] = value2
 
         # Test rotation lock (doesn't work)
@@ -156,7 +157,7 @@ class GyroIntegrator:
 
         for i in range(self.num_data_points):
             # rotation quaternion from smooth motion -> raw motion to counteract it
-            stab_rotations[i,:] = quart.rot_between(smoothed_orientation[i],self.orientation_list[i])
+            stab_rotations[i,:] = quat.rot_between(smoothed_orientation[i],self.orientation_list[i])
 
         return (self.time_list, stab_rotations) 
 
@@ -185,7 +186,7 @@ class GyroIntegrator:
 
                 # interpolate between two quaternions
                 weight = (time - time_list[i])/(time_list[i+1]-time_list[i])
-                slerped_rotations.append(quart.slerp(smoothed_orientation[i],smoothed_orientation[i+1],[weight]))
+                slerped_rotations.append(quat.slerp(smoothed_orientation[i],smoothed_orientation[i+1],[weight]))
                 out_times.append(time)
 
                 time += interval
@@ -216,7 +217,7 @@ class GyroIntegrator:
 
 
 
-    def rate_to_quart(self, omega, dt):
+    def rate_to_quat(self, omega, dt):
         """Rotation quaternion from gyroscope sample
 
         Args:
@@ -241,10 +242,10 @@ class GyroIntegrator:
             q2 = ha[1]
             q3 = ha[2]
 
-            return quart.normalize(quart.quaternion(q0,q1,q2,q3))
+            return quat.normalize(quat.quaternion(q0,q1,q2,q3))
 
         else:
-            return quart.quaternion(1,0,0,0)
+            return quat.quaternion(1,0,0,0)
 
 
 class FrameRotationIntegrator(GyroIntegrator):
@@ -272,9 +273,9 @@ class FrameRotationIntegrator(GyroIntegrator):
         self.time_list = None
 
         # IMU reference vectors
-        self.imuRefX = quart.vector(1,0,0)
-        self.imuRefY = quart.vector(0,1,0)
-        self.imuRefY = quart.vector(0,0,1)
+        self.imuRefX = quat.vector(1,0,0)
+        self.imuRefY = quat.vector(0,1,0)
+        self.imuRefY = quat.vector(0,0,1)
 
         self.already_integrated = False
 
@@ -312,12 +313,12 @@ class FrameRotationIntegrator(GyroIntegrator):
             # Only calculate if angular velocity is present
             if np.any(omega):
                 # calculate rotation quaternion
-                delta_q = self.rate_to_quart(omega, delta_time)
+                delta_q = self.rate_to_quat(omega, delta_time)
 
                 # rotate orientation by this quaternion
-                self.orientation = quart.quaternion_multiply(self.orientation, delta_q) # Maybe change order
+                self.orientation = quat.quaternion_multiply(self.orientation, delta_q) # Maybe change order
 
-                self.orientation = quart.normalize(self.orientation)
+                self.orientation = quat.normalize(self.orientation)
 
             temp_orientation_list.append(np.copy(self.orientation))
             temp_time_list.append(this_time)
@@ -328,3 +329,9 @@ class FrameRotationIntegrator(GyroIntegrator):
         self.already_integrated = True
 
         return (self.time_list, self.orientation_list)
+
+    def integrate_complementary(self):
+        """
+        TODO: Implement this
+        """
+        # Useful ressource: https://josephmalloch.wordpress.com/portfolio/imu-sensor-fusion/

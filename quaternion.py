@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-def quaternion(q0,q1,q2,q3):
-    return np.array([q0,q1,q2,q3])
+def quaternion(w,x,y,z):
+    return np.array([w,x,y,z])
 
 def vector(x,y,z):
     return np.array([x,y,z])
@@ -22,7 +22,7 @@ def quaternion_multiply(Q1, Q2):
 
 # https://www.mathworks.com/help/aeroblks/quaternioninverse.html
 def inverse(q):
-    # negate imaginary components to get inverse of unit quart
+    # negate imaginary components to get inverse of unit quat
     return quaternion(q[0],-q[1],-q[2],-q[3])
 
 def rot_between(q1, q2):
