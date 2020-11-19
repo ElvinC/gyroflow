@@ -12,7 +12,7 @@ Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) p
 
 ### Status
 
-[Latest test clip.](https://youtu.be/SiHCn3GzLpM)
+[Latest test clip.](https://youtu.be/ZhVVRnuuMFc)
 
 Working:
 * Videoplayer based on OpenCV and Pyside2
@@ -21,7 +21,7 @@ Working:
 * Basic video import/export
 * Camera calibration utility with preset import/export
 * GoPro metadata import
-* Symmetrical quaternion low-pass filter (more or less)
+* Symmetrical quaternion low-pass filter
 * Blackbox data import
 * Undistort and rotation perspective transform
 
@@ -30,6 +30,7 @@ Work in progress:
 * Camera orientation determination with respect to gyro
 
 Not working (yet) and potential future additions:
+* Gyro orientation presets
 * Stabilization UI
 * Incorporate acceleration data in orientation estimation for horizon lock (Complementary filter? Kalman is probably overkill but could be fun to learn).
 * Rolling shutter determination/correction (may or may not be required)

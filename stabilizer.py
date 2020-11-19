@@ -18,7 +18,9 @@ class Stabilizer:
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
         d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength)
+        #self.initial_offset = d1
         d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength)
+
 
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
 
@@ -34,20 +36,20 @@ class Stabilizer:
 
 
 
-        plt.plot(times1, transforms1[:,2])
-        plt.plot(times2, transforms2[:,2])
+        plt.plot(times1, transforms1[:,2] * self.fps)
+        plt.plot(times2, transforms2[:,2] * self.fps)
         plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("z"))
         #plt.plot((self.integrator.get_raw_data("t") + d2), self.integrator.get_raw_data("z"))
         #plt.plot((self.integrator.get_raw_data("t") + d1), self.integrator.get_raw_data("z"))
         plt.figure()
-        plt.plot(times1, -transforms1[:,0])
-        plt.plot(times2, -transforms2[:,0])
+        plt.plot(times1, -transforms1[:,0] * self.fps)
+        plt.plot(times2, -transforms2[:,0] * self.fps)
         plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("x"))
         
         plt.figure()
         
-        plt.plot(times1, -transforms1[:,1])
-        plt.plot(times2, -transforms2[:,1])
+        plt.plot(times1, -transforms1[:,1] * self.fps)
+        plt.plot(times2, -transforms2[:,1] * self.fps)
         plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("y"))
 
         plt.show()
@@ -75,6 +77,7 @@ class Stabilizer:
         curr_pts_lst = []
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        time.sleep(0.05)
 
         # Read first frame
         _, prev = self.cap.read()
@@ -156,7 +159,7 @@ class Stabilizer:
             else:
                 print("Frame {}".format(i))
         
-        transforms = np.array(transforms) * self.fps
+        transforms = np.array(transforms)
         estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst)
         return estimated_offset, frame_times, transforms
 
@@ -189,11 +192,11 @@ class Stabilizer:
         offsets = []
 
         N = 800
-        dt = 1.6
+        dt = 4
 
         for i in range(800):
             offset = dt/2 - i * (dt/N) + self.initial_offset
-            cost = self.gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
+            cost = self.better_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
 
@@ -239,7 +242,7 @@ class Stabilizer:
 
         # Estimate time delay using only roll direction
 
-        gyro_roll = gyro_data[:,2]
+        gyro_roll = gyro_data[:,2] * self.fps
         OF_roll = OF_transforms[:,2]
 
 
@@ -265,9 +268,9 @@ class Stabilizer:
     def better_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
 
-        new_OF_transforms = np.copy(OF_transforms)
-        new_OF_transforms[0] = -new_OF_transforms[0]
-        new_OF_transforms[1] = -new_OF_transforms[1]
+        new_OF_transforms = np.copy(OF_transforms) * self.fps
+        new_OF_transforms[:,0] = -new_OF_transforms[:,0]
+        new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
         #gyro_x = gyro_data[:,0]
         #OF_x = -OF_transforms[:,0]
@@ -278,7 +281,7 @@ class Stabilizer:
         #gyro_z = gyro_data[:,2]
         #OF_z = OF_transforms[:,2]
 
-        axes_weight = np.array([0.1,0.2,1]) # Weight of the xyz in the cost function
+        axes_weight = np.array([1,1,1]) # Weight of the xyz in the cost function
 
         sum_squared_diff = 0
         gyro_idx = 1
@@ -321,17 +324,18 @@ class Stabilizer:
 
     def renderfile(self, outpath = "Stabilized.mp4", out_size = (1920,1080)):
 
-        out = cv2.VideoWriter(outpath, -1, 29.97, (1920*2,1080))
+        out = cv2.VideoWriter(outpath, -1, self.fps, (1920*2,1080))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 19*30)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0*30)
 
         i = 0
         while(True):
             # Read next frame
+            frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read() 
 
-            frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+            
             print("FRAME: {}, IDX: {}".format(frame_num, i))
 
             if success:
@@ -644,7 +648,7 @@ class OpticalStabilizer:
 
     def renderfile(self, outpath = "Stabilized.mp4", out_size = (1920,1080)):
 
-        out = cv2.VideoWriter(outpath, -1, 29.97, (1920*2,1080))
+        out = cv2.VideoWriter(outpath, -1, 30, (1920*2,1080))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0*30)
@@ -730,7 +734,7 @@ if __name__ == "__main__":
     #stab = BBLStabilizer("test_clips/GX015563.MP4", "camera_presets/gopro_calib2.JSON", "test_clips/GX015563.MP4_emuf_004.bbl", initial_offset=2)
 
     #stab.stabilization_settings(smooth = 0.8)
-    stab.auto_sync_stab(0.89,1*30, 20 * 60, 50)
+    stab.auto_sync_stab(0.89,4*30, 19 * 60, 55)
     #stab.optical_flow_comparison(start_frame=1300, analyze_length = 50)
     #stab.times, stab.stab_transform = stab.integrator.get_interpolated_stab_transform(smooth=0.785,start=2.56+0.07,interval = 1/59.94)
 
@@ -740,7 +744,7 @@ if __name__ == "__main__":
     stab.map1, stab.map2 = stab.undistort.get_maps(1.6,new_img_dim=(stab.width,stab.height))
 
 
-    stab.renderfile("GX016015_stab.mp4",out_size = (1920,1080))
+    stab.renderfile("GX016015_stab_2.mp4",out_size = (1920,1080))
     stab.release()
 
     # 20 / self.fps: 0.042
