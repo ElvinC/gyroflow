@@ -8,7 +8,7 @@ This is currently a work in progress project, but the goal is to use the gyro da
 
 The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a (possibly outdated and/or buggy) binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). The current release was for testing pyinstaller. This will be updated once the stabilization code works.
 
-Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) project by jaromeyer for stitching blackbox data to Hero 7 files for use with Reelsteady Go.
+Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) project by jaromeyer for stitching blackbox data to Hero 7 files for use with Reelsteady Go. There's also a [discord server](https://discord.gg/Rs4GBPm) run by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for blackbox2gpmf, gyroflow, and related projects.
 
 ### Status
 
