@@ -27,11 +27,11 @@ Working:
 
 Work in progress:
 * Automatic/semi-automatic temporal gyro/video sync. Basic sync working (bit finnicky and needs tweaking)
-* Camera orientation determination with respect to gyro
+* Stabilization UI
 
 Not working (yet) and potential future additions:
 * Gyro orientation presets
-* Stabilization UI
+* Camera orientation determination with respect to gyro
 * Incorporate acceleration data in orientation estimation for horizon lock (Complementary filter? Kalman is probably overkill but could be fun to learn).
 * Rolling shutter determination/correction (may or may not be required)
 * Improved low-pass filter and more stabilization modes (Time-lapse, separate pitch/yaw/roll smoothness control etc.)

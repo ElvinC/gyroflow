@@ -66,8 +66,10 @@ class Stabilizer:
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
 
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
-        #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+        # Doesn't work for BBL for some reason. TODO: Figure out why
+        #self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
     def optical_flow_comparison(self, start_frame=0, analyze_length = 50):
         frame_times = []
@@ -191,17 +193,17 @@ class Stabilizer:
         costs = []
         offsets = []
 
-        N = 800
+        N = 600
         dt = 4
 
-        for i in range(800):
+        for i in range(N):
             offset = dt/2 - i * (dt/N) + self.initial_offset
             cost = self.better_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
 
         slice_length = len(OF_times)
-        cutting_ratio = 0.4
+        cutting_ratio = 1
         new_slice_length = int(slice_length*cutting_ratio)
 
         start_idx = int((slice_length - new_slice_length)/2)
@@ -289,6 +291,9 @@ class Stabilizer:
         next_gyro_snip = np.array([0, 0, 0], dtype=np.float64)
         next_cumulative_time = 0
 
+        while gyro_times[gyro_idx + 1] < OF_times[0]:
+            gyro_idx += 1
+
         for OF_idx in range(len(OF_times)):			
             cumulative = next_gyro_snip
             cumulative_time =  next_cumulative_time
@@ -322,12 +327,16 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-    def renderfile(self, outpath = "Stabilized.mp4", out_size = (1920,1080)):
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080)):
 
         out = cv2.VideoWriter(outpath, -1, self.fps, (1920*2,1080))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0*30)
+
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+
+        num_frames = int((stoptime - starttime) * self.fps) 
+
 
         i = 0
         while(True):
@@ -381,7 +390,7 @@ class Stabilizer:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile):
+    def __init__(self, videopath, calibrationfile, hero6 = False):
         # General video stuff
         self.cap = cv2.VideoCapture(videopath)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -400,12 +409,15 @@ class GPMFStabilizer(Stabilizer):
         self.gyro_data = self.gpmf.get_gyro(True)
 
         # Hero 6??
-        self.gyro_data[:,1] = self.gyro_data[:,1]
-        self.gyro_data[:,2] = -self.gyro_data[:,2]
-        self.gyro_data[:,3] = self.gyro_data[:,3]
+        if hero6:
+            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,2] = -self.gyro_data[:,2]
+            self.gyro_data[:,3] = self.gyro_data[:,3]
+        else:
+            # Hero 8??
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
-        # Hero 8??
-        #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+        
 
         #gyro_data[:,1] = gyro_data[:,1]
         #gyro_data[:,2] = -gyro_data[:,2]
@@ -474,7 +486,7 @@ class BBLStabilizer(Stabilizer):
 
         # This seems to make the orientation match. Implement auto match later
         self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-        self.gyro_data[:,1] = self.gyro_data[:,1]
+        self.gyro_data[:,2] = -self.gyro_data[:,2]
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -487,7 +499,7 @@ class BBLStabilizer(Stabilizer):
         self.initial_offset = initial_offset
 
     
-    def stabilization_settings(self, smooth = 0.95):
+    def stabilization_settings(self, smooth = 0.99):
 
 
         v1 = 20 / self.fps
@@ -506,7 +518,10 @@ class BBLStabilizer(Stabilizer):
 
         print("Interval {}, slope {}".format(interval, correction_slope))
 
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=0.985,start=2.56+0.07,interval = 1/59.94)
+
+
+        #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
 
@@ -646,12 +661,14 @@ class OpticalStabilizer:
         return frame_idx, transforms
 
 
-    def renderfile(self, outpath = "Stabilized.mp4", out_size = (1920,1080)):
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080)):
 
         out = cv2.VideoWriter(outpath, -1, 30, (1920*2,1080))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0*30)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+
+        num_frames = int((stoptime - starttime) * self.fps) 
 
         i = 0
         while(True):
@@ -666,7 +683,7 @@ class OpticalStabilizer:
             if success:
                 i +=1
 
-            if i > 900:
+            if i > num_frames:
                 break
 
             if success and i > 0:
@@ -728,23 +745,27 @@ if __name__ == "__main__":
 
 
     #exit()
-    #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json")
-    stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON")
+    #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json") # Walk
+    #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
+    #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    #stab = BBLStabilizer("test_clips/GX015563.MP4", "camera_presets/gopro_calib2.JSON", "test_clips/GX015563.MP4_emuf_004.bbl", initial_offset=2)
+    stab = BBLStabilizer("test_clips/GX015563.MP4", "camera_presets/gopro_calib2.JSON", "test_clips/GX015563.MP4_emuf_004.bbl", initial_offset=-2) # FPV clip
 
     #stab.stabilization_settings(smooth = 0.8)
-    stab.auto_sync_stab(0.89,4*30, 19 * 60, 55)
-    #stab.optical_flow_comparison(start_frame=1300, analyze_length = 50)
-    #stab.times, stab.stab_transform = stab.integrator.get_interpolated_stab_transform(smooth=0.785,start=2.56+0.07,interval = 1/59.94)
+    # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
+
+    stab.auto_sync_stab(0.985,5*60, 18 * 60, 70) # FPV clip
+    #stab.stabilization_settings()
+
 
     # Camera undistortion stuff
-    stab.undistort = FisheyeCalibrator()
-    stab.undistort.load_calibration_json("camera_presets/Hero_7_2.7K_60_4by3_wide.json", True)
-    stab.map1, stab.map2 = stab.undistort.get_maps(1.6,new_img_dim=(stab.width,stab.height))
+    #stab.undistort = FisheyeCalibrator()
+    #stab.undistort.load_calibration_json("camera_presets/Hero_7_2.7K_60_4by3_wide.json", True)
+    #stab.map1, stab.map2 = stab.undistort.get_maps(2.6,new_img_dim=(stab.width,stab.height))
 
 
-    stab.renderfile("GX016015_stab_2.mp4",out_size = (1920,1080))
+    #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
+    stab.renderfile(4, 26, "FPV_stab.mp4",out_size = (1920,1080))
     stab.release()
 
     # 20 / self.fps: 0.042

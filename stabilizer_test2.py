@@ -25,7 +25,7 @@ out = cv2.VideoWriter(outpath, -1, 59.94, out_size )
 
 undistort = FisheyeCalibrator()
 
-undistort.load_calibration_json("camera_presets/Hero_7_2.7K_60_4by3_wide.json", True)
+undistort.load_calibration_json("camera_presets/gopro_calib2.JSON", True)
 
 
 map1, map2 = undistort.get_maps(2)
@@ -41,7 +41,7 @@ gyro_data = bb.get_gyro_data(cam_angle_degrees=-2)
 gyro_data[:,[2, 3]] = gyro_data[:,[3, 2]]
 
 
-gyro_data[:,3] = gyro_data[:,3]
+gyro_data[:,2] = -gyro_data[:,2]
 
 #gyro_data[:,1:] = -gyro_data[:,1:]
 

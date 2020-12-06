@@ -70,7 +70,16 @@ class Launcher(QtWidgets.QWidget):
         self.calibrator_utility.show()
 
     def open_stab_util(self):
-        pass
+        """Open video stabilization utility in new window
+        """
+        # Only open if not already open
+        if self.stabilizer_utility:
+            if self.stabilizer_utility.isVisible():
+                return
+        
+        self.stab_utility = StabUtility()
+        self.stab_utility.resize(500, 500)
+        self.stab_utility.show()
 
     def open_stretch_util(self):
         """Open non-linear stretch utility in new window
@@ -865,6 +874,208 @@ class StretchUtility(QtWidgets.QMainWindow):
         err_window.setWindowTitle("Something's gone awry")
         err_window.show()
 
+
+
+class StabUtility(QtWidgets.QMainWindow):
+    def __init__(self):
+        """Qt window containing utility for syncing and stabilization
+        """
+        super().__init__()
+
+        # Initialize UI
+        self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
+
+        self.main_widget = QtWidgets.QWidget()
+        self.layout = QtWidgets.QVBoxLayout()
+        self.main_widget.setLayout(self.layout)
+
+        # video player with controls
+        self.video_viewer = VideoPlayerWidget()
+        self.layout.addWidget(self.video_viewer)
+
+        self.setCentralWidget(self.main_widget)
+
+        # control buttons
+        self.main_controls = QtWidgets.QWidget()
+        self.main_controls_layout = QtWidgets.QHBoxLayout()
+        self.main_controls.setLayout(self.main_controls_layout)
+
+        # button for syncing around current frame
+        self.syncpoint_button = QtWidgets.QPushButton("Add sync point")
+        self.syncpoint_button.clicked.connect(self.syncpoint_handler)
+        self.main_controls_layout.addWidget(self.syncpoint_button)
+
+
+        # slider for adjusting unwarped area
+        self.smooth_text = QtWidgets.QLabel("Smoothness (0%):")
+        self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.smooth_slider.setMinimum(0)
+        self.smooth_slider.setValue(0)
+        self.smooth_slider.setMaximum(100)
+        self.smooth_slider.setSingleStep(1)
+        self.smooth_slider.setTickInterval(1)
+        self.smooth_slider.valueChanged.connect(self.smooth_changed)
+
+        self.main_controls_layout.addWidget(self.smooth_text)
+        self.main_controls_layout.addWidget(self.smooth_slider)
+
+        # slider for adjusting non linear crop
+        self.crop_text = QtWidgets.QLabel("Crop (2.0):")
+        self.crop_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.crop_slider.setMinimum(10)
+        self.crop_slider.setValue(20)
+        self.crop_slider.setMaximum(40)
+        self.crop_slider.setSingleStep(1)
+        self.crop_slider.setTickInterval(1)
+        self.crop_slider.valueChanged.connect(self.crop_changed)
+
+
+        self.main_controls_layout.addWidget(self.crop_text)
+        self.main_controls_layout.addWidget(self.crop_slider)        
+
+        # output size choice
+        self.out_size_text = QtWidgets.QLabel("Output size: ")
+        self.main_controls_layout.addWidget(self.out_size_text)
+
+        self.out_width_control = QtWidgets.QSpinBox(self)
+        self.out_width_control.setMinimum(16)
+        self.out_width_control.setMaximum(7680) # 8K max is probably fine
+        self.out_width_control.setValue(1920)
+        self.out_width_control.valueChanged.connect(self.update_out_size)
+
+        self.main_controls_layout.addWidget(self.out_width_control)       
+
+        # output size choice
+        self.out_height_control = QtWidgets.QSpinBox(self)
+        self.out_height_control.setMinimum(9)
+        self.out_height_control.setMaximum(4320)
+        self.out_height_control.setValue(1080)
+        self.out_height_control.valueChanged.connect(self.update_out_size)
+
+        self.main_controls_layout.addWidget(self.out_height_control)   
+
+        # button for recomputing image stretching maps
+        self.recompute_stab_button = QtWidgets.QPushButton("Apply settings and recompute")
+        self.recompute_stab_button.clicked.connect(self.recompute_stab)
+        
+        self.main_controls_layout.addWidget(self.recompute_stab_button)
+
+        # button for exporting video
+        self.export_button = QtWidgets.QPushButton("Export video")
+        self.export_button.clicked.connect(self.export_video)
+        
+        self.main_controls_layout.addWidget(self.export_button)
+
+        # add control bar to main layout
+        self.layout.addWidget(self.main_controls)
+
+        # file menu setup
+        menubar = self.menuBar()
+        filemenu = menubar.addMenu('&File')
+
+        # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
+
+        self.open_file = QtWidgets.QAction(icon, 'Open file', self)
+        self.open_file.setShortcut("Ctrl+O")
+        self.open_file.triggered.connect(self.open_file_func)
+        filemenu.addAction(self.open_file)
+
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
+        self.open_preset = QtWidgets.QAction(icon, 'Open calibration preset', self)
+        self.open_preset.triggered.connect(self.open_preset_func)
+        filemenu.addAction(self.open_preset)
+
+        self.statusBar()
+
+        self.infile_path = ""
+
+        
+
+        self.show()
+
+        self.main_widget.show()
+
+        # non linear setup
+        
+
+    def open_file_func(self):
+        """Open file using Qt filedialog 
+        """
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
+        self.infile_path = path[0]
+        self.video_viewer.set_video_path(path[0])
+
+        #self.recompute_stab()
+
+        self.video_viewer.next_frame()
+
+    def open_preset_func(self):
+        pass
+        
+
+    def closeEvent(self, event):
+        print("Closing now")
+        self.video_viewer.destroy_thread()
+        event.accept()
+
+    def smooth_changed(self):
+        """Smoothness has changed
+        """
+        pass
+
+
+    def crop_changed(self):
+        """Nonlinear expo has changed
+        """
+        crop_val = self.crop_slider.value() / 10
+        self.crop_text.setText("Crop ({}):".format(crop_val))
+
+    def syncpoint_handler(self):
+        """Add sync point
+        """
+        pass
+
+    def update_out_size(self):
+        """Update export image size
+        """
+        #print(self.out_width_control.value())
+        pass
+
+    def recompute_stab(self):
+        """Update sync and stabilization
+        """
+        pass
+
+
+    def export_video(self):
+        """Gives save location using filedialog
+           and saves video to given location
+        """
+        # no input file opened
+        if self.infile_path == "":
+            self.show_error("No video file loaded")
+            return
+
+        self.video_viewer.stop()
+
+        # get file
+
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="mp4 (*.mp4);; Quicktime (*.mov)")
+        print(filename[0])
+
+        if len(filename[0]) == 0:
+            self.show_error("No output file given")
+            return
+        
+        pass
+
+    def show_error(self, msg):
+        err_window = QtWidgets.QMessageBox(self)
+        err_window.setIcon(QtWidgets.QMessageBox.Critical)
+        err_window.setText(msg)
+        err_window.setWindowTitle("Something's gone awry")
+        err_window.show()
 
 
 def main():
