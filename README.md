@@ -8,7 +8,8 @@ This is currently a work in progress project, but the goal is to use the gyro da
 
 The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a (possibly outdated and/or buggy) binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). The current release was for testing pyinstaller. This will be updated once the stabilization code works.
 
-Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) project by jaromeyer for stitching blackbox data to Hero 7 files for use with Reelsteady Go. There's also a [discord server](https://discord.gg/Rs4GBPm) run by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for blackbox2gpmf, gyroflow, and related projects.
+Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) project by jaromeyer for stitching blackbox data to Hero 7 files for use with Reelsteady Go. Cleric-K previously worked on emulating GoPro metadata and adding blackbox data to non-GoPro cameras for use with Reelsteady Go with great results, and attilafustos has added a UI. Check it out [here](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui).
+There's also a [discord server](https://discord.gg/Rs4GBPm) run by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for blackbox2gpmf, gyroflow, and related projects.
 
 ### Status
 
@@ -26,8 +27,8 @@ Working:
 * Undistort and rotation perspective transform
 
 Work in progress:
-* Automatic/semi-automatic temporal gyro/video sync. Basic sync working (bit finnicky and needs tweaking)
-* Stabilization UI
+* Automatic/semi-automatic temporal gyro/video sync. Basic sync working (bit finnicky and may require tweaking) for GPMF data. Still not reliable for blackbox log and has a few bugs being worked on.
+* Stabilization UI. Working barebone version without video player added.
 
 Not working (yet) and potential future additions:
 * Gyro orientation presets

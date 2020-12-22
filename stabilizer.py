@@ -119,7 +119,19 @@ class Stabilizer:
                 # TODO: Try getting undistort + homography working for more accurate rotation estimation
                 src_pts = self.undistort.undistort_points(prev_pts, new_img_dim=(self.width,self.height))
                 dst_pts = self.undistort.undistort_points(curr_pts, new_img_dim=(self.width,self.height))
-                H, mask = cv2.findHomography(src_pts, dst_pts)
+
+                filtered_src = []
+                filtered_dst = []
+
+                for i in range(src_pts.shape[0]):
+                    # if both points are within frame
+                    if (0 < src_pts[i,0,0] < self.width) and (0 < dst_pts[i,0,0] < self.width) and (0 < src_pts[i,0,1] < self.height) and (0 < dst_pts[i,0,1] < self.height):
+                        filtered_src.append(src_pts[i,:])
+                        filtered_dst.append(dst_pts[i,:])
+
+
+
+                H, mask = cv2.findHomography(np.array(filtered_src), np.array(filtered_dst))
                 retval, rots, trans, norms = self.undistort.decompose_homography(H, new_img_dim=(self.width,self.height))
 
 
@@ -128,7 +140,8 @@ class Stabilizer:
                 smallest_mag = 1000
                 for rot in rots:
                     thisrot = Rotation.from_matrix(rots[0])
-                    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.3:
+                    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.6:
+                        # For some reason some camera calibrations lead to super high rotation magnitudes... Still testing.
                         roteul = Rotation.from_matrix(rot).as_euler("xyz")
                         smallest_mag = thisrot.magnitude()
 
@@ -182,12 +195,12 @@ class Stabilizer:
         plt.show()
 
     def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list):
-        print(prev_pts_list)
+        #print(prev_pts_list)
         # Estimate offset between small optical flow slice and gyro data
 
         gyro_times = self.integrator.get_raw_data("t")
         gyro_data = self.integrator.get_raw_data("xyz")
-        print(gyro_data)
+        #print(gyro_data)
 
 
         costs = []
@@ -329,7 +342,7 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080)):
 
-        out = cv2.VideoWriter(outpath, -1, self.fps, (1920*2,1080))
+        out = cv2.VideoWriter(outpath, -1, self.fps, (out_size[0]*2,out_size[1]))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
@@ -350,7 +363,7 @@ class Stabilizer:
             if success:
                 i +=1
 
-            if i > 1300:
+            if i > num_frames or i == len(self.stab_transform):
                 break
 
             if success and i > 0:
@@ -377,12 +390,13 @@ class Stabilizer:
                 frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
                 frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
-                concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (1920*2,1080))
+                concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (out_size[0]*2,out_size[1]))
                 out.write(concatted)
                 cv2.imshow("Before and After", concatted)
                 cv2.waitKey(5)
 
         # When everything done, release the capture
+        cv2.destroyAllWindows()
         out.release()
 
     def release(self):
@@ -390,8 +404,9 @@ class Stabilizer:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, hero6 = False):
+    def __init__(self, videopath, calibrationfile, hero6 = False, fov_scale = 1.6):
         # General video stuff
+        self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

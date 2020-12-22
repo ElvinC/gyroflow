@@ -10,6 +10,8 @@ import calibrate_video
 import time
 import nonlinear_stretch
 
+from stabilizer import GPMFStabilizer
+
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
     """
@@ -26,8 +28,11 @@ class Launcher(QtWidgets.QWidget):
         self.calibrator_button.setMinimumSize(300,50)
         self.calibrator_button.setToolTip("Use this to generate camera calibration files")
 
-        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer")
+        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer (Doesn't work yet)")
         self.stabilizer_button.setMinimumSize(300,50)
+
+        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (barebone dev version)")
+        self.stabilizer_barebone_button.setMinimumSize(300,50)
 
         self.stretch_button = QtWidgets.QPushButton("Non-linear Stretch")
         self.stretch_button.setMinimumSize(300,50)
@@ -41,6 +46,7 @@ class Launcher(QtWidgets.QWidget):
         self.layout.addWidget(self.text)
         self.layout.addWidget(self.calibrator_button)
         self.layout.addWidget(self.stabilizer_button)
+        self.layout.addWidget(self.stabilizer_barebone_button)
         self.layout.addWidget(self.stretch_button)
         
         self.setLayout(self.layout)
@@ -49,11 +55,13 @@ class Launcher(QtWidgets.QWidget):
 
         self.calibrator_button.clicked.connect(self.open_calib_util)
         self.stabilizer_button.clicked.connect(self.open_stab_util)
+        self.stabilizer_barebone_button.clicked.connect(self.open_stab_util_barebone)
         self.stretch_button.clicked.connect(self.open_stretch_util)
 
         # Placeholder for utility windows.
         self.calibrator_utility = None
         self.stabilizer_utility = None
+        self.stabilizer_utility_barebone = None
         self.stretch_utility = None
 
     def open_calib_util(self):
@@ -80,6 +88,15 @@ class Launcher(QtWidgets.QWidget):
         self.stab_utility = StabUtility()
         self.stab_utility.resize(500, 500)
         self.stab_utility.show()
+
+    def open_stab_util_barebone(self):
+        if self.stabilizer_utility_barebone:
+            if self.stabilizer_utility_barebone.isVisible():
+                return
+
+        self.stabilizer_utility_barebone = StabUtilityBarebone()
+        self.stabilizer_utility_barebone.resize(500, 800)
+        self.stabilizer_utility_barebone.show()
 
     def open_stretch_util(self):
         """Open non-linear stretch utility in new window
@@ -507,7 +524,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         """
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="JSON preset (*.json)")
 
-        if (len(path) == 0):
+        if (len(path[0]) == 0):
             print("No file selected")
             return
 
@@ -1077,6 +1094,359 @@ class StabUtility(QtWidgets.QMainWindow):
         err_window.setWindowTitle("Something's gone awry")
         err_window.show()
 
+
+
+class StabUtilityBarebone(QtWidgets.QMainWindow):
+    def __init__(self):
+        """Qt window containing barebone utility for stabilization. (No video viewer)
+        """
+        super().__init__()
+
+        # Initialize UI
+        self.setWindowTitle("Gyroflow Stabilizer Barebone {}".format(__version__))
+
+        self.main_widget = QtWidgets.QWidget()
+        self.layout = QtWidgets.QVBoxLayout()
+        self.main_widget.setLayout(self.layout)
+        self.main_widget.setStyleSheet("font-size: 12px")
+
+        # video player with controls
+
+        self.setCentralWidget(self.main_widget)
+
+        # control buttons
+        self.main_controls = QtWidgets.QWidget()
+        self.main_controls_layout = QtWidgets.QVBoxLayout()
+        self.main_controls.setLayout(self.main_controls_layout)
+
+        self.open_vid_button = QtWidgets.QPushButton("Open video file")
+        self.open_vid_button.setMinimumHeight(30)
+        self.open_vid_button.clicked.connect(self.open_file_func)
+        
+        self.main_controls_layout.addWidget(self.open_vid_button)
+
+        # lens preset
+        self.open_preset_button = QtWidgets.QPushButton("Open lens preset")
+        self.open_preset_button.setMinimumHeight(30)
+        self.open_preset_button.clicked.connect(self.open_preset_func)
+        self.main_controls_layout.addWidget(self.open_preset_button)
+
+
+        self.open_bbl_button = QtWidgets.QPushButton("Open BBL file (leave empty for GPMF, not implemented yet)")
+        self.open_bbl_button.setMinimumHeight(30)
+        self.open_bbl_button.clicked.connect(self.open_bbl_func)
+        self.main_controls_layout.addWidget(self.open_bbl_button)
+
+        # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
+        self.smooth_text = QtWidgets.QLabel("Smoothness (85%):")
+        self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.smooth_slider.setMinimum(0)
+        self.smooth_slider.setValue(85)
+        self.smooth_slider.setMaximum(100)
+        self.smooth_slider.setSingleStep(1)
+        self.smooth_slider.setTickInterval(1)
+        self.smooth_slider.valueChanged.connect(self.smooth_changed)
+
+        self.main_controls_layout.addWidget(self.smooth_text)
+        self.main_controls_layout.addWidget(self.smooth_slider)
+
+        explaintext = QtWidgets.QLabel("<b>Note:</b> 0% corresponds to no smoothing and 100% corresponds to a locked camera. " \
+        "intermediate values are non-linear and depend on gyro sample rate in current implementation.")
+        explaintext.setWordWrap(True)
+        explaintext.setMinimumHeight(60)
+        self.main_controls_layout.addWidget(explaintext)
+
+
+        # slider for adjusting non linear crop
+        self.fov_text = QtWidgets.QLabel("FOV scale (1.5):")
+        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_slider.setMinimum(10)
+        self.fov_slider.setValue(15)
+        self.fov_slider.setMaximum(40)
+        self.fov_slider.setSingleStep(1)
+        self.fov_slider.setTickInterval(1)
+        self.fov_slider.valueChanged.connect(self.fov_scale_changed)
+
+
+        self.main_controls_layout.addWidget(self.fov_text)
+        self.main_controls_layout.addWidget(self.fov_slider)        
+
+        # output size choice
+        self.out_size_text = QtWidgets.QLabel("Output crop: ")
+        self.main_controls_layout.addWidget(self.out_size_text)
+
+        self.out_width_control = QtWidgets.QSpinBox(self)
+        self.out_width_control.setMinimum(16)
+        self.out_width_control.setMaximum(7680) # 8K max is probably fine
+        self.out_width_control.setValue(1920)
+        self.out_width_control.valueChanged.connect(self.update_out_size)
+
+        # output size choice
+        self.out_height_control = QtWidgets.QSpinBox(self)
+        self.out_height_control.setMinimum(9)
+        self.out_height_control.setMaximum(4320)
+        self.out_height_control.setValue(1080)
+        self.out_height_control.valueChanged.connect(self.update_out_size)
+
+        self.main_controls_layout.addWidget(self.out_height_control)   
+        self.main_controls_layout.addWidget(self.out_width_control)
+
+
+        explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
+        "and perspective transform, so output must be cropped seperately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
+        explaintext.setWordWrap(True)
+        explaintext.setMinimumHeight(60)
+        self.main_controls_layout.addWidget(explaintext)
+
+        # output size choice
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds (Sync requires +/- 2 sec. Set to 0 for GPMF):"))
+
+        self.offset_control = QtWidgets.QDoubleSpinBox(self)
+        self.offset_control.setMinimum(-100)
+        self.offset_control.setMaximum(100)
+        self.offset_control.setValue(0)
+
+        self.main_controls_layout.addWidget(self.offset_control)
+
+
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Auto sync timestamp 1 (video time in seconds. Shaky parts of video work best)"))
+        self.sync1_control = QtWidgets.QDoubleSpinBox(self)
+        self.sync1_control.setMinimum(0)
+        self.sync1_control.setMaximum(10000)
+        self.sync1_control.setValue(5)
+        self.main_controls_layout.addWidget(self.sync1_control)
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Auto sync timestamp 2"))
+        self.sync2_control = QtWidgets.QDoubleSpinBox(self)
+        self.sync2_control.setMinimum(0)
+        self.sync2_control.setMaximum(10000)
+        self.sync2_control.setValue(30)
+        self.main_controls_layout.addWidget(self.sync2_control)
+
+        # How many frames to analyze using optical flow each slice
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Number of frames to analyze per slice using optical flow:"))
+        self.OF_frames_control = QtWidgets.QSpinBox(self)
+        self.OF_frames_control.setMinimum(10)
+        self.OF_frames_control.setMaximum(300)
+        self.OF_frames_control.setValue(60)
+
+        self.main_controls_layout.addWidget(self.OF_frames_control)
+
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel('Gyro orientation. Write "hero6" or "hero8". Orientation presets to be added later.'))
+        self.gyro_control = QtWidgets.QLineEdit(self)
+        self.gyro_control.setText("hero6")
+        self.main_controls_layout.addWidget(self.gyro_control)
+        
+
+        # button for (re)computing sync
+        self.recompute_stab_button = QtWidgets.QPushButton("Apply settings and compute sync")
+        self.recompute_stab_button.setMinimumHeight(30)
+        self.recompute_stab_button.clicked.connect(self.recompute_stab)
+        self.main_controls_layout.addWidget(self.recompute_stab_button)
+
+        explaintext = QtWidgets.QLabel("<b>Note:</b> Check console for info after clicking. A number of plots will appear during the" \
+                                        "process showing the difference between gyro and optical flow. Just close these after you've done looking at them.")
+        explaintext.setWordWrap(True)
+        explaintext.setMinimumHeight(60)
+        self.main_controls_layout.addWidget(explaintext)
+
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
+        self.export_starttime = QtWidgets.QDoubleSpinBox(self)
+        self.export_starttime.setMinimum(0)
+        self.export_starttime.setMaximum(10000)
+        self.export_starttime.setValue(0)
+        self.main_controls_layout.addWidget(self.export_starttime)
+
+
+        self.export_stoptime = QtWidgets.QDoubleSpinBox(self)
+        self.export_stoptime.setMinimum(0)
+        self.export_stoptime.setMaximum(10000)
+        self.export_stoptime.setValue(30)
+        self.main_controls_layout.addWidget(self.export_stoptime)
+
+        
+        # button for exporting video
+        self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
+        self.export_button.setMinimumHeight(30)
+        self.export_button.setEnabled(False)
+        self.export_button.clicked.connect(self.export_video)
+        
+        self.main_controls_layout.addWidget(self.export_button)
+
+        # add control bar to main layout
+        self.layout.addWidget(self.main_controls)
+
+
+        self.infile_path = ""
+        self.preset_path = ""
+        self.BBL_path = ""
+        self.stab = None
+        self.analyzed = False
+        
+        self.show()
+
+        self.main_widget.show()
+
+        # non linear setup
+        
+
+    def open_file_func(self):
+        """Open file using Qt filedialog 
+        """
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
+
+        if (len(path[0]) == 0):
+            print("No file selected")
+            return
+        
+        self.infile_path = path[0]
+        self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
+        self.open_vid_button.setStyleSheet("font-weight:bold;")
+
+
+
+
+    def open_preset_func(self):
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="JSON preset (*.json)")
+
+        if (len(path[0]) == 0):
+            print("No file selected")
+            return
+        print(path)
+        self.preset_path = path[0]
+        self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
+        self.open_preset_button.setStyleSheet("font-weight:bold;")
+
+    def open_bbl_func(self):
+        pass
+        
+
+    def closeEvent(self, event):
+        print("Closing now")
+        #self.video_viewer.destroy_thread()
+        event.accept()
+
+    def smooth_changed(self):
+        """Smoothness has changed
+        """
+        smooth_val = self.smooth_slider.value()
+        self.smooth_text.setText("Smoothness ({}%):".format(smooth_val))
+
+
+
+    def fov_scale_changed(self):
+        """Undistort FOV scale changed
+        """
+        fov_val = self.fov_slider.value() / 10
+        self.fov_text.setText("FOV scale ({}):".format(fov_val))
+
+    def update_out_size(self):
+        """Update export image size
+        """
+        #print(self.out_width_control.value())
+        pass
+
+    def recompute_stab(self):
+        """Update sync and stabilization
+        """
+        if self.BBL_path == "":
+            # GPMF file
+            gyro_orientation_text = self.gyro_control.text().lower().strip()
+            if gyro_orientation_text not in ["hero6", "hero8"]:
+                self.show_error("{} is not a valid orientation preset, if you can even call it a preset. This will be easier eventually... but you were the one who decided to test alpha software (thanks btw)".format(gyro_orientation_text))
+                self.export_button.setEnabled(False)
+                return
+
+            is_hero6 = (gyro_orientation_text == "hero6")
+
+            if self.infile_path == "" or self.preset_path == "":
+                self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
+                self.export_button.setEnabled(False)
+
+            # initiate stabilization
+            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero6=is_hero6) # FPV clip
+
+            smoothness = self.smooth_slider.value() / 100
+            fps = self.stab.fps
+            num_frames = self.stab.num_frames
+
+            sync1_frame = int(self.sync1_control.value() * fps)
+            sync2_frame = int(self.sync2_control.value() * fps)
+
+            OF_slice_length = self.OF_frames_control.value()
+
+            if max(sync1_frame, sync2_frame) + OF_slice_length > num_frames:
+                self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
+                return
+
+            print("Starting sync. Smoothness: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
+                    smoothness, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
+
+            # Known to work: test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json
+            # 5 40
+
+            self.stab.auto_sync_stab(smoothness,sync1_frame, sync2_frame, OF_slice_length)
+
+            self.recompute_stab_button.setText("Recompute sync")
+
+            self.export_button.setEnabled(True)
+            self.analyzed = True
+
+        else:
+            self.stab = None # TODO: BBL stabilizer
+
+
+    def export_video(self):
+        """Gives save location using filedialog
+           and saves video to given location
+        """
+
+
+        
+        out_size = (self.out_width_control.value(), self.out_height_control.value())
+
+        if out_size[0] > self.stab.width:
+            self.show_error("The given output cropped width ({}) is greater than the video width ({})".format(out_size[0], self.stab.width))
+            return
+        if out_size[1] > self.stab.height:
+            self.show_error("The given output cropped height ({}) is greater than the video height ({})".format(out_size[1], self.stab.height))
+            return
+
+        start_time = self.export_starttime.value()
+        stop_time = self.export_stoptime.value()
+        
+        if (stop_time < start_time):
+            self.show_error("Start time is later than stop time.")
+            return
+
+        video_length = self.stab.num_frames / self.stab.fps
+
+        if stop_time > video_length:
+            self.show_error("Stop time ({}) is after end of video ({})".format(stop_time, video_length))
+            return
+
+        # get file
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="mp4 (*.mp4);; Quicktime (*.mov)")
+        print("Output file: {}".format(filename[0]))
+
+        if len(filename[0]) == 0:
+            self.show_error("No output file given")
+            return
+
+
+        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size)
+
+        self.stab.release()
+
+    def show_error(self, msg):
+        err_window = QtWidgets.QMessageBox(self)
+        err_window.setIcon(QtWidgets.QMessageBox.Critical)
+        err_window.setText(msg)
+        err_window.setWindowTitle("Something's gone awry")
+        err_window.show()
 
 def main():
     app = QtWidgets.QApplication([])
