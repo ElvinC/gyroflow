@@ -522,7 +522,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def open_preset_func(self):
         """Load in calibration preset
         """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="JSON preset (*.json)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open preset file", filter="JSON preset (*.json)")
 
         if (len(path[0]) == 0):
             print("No file selected")
@@ -1188,8 +1188,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.out_height_control.setValue(1080)
         self.out_height_control.valueChanged.connect(self.update_out_size)
 
-        self.main_controls_layout.addWidget(self.out_height_control)   
         self.main_controls_layout.addWidget(self.out_width_control)
+        self.main_controls_layout.addWidget(self.out_height_control)   
+        
 
 
         explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
@@ -1234,7 +1235,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.OF_frames_control)
 
 
-        self.main_controls_layout.addWidget(QtWidgets.QLabel('Gyro orientation. Write "hero6" or "hero8". Orientation presets to be added later.'))
+        self.main_controls_layout.addWidget(QtWidgets.QLabel('Gyro orientation. Write "hero5", "hero6", or "hero8". Orientation presets to be added later.'))
         self.gyro_control = QtWidgets.QLineEdit(self)
         self.gyro_control.setText("hero6")
         self.main_controls_layout.addWidget(self.gyro_control)
@@ -1247,10 +1248,33 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.recompute_stab_button)
 
         explaintext = QtWidgets.QLabel("<b>Note:</b> Check console for info after clicking. A number of plots will appear during the" \
-                                        "process showing the difference between gyro and optical flow. Just close these after you've done looking at them.")
+                                        " process showing the difference between gyro and optical flow. Just close these after you're done looking at them.")
         explaintext.setWordWrap(True)
         explaintext.setMinimumHeight(60)
         self.main_controls_layout.addWidget(explaintext)
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 1"))
+        self.d1_control = QtWidgets.QDoubleSpinBox(self)
+        self.d1_control.setDecimals(5)
+        self.d1_control.setMinimum(-1000)
+        self.d1_control.setMaximum(1000)
+        self.d1_control.setValue(0)
+        self.main_controls_layout.addWidget(self.d1_control)
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 2"))
+        self.d2_control = QtWidgets.QDoubleSpinBox(self)
+        self.d2_control.setDecimals(5)
+        self.d2_control.setMinimum(-1000)
+        self.d2_control.setMaximum(1000)
+        self.d2_control.setValue(0)
+        self.main_controls_layout.addWidget(self.d2_control)
+
+
+        self.sync_correction_button = QtWidgets.QPushButton("Sync correction/update smoothness")
+        self.sync_correction_button.setMinimumHeight(30)
+        self.sync_correction_button.setEnabled(False)
+        self.sync_correction_button.clicked.connect(self.correct_sync)
+        self.main_controls_layout.addWidget(self.sync_correction_button)
 
 
         self.main_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
@@ -1310,7 +1334,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
     def open_preset_func(self):
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="JSON preset (*.json)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open preset file", filter="JSON preset (*.json)")
 
         if (len(path[0]) == 0):
             print("No file selected")
@@ -1355,19 +1379,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.BBL_path == "":
             # GPMF file
             gyro_orientation_text = self.gyro_control.text().lower().strip()
-            if gyro_orientation_text not in ["hero6", "hero8"]:
+            if gyro_orientation_text not in ["hero6","hero5", "hero8"]:
                 self.show_error("{} is not a valid orientation preset, if you can even call it a preset. This will be easier eventually... but you were the one who decided to test alpha software (thanks btw)".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
+                self.sync_correction_button.setEnabled(False)
                 return
 
-            is_hero6 = (gyro_orientation_text == "hero6")
+            heronum = int(gyro_orientation_text.replace("hero",""))
 
             if self.infile_path == "" or self.preset_path == "":
                 self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
                 self.export_button.setEnabled(False)
+                self.sync_correction_button.setEnabled(False)
 
             # initiate stabilization
-            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero6=is_hero6) # FPV clip
+            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum) # FPV clip
 
             smoothness = self.smooth_slider.value() / 100
             fps = self.stab.fps
@@ -1393,10 +1419,23 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.recompute_stab_button.setText("Recompute sync")
 
             self.export_button.setEnabled(True)
+            
+            # Show estimated delays in UI
+            self.sync_correction_button.setEnabled(True)
+            self.d1_control.setValue(self.stab.d1)
+            self.d2_control.setValue(self.stab.d2)
+
             self.analyzed = True
 
         else:
             self.stab = None # TODO: BBL stabilizer
+
+
+    def correct_sync(self):
+        d1 = self.d1_control.value()
+        d2 = self.d2_control.value()
+        smoothness = self.smooth_slider.value() / 100
+        self.stab.manual_sync_correction(d1, d2, smoothness)
 
 
     def export_video(self):

@@ -28,7 +28,7 @@ Working:
 
 Work in progress:
 * Automatic/semi-automatic temporal gyro/video sync. Basic sync working (bit finnicky and may require tweaking) for GPMF data. Still not reliable for blackbox log and has a few bugs being worked on.
-* Stabilization UI. Working barebone version without video player added.
+* Stabilization UI. Working barebone version without video player added. Feel free to try it out using Hero 6 or Hero 8 files, but this is still work in progress.
 
 Not working (yet) and potential future additions:
 * Gyro orientation presets

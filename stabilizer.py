@@ -21,6 +21,15 @@ class Stabilizer:
         #self.initial_offset = d1
         d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength)
 
+        self.times1 = times1
+        self.times2 = times2
+        self.transforms1 = transforms1
+        self.transforms2 = transforms2
+        self.v1 = v1
+        self.v2 = v2
+        self.d1 = d1
+        self.d2 = d2
+
 
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
 
@@ -71,6 +80,69 @@ class Stabilizer:
 
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
+    def manual_sync_correction(self, d1, d2, smooth=0.8):
+        v1 = self.v1
+        v2 = self.v2
+
+        transforms1 = self.transforms1
+        transforms2 = self.transforms2
+        times1 = self.times1
+        times2 = self.times2
+
+        print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
+
+
+
+        err_slope = (d2-d1)/(v2-v1)
+        correction_slope = err_slope + 1
+        gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
+
+        interval = 1/(correction_slope * self.fps)
+
+        print("Start {}".format(gyro_start))
+
+        print("Interval {}, slope {}".format(interval, correction_slope))
+
+
+
+        plt.plot(times1, transforms1[:,2] * self.fps)
+        plt.plot(times2, transforms2[:,2] * self.fps)
+        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("z"))
+        #plt.plot((self.integrator.get_raw_data("t") + d2), self.integrator.get_raw_data("z"))
+        #plt.plot((self.integrator.get_raw_data("t") + d1), self.integrator.get_raw_data("z"))
+        plt.figure()
+        plt.plot(times1, -transforms1[:,0] * self.fps)
+        plt.plot(times2, -transforms2[:,0] * self.fps)
+        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("x"))
+        
+        plt.figure()
+        
+        plt.plot(times1, -transforms1[:,1] * self.fps)
+        plt.plot(times2, -transforms2[:,1] * self.fps)
+        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("y"))
+
+        plt.show()
+
+        # Temp new integrator with corrected time scale
+
+        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+
+        new_gyro_data = self.gyro_data
+
+        # Correct time scale
+        new_gyro_data[:,0] = (new_gyro_data[:,0]+gyro_start) *correction_slope
+
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
+        new_integrator.integrate_all()
+
+        # Doesn't work for BBL for some reason. TODO: Figure out why
+        #self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+
+
+
+
     def optical_flow_comparison(self, start_frame=0, analyze_length = 50):
         frame_times = []
         frame_idx = []
@@ -102,6 +174,7 @@ class Stabilizer:
                 # Only add if succeeded
                 frame_idx.append(frame_id)
                 frame_times.append(frame_time)
+
 
                 curr_gray = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
                 # Estimate transform using optical flow
@@ -202,6 +275,16 @@ class Stabilizer:
         gyro_data = self.integrator.get_raw_data("xyz")
         #print(gyro_data)
 
+        # quick low pass filter
+        self.frame_lowpass = False
+
+        if self.frame_lowpass:
+            params = [0.3,0.4,0.3] # weights. last frame, current frame, next frame
+            new_OF_transforms = np.copy(OF_transforms)
+            for i in range(1,new_OF_transforms.shape[0]-1):
+                new_OF_transforms[i,:] = new_OF_transforms[i-1,:] * params[0] + new_OF_transforms[i,:]*params[1] + new_OF_transforms[i+1,:] * params[2]
+
+            OF_transforms = new_OF_transforms
 
         costs = []
         offsets = []
@@ -296,7 +379,7 @@ class Stabilizer:
         #gyro_z = gyro_data[:,2]
         #OF_z = OF_transforms[:,2]
 
-        axes_weight = np.array([1,1,1]) # Weight of the xyz in the cost function
+        axes_weight = np.array([1,1,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. More weight to roll
 
         sum_squared_diff = 0
         gyro_idx = 1
@@ -347,6 +430,7 @@ class Stabilizer:
 
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+        time.sleep(0.1)
 
         num_frames = int((stoptime - starttime) * self.fps) 
 
@@ -367,12 +451,18 @@ class Stabilizer:
                 break
 
             if success and i > 0:
+                
+
 
                 frame_undistort = cv2.remap(frame, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                               borderMode=cv2.BORDER_CONSTANT)
 
+
                 print(self.stab_transform[frame_num])
                 frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
+
+                #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
+
 
                 # Fix border artifacts
                 frame_out = frame_out[crop[1]:crop[1]+out_size[1], crop[0]:crop[0]+out_size[0]]
@@ -404,7 +494,7 @@ class Stabilizer:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, hero6 = False, fov_scale = 1.6):
+    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6):
         # General video stuff
         self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
@@ -417,18 +507,24 @@ class GPMFStabilizer(Stabilizer):
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
         self.undistort.load_calibration_json(calibrationfile, True)
-        self.map1, self.map2 = self.undistort.get_maps(1.6,new_img_dim=(self.width,self.height))
+        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
         self.gpmf = Extractor(videopath)
         self.gyro_data = self.gpmf.get_gyro(True)
 
         # Hero 6??
-        if hero6:
+        if hero == 6:
             self.gyro_data[:,1] = self.gyro_data[:,1]
             self.gyro_data[:,2] = -self.gyro_data[:,2]
             self.gyro_data[:,3] = self.gyro_data[:,3]
-        else:
+        elif hero == 5:
+            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,2] = self.gyro_data[:,2]
+            self.gyro_data[:,3] = -self.gyro_data[:,3]
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+
+        elif hero == 8:
             # Hero 8??
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
