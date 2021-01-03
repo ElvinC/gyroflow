@@ -1194,7 +1194,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
-        "and perspective transform, so output must be cropped seperately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
+        "and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
         explaintext.setWordWrap(True)
         explaintext.setMinimumHeight(60)
         self.main_controls_layout.addWidget(explaintext)
@@ -1351,6 +1351,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         print("Closing now")
         #self.video_viewer.destroy_thread()
+        self.stab.release()
         event.accept()
 
     def smooth_changed(self):
@@ -1478,7 +1479,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size)
 
-        self.stab.release()
+        
 
     def show_error(self, msg):
         err_window = QtWidgets.QMessageBox(self)

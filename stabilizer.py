@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import csv
 
 from calibrate_video import FisheyeCalibrator
 from scipy.spatial.transform import Rotation
@@ -7,6 +8,7 @@ from gyro_integrator import GyroIntegrator, FrameRotationIntegrator
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
+
 
 from scipy.fftpack import fft,ifft
 from scipy.signal import resample
@@ -72,7 +74,7 @@ class Stabilizer:
         # Correct time scale
         new_gyro_data[:,0] = (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=True, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
 
         # Doesn't work for BBL for some reason. TODO: Figure out why
@@ -218,7 +220,9 @@ class Stabilizer:
                         roteul = Rotation.from_matrix(rot).as_euler("xyz")
                         smallest_mag = thisrot.magnitude()
 
-
+                if type(roteul) == type(None):
+                    print("Optical flow rotation determination failed")
+                    roteul = [0, 0, 0]
 
                 #points_drawn = curr
 
@@ -276,7 +280,7 @@ class Stabilizer:
         #print(gyro_data)
 
         # quick low pass filter
-        self.frame_lowpass = False
+        self.frame_lowpass = True
 
         if self.frame_lowpass:
             params = [0.3,0.4,0.3] # weights. last frame, current frame, next frame
@@ -379,7 +383,7 @@ class Stabilizer:
         #gyro_z = gyro_data[:,2]
         #OF_z = OF_transforms[:,2]
 
-        axes_weight = np.array([1,1,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. More weight to roll
+        axes_weight = np.array([0.5,1,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. More weight to roll
 
         sum_squared_diff = 0
         gyro_idx = 1
@@ -458,7 +462,7 @@ class Stabilizer:
                                               borderMode=cv2.BORDER_CONSTANT)
 
 
-                print(self.stab_transform[frame_num])
+                #print(self.stab_transform[frame_num])
                 frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
@@ -519,7 +523,7 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,2] = -self.gyro_data[:,2]
             self.gyro_data[:,3] = self.gyro_data[:,3]
         elif hero == 5:
-            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,1] = -self.gyro_data[:,1]
             self.gyro_data[:,2] = self.gyro_data[:,2]
             self.gyro_data[:,3] = -self.gyro_data[:,3]
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
@@ -573,6 +577,105 @@ class GPMFStabilizer(Stabilizer):
         print("Interval {}, slope {}".format(interval, correction_slope))
 
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
+
+
+
+
+
+class InstaStabilizer(Stabilizer):
+    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6):
+        # General video stuff
+        self.undistort_fov_scale = fov_scale
+        self.cap = cv2.VideoCapture(videopath)
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+
+        # Camera undistortion stuff
+        self.undistort = FisheyeCalibrator()
+        self.undistort.load_calibration_json(calibrationfile, True)
+        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
+
+        # Get gyro data
+
+        self.gyro_data = self.instaCSVGyro(gyrocsv)
+        hero = 6
+
+        # Hero 6??
+        if hero == 6:
+            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,2] = -self.gyro_data[:,2]
+            self.gyro_data[:,3] = self.gyro_data[:,3]
+        elif hero == 5:
+            self.gyro_data[:,1] = -self.gyro_data[:,1]
+            self.gyro_data[:,2] = self.gyro_data[:,2]
+            self.gyro_data[:,3] = -self.gyro_data[:,3]
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+
+        elif hero == 8:
+            # Hero 8??
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+
+        
+
+        #gyro_data[:,1] = gyro_data[:,1]
+        #gyro_data[:,2] = -gyro_data[:,2]
+        #gyro_data[:,3] = gyro_data[:,3]
+
+        #gyro_data[:,1:] = -gyro_data[:,1:]
+
+        #points_test = np.array([[[0,0],[100,100],[200,300],[400,400]]], dtype = np.float32)
+        #result = self.undistort.undistort_points(points_test, new_img_dim=(self.width,self.height))
+        #print(result)
+        #exit()
+
+        # Other attributes
+        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+
+        self.integrator = GyroIntegrator(self.gyro_data,zero_out_time=False,initial_orientation=initial_orientation)
+        self.integrator.integrate_all()
+        self.times = None
+        self.stab_transform = None
+
+
+        self.initial_offset = 0
+
+    def instaCSVGyro(self, csvfile):
+        gyrodata = []
+        with open(csvfile) as f:
+            reader = csv.reader(f, delimiter=",", quotechar='"')
+            next(reader, None)
+            for row in reader:
+                gyro = [float(row[0])] + [float(val) for val in row[2].split(" ")] # Time + gyro
+                gyrodata.append(gyro)
+
+        gyrodata = np.array(gyrodata)
+        print(gyrodata)
+        return gyrodata
+    
+    def stabilization_settings(self, smooth = 0.95):
+
+
+        v1 = 20 / self.fps
+        v2 = 900 / self.fps
+        d1 = 0.042
+        d2 = -0.396
+
+        err_slope = (d2-d1)/(v2-v1)
+        correction_slope = err_slope + 1
+        gyro_start = (d1 - err_slope*v1)
+
+        interval = 1/(correction_slope * self.fps)
+
+
+        print("Start {}".format(gyro_start))
+
+        print("Interval {}, slope {}".format(interval, correction_slope))
+
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
+
 
 
 
@@ -855,7 +958,13 @@ if __name__ == "__main__":
     """
 
 
-    #exit()
+    # insta360 test
+    
+    stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/gopro_calib2.JSON", gyrocsv="test_clips/insta360_gyro.csv")
+    stab.auto_sync_stab(0.985,30 *24, 66 * 24, 170)
+    #stab.renderfile(19, 40, "insta360test.mp4",out_size = (2560,1440))
+
+    exit()
     #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json") # Walk
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
@@ -865,7 +974,7 @@ if __name__ == "__main__":
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.985,5*60, 18 * 60, 70) # FPV clip
+    stab.auto_sync_stab(0.985,5*24, 18 * 60, 70) # FPV clip
     #stab.stabilization_settings()
 
 

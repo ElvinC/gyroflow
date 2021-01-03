@@ -6,14 +6,22 @@ The project consists of three core parts: A utility for the generation of lens u
 
 This is currently a work in progress project, but the goal is to use the gyro data logged by drone flight controllers for stabilizing the onboard HD camera. Furthermore, the gyro data embedded in newer GoPro cameras should also be usable for stabilization purposes.
 
-The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a (possibly outdated and/or buggy) binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). The current release was for testing pyinstaller. This will be updated once the stabilization code works.
+The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). The current release is very outdated and will be updated once the program is more polished.
 
-Also check out the [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) project by jaromeyer for stitching blackbox data to Hero 7 files for use with Reelsteady Go. Cleric-K previously worked on emulating GoPro metadata and adding blackbox data to non-GoPro cameras for use with Reelsteady Go with great results, and attilafustos has added a UI. Check it out [here](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui).
-There's also a [discord server](https://discord.gg/Rs4GBPm) run by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for blackbox2gpmf, gyroflow, and related projects.
+### Other things to check out:
+* [BlackboxToGPMF](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui) by Cleric-K and Attilafustos. Tool for adding GoPro metadata and blackbox data to non-GoPro cameras for use with Reelsteady GO. Initial discussion [here](https://github.com/ElvinC/gyroflow/issues/1).
+* [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) by Jaromeyer. Tool for adding blackbox gyro data to Hero 7 files for Reelsteady Go.
+* [Discord server](https://discord.gg/Rs4GBPm) maintained by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for discussion about gyroflow, BlackboxToGPMF, blackbox2gpmf and other related projects.
+* [FPV Stabilization Tools Facebook group](https://www.facebook.com/groups/fpvtools) maintained by Attilafustos.
+
+
 
 ### Status
 
-[Latest test clip.](https://youtu.be/ZhVVRnuuMFc)
+Sample clips:
+* [Handheld Hero 6 + internal gyro](https://youtu.be/ZhVVRnuuMFc) (Clip by Nicecrash)
+* [FPV Hero 8 + internal gyro](https://youtu.be/MUwERfNBK6U) (Clip by Kyle Li)
+* [FPV Session 5 + blackbox data using BlackboxToGPMF](https://youtu.be/5PkTHkl2GsI) (Clip by [iLLjoy Presents](https://www.youtube.com/channel/UCaIqfSaXAFSGEdW1PNbrIjA))
 
 Working:
 * Videoplayer based on OpenCV and Pyside2
@@ -25,15 +33,17 @@ Working:
 * Symmetrical quaternion low-pass filter
 * Blackbox data import
 * Undistort and rotation perspective transform
+* Automatic/semi-automatic temporal gyro/video sync. Not super robust but works most of the time.
+
 
 Work in progress:
-* Automatic/semi-automatic temporal gyro/video sync. Basic sync working (bit finnicky and may require tweaking) for GPMF data. Still not reliable for blackbox log and has a few bugs being worked on.
-* Stabilization UI. Working barebone version without video player added. Feel free to try it out using Hero 6 or Hero 8 files, but this is still work in progress.
+
+* Stabilization UI. Working barebone version without video player added. Feel free to try it out using Hero 6 or Hero 8 files, but this is still work in progress. Exports split screen video by default.
+* Gyro orientation presets and blackbox orientation handling
 
 Not working (yet) and potential future additions:
-* Gyro orientation presets
-* Camera orientation determination with respect to gyro
-* Incorporate acceleration data in orientation estimation for horizon lock (Complementary filter? Kalman is probably overkill but could be fun to learn).
-* Rolling shutter determination/correction (may or may not be required)
 * Improved low-pass filter and more stabilization modes (Time-lapse, separate pitch/yaw/roll smoothness control etc.)
+* Incorporate acceleration data in orientation estimation for horizon lock (Complementary filter? Kalman is probably overkill but could be fun to learn).
+* Camera orientation determination with respect to gyro
 * Streamlining/optimizing the image processing pipeline
+* Rolling shutter determination/correction (may or may not be required)
