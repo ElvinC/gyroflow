@@ -211,10 +211,14 @@ class Stabilizer:
 
 
                 # rots contains for solutions for the rotation. Get one with smallest magnitude. Idk
+                # TODO: Implement rotation determination using essential matrix instead:
+                # https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
+                # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
                 roteul = None
                 smallest_mag = 1000
                 for rot in rots:
-                    thisrot = Rotation.from_matrix(rots[0])
+                    thisrot = Rotation.from_matrix(rots[0]) # First one?
+                    #thisrot = Rotation.from_matrix(rot)
                     if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.6:
                         # For some reason some camera calibrations lead to super high rotation magnitudes... Still testing.
                         roteul = Rotation.from_matrix(rot).as_euler("xyz")
@@ -223,6 +227,24 @@ class Stabilizer:
                 if type(roteul) == type(None):
                     print("Optical flow rotation determination failed")
                     roteul = [0, 0, 0]
+
+                # Compute fundamental matrix
+                #F, mask = cv2.findFundamentalMat(np.array(filtered_src), np.array(filtered_dst),cv2.FM_LMEDS)
+                # Compute essential matrix
+
+                # https://answers.opencv.org/question/206817/extract-rotation-and-translation-from-fundamental-matrix/
+                #E = self.undistort.find_essential_matrix(F, new_img_dim=(self.width,self.height))
+
+                R, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+
+                #w, u, vt = cv2.SVDecomp(E) # , flag = cv2.SVD.FULL_UV
+                
+                #W = np.array([[0, -1.0, 0],[1.0, 0, 0],[0, 0, 1.0]])
+
+                #U_W_Vt = np.linalg.multi_dot([u, W, vt])
+                #U_Wt_Vt = np.linalg.multi_dot([u, W.transpose(), vt]) # Rotation matrix?
+                #roteul = Rotation.from_matrix(R).as_euler("xyz")
+                
 
                 #points_drawn = curr
 
@@ -849,7 +871,8 @@ class OpticalStabilizer:
                 roteul = None
                 smallest_mag = 1000
                 for rot in rots:
-                    thisrot = Rotation.from_matrix(rots[0])
+                    thisrot = Rotation.from_matrix(rots[0]) # first one?
+                    
                     if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.3:
                         roteul = Rotation.from_matrix(rot).as_euler("xyz")
                         smallest_mag = thisrot.magnitude()

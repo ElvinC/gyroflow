@@ -14,6 +14,7 @@ test_clips/*
 # camera preset folder
 !camera_presets/*.json
 !camera_presets/*/*.json
+!media/*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

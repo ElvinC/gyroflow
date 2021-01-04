@@ -294,6 +294,19 @@ class FisheyeCalibrator:
         return cv2.decomposeHomographyMat(H, scaled_K)
 
 
+    def recover_pose(self, pts1, pts2, new_img_dim = None):
+        # https://answers.opencv.org/question/31421/opencv-3-essentialmatrix-and-recoverpose/
+        # Find essential matrix from fundamental matrix
+        img_dim = new_img_dim if new_img_dim else self.calib_dimension
+        scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
+        scaled_K[2][2] = 1.0
+
+        E, mask = cv2.findEssentialMat(pts1, pts2, scaled_K, cv2.RANSAC, 0.999, 0.1)
+        #retval, R, t, mask = cv2.recoverPose(E, pts1, pts2, scaled_K)
+        R1, R2, t = cv2.decomposeEssentialMat(E) 
+
+        return R1, t
+
     def get_rotation_map(self, img, quart):
         """Get maps for doing perspective rotations
         
