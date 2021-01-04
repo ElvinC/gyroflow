@@ -1106,7 +1106,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.setWindowTitle("Gyroflow Stabilizer Barebone {}".format(__version__))
 
         self.main_widget = QtWidgets.QWidget()
-        self.layout = QtWidgets.QVBoxLayout()
+        self.layout = QtWidgets.QHBoxLayout()
         self.main_widget.setLayout(self.layout)
         self.main_widget.setStyleSheet("font-size: 12px")
 
@@ -1118,6 +1118,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls = QtWidgets.QWidget()
         self.main_controls_layout = QtWidgets.QVBoxLayout()
         self.main_controls.setLayout(self.main_controls_layout)
+
+        self.second_controls = QtWidgets.QWidget()
+        self.second_controls_layout = QtWidgets.QVBoxLayout()
+        self.second_controls.setLayout(self.second_controls_layout)
+        self.second_controls_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.second_controls.setMinimumWidth(500)
 
         self.open_vid_button = QtWidgets.QPushButton("Open video file")
         self.open_vid_button.setMinimumHeight(30)
@@ -1253,55 +1259,61 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         explaintext.setMinimumHeight(60)
         self.main_controls_layout.addWidget(explaintext)
 
-        self.main_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 1"))
+        self.second_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 1"))
         self.d1_control = QtWidgets.QDoubleSpinBox(self)
         self.d1_control.setDecimals(5)
         self.d1_control.setMinimum(-1000)
         self.d1_control.setMaximum(1000)
         self.d1_control.setValue(0)
-        self.main_controls_layout.addWidget(self.d1_control)
+        self.second_controls_layout.addWidget(self.d1_control)
 
-        self.main_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 2"))
+        self.second_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 2"))
         self.d2_control = QtWidgets.QDoubleSpinBox(self)
         self.d2_control.setDecimals(5)
         self.d2_control.setMinimum(-1000)
         self.d2_control.setMaximum(1000)
         self.d2_control.setValue(0)
-        self.main_controls_layout.addWidget(self.d2_control)
+        self.second_controls_layout.addWidget(self.d2_control)
 
 
         self.sync_correction_button = QtWidgets.QPushButton("Sync correction/update smoothness")
         self.sync_correction_button.setMinimumHeight(30)
         self.sync_correction_button.setEnabled(False)
         self.sync_correction_button.clicked.connect(self.correct_sync)
-        self.main_controls_layout.addWidget(self.sync_correction_button)
+        self.second_controls_layout.addWidget(self.sync_correction_button)
 
 
-        self.main_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
+        self.second_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
         self.export_starttime = QtWidgets.QDoubleSpinBox(self)
         self.export_starttime.setMinimum(0)
         self.export_starttime.setMaximum(10000)
         self.export_starttime.setValue(0)
-        self.main_controls_layout.addWidget(self.export_starttime)
+        self.second_controls_layout.addWidget(self.export_starttime)
 
 
         self.export_stoptime = QtWidgets.QDoubleSpinBox(self)
         self.export_stoptime.setMinimum(0)
         self.export_stoptime.setMaximum(10000)
         self.export_stoptime.setValue(30)
-        self.main_controls_layout.addWidget(self.export_stoptime)
+        self.second_controls_layout.addWidget(self.export_stoptime)
 
         
+        self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
+        self.split_screen_select.setChecked(True)
+        self.second_controls_layout.addWidget(self.split_screen_select)
+
+
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
         self.export_button.setMinimumHeight(30)
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export_video)
         
-        self.main_controls_layout.addWidget(self.export_button)
+        self.second_controls_layout.addWidget(self.export_button)
 
         # add control bar to main layout
         self.layout.addWidget(self.main_controls)
+        self.layout.addWidget(self.second_controls)
 
 
         self.infile_path = ""
@@ -1405,7 +1417,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
             OF_slice_length = self.OF_frames_control.value()
 
-            if max(sync1_frame, sync2_frame) + OF_slice_length > num_frames:
+            if max(sync1_frame, sync2_frame) + OF_slice_length + 5 > num_frames:
                 self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
                 return
 
@@ -1476,8 +1488,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.show_error("No output file given")
             return
 
+        split_screen = self.split_screen_select.isChecked()
 
-        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size)
+        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size, split_screen = split_screen)
 
         
 

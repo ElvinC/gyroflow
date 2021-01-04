@@ -38,7 +38,7 @@ Working:
 
 Work in progress:
 
-* Stabilization UI. Working barebone version without video player added. Feel free to try it out using Hero 6 or Hero 8 files, but this is still work in progress. Exports split screen video by default.
+* Stabilization UI. Working barebone version without video player added. Feel free to try it out using Hero 6 or Hero 8 files or files modified with BlackboxToGPMF, but this is still work in progress.
 * Gyro orientation presets and blackbox orientation handling
 
 Not working (yet) and potential future additions:

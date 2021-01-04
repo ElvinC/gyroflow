@@ -301,11 +301,11 @@ class FisheyeCalibrator:
         scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
         scaled_K[2][2] = 1.0
 
-        E, mask = cv2.findEssentialMat(pts1, pts2, scaled_K, cv2.RANSAC, 0.999, 0.1)
+        E, mask = cv2.findEssentialMat(pts1, pts2, scaled_K, cv2.RANSAC, 0.999, 0.1) # cv2.LMEDS or cv2.RANSAC
         #retval, R, t, mask = cv2.recoverPose(E, pts1, pts2, scaled_K)
         R1, R2, t = cv2.decomposeEssentialMat(E) 
 
-        return R1, t
+        return R1, R2, t
 
     def get_rotation_map(self, img, quart):
         """Get maps for doing perspective rotations

@@ -235,7 +235,19 @@ class Stabilizer:
                 # https://answers.opencv.org/question/206817/extract-rotation-and-translation-from-fundamental-matrix/
                 #E = self.undistort.find_essential_matrix(F, new_img_dim=(self.width,self.height))
 
-                R, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+                self.use_essential_matrix = True
+
+                if self.use_essential_matrix:
+                    R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+                
+                    rot1 = Rotation.from_matrix(R1)
+                    rot2 = Rotation.from_matrix(R2)
+
+                    if rot1.magnitude() < rot2.magnitude():
+                        roteul = rot1.as_euler("xyz")
+                    else: 
+                        roteul = rot2.as_euler("xyz")
+
 
                 #w, u, vt = cv2.SVDecomp(E) # , flag = cv2.SVD.FULL_UV
                 
@@ -243,7 +255,7 @@ class Stabilizer:
 
                 #U_W_Vt = np.linalg.multi_dot([u, W, vt])
                 #U_Wt_Vt = np.linalg.multi_dot([u, W.transpose(), vt]) # Rotation matrix?
-                #roteul = Rotation.from_matrix(R).as_euler("xyz")
+                #
                 
 
                 #points_drawn = curr
@@ -449,9 +461,9 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080)):
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True):
 
-        out = cv2.VideoWriter(outpath, -1, self.fps, (out_size[0]*2,out_size[1]))
+        out = cv2.VideoWriter(outpath, -1, self.fps, (out_size[0]*2 if split_screen else out_size[0] ,out_size[1]))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
@@ -506,10 +518,14 @@ class Stabilizer:
                 frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
                 frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
-                concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (out_size[0]*2,out_size[1]))
-                out.write(concatted)
-                cv2.imshow("Before and After", concatted)
-                cv2.waitKey(5)
+                if split_screen:
+                    concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (out_size[0]*2,out_size[1]))
+                    out.write(concatted)
+                    cv2.imshow("Before and After", concatted)
+                else:
+                    out.write(frame_out)
+                    cv2.imshow("Stabilized?", frame_out)
+                cv2.waitKey(2)
 
         # When everything done, release the capture
         cv2.destroyAllWindows()
