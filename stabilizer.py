@@ -533,7 +533,6 @@ class Stabilizer:
                 if split_screen:
                     concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (out_size[0]*2,out_size[1]))
                     out.write(concatted)
-                    #out.write(concatted)
                     #cv2.imshow("Before and After", concatted)
                 else:
                     out.write(frame_out)
