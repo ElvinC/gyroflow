@@ -463,8 +463,8 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True):
-        if platform.system() == "Darwin":
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True, hw_accel = False):
+        if platform.system() == "Darwin" and hw_accel:
             output_params = {
                 "-input_framerate": self.fps, 
                 "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
@@ -542,7 +542,7 @@ class Stabilizer:
         # When everything done, release the capture
         #out.release()
         cv2.destroyAllWindows()
-        if platform.system() == "Darwin":
+        if hw_accel:
             out.close()
         else:
             out.release()

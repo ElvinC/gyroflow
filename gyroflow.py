@@ -1302,6 +1302,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.split_screen_select.setChecked(True)
         self.second_controls_layout.addWidget(self.split_screen_select)
 
+        self.hw_acceleration_select = QtWidgets.QCheckBox("Encode with HW acceleration (req. FFmpeg compiled HW accel")
+        self.hw_acceleration_select.setChecked(False)
+        self.second_controls_layout.addWidget(self.hw_acceleration_select)
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
@@ -1489,8 +1492,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         split_screen = self.split_screen_select.isChecked()
+        hardware_acceleration = self.hw_acceleration_select.isChecked()
 
-        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size, split_screen = split_screen)
+        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size, split_screen = split_screen, hw_accel = hardware_acceleration)
 
         
 
