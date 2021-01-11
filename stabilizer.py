@@ -463,7 +463,9 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True):
 
-        out = cv2.VideoWriter(outpath, -1, self.fps, (out_size[0]*2 if split_screen else out_size[0] ,out_size[1]))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+        out = cv2.VideoWriter(outpath, fourcc, self.fps, (out_size[0]*2 if split_screen else out_size[0], out_size[1]))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
@@ -528,8 +530,8 @@ class Stabilizer:
                 cv2.waitKey(2)
 
         # When everything done, release the capture
-        cv2.destroyAllWindows()
         out.release()
+        cv2.destroyAllWindows()
 
     def release(self):
         self.cap.release()
