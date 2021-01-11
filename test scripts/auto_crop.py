@@ -4,7 +4,9 @@ from scipy.signal import butter,sosfilt
 
 butterfilter = butter(2,0.05,output='sos')
 
-zooms = sosfilt(butterfilter, np.random.random(1000) * 100)[100:]
+N = 1000
+
+zooms = sosfilt(butterfilter, np.random.random(N + 100) * 100)[100:]
 
 filtered = np.zeros(zooms.shape[0])
 
@@ -26,8 +28,28 @@ for i in range(zooms.shape[0]-1, -1, -1):
 
 final = (filtered + filtered2)/2
 
+
+
+
+# Alternative idea
+windowsize = 10
+newzooms = np.zeros(N)
+
+for i in range(len(newzooms)):
+	l = int(i - windowsize/2)
+	h = int(i + windowsize/2)
+	if l < 0:
+		l = 0
+	if h > N-1:
+		h = N-1
+
+	maxval = np.max(filtered[l:h])
+	newzooms[i] = maxval
+
+#newzooms = sosfilt(butterfilter, newzooms)
+
 plt.plot(zooms)	
 #plt.plot(filtered)
-plt.plot(filtered2)
+plt.plot(newzooms)
 #plt.plot(final)
 plt.show()

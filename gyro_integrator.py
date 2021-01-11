@@ -33,6 +33,8 @@ class GyroIntegrator:
 
         self.num_data_points = self.data.shape[0]
 
+        self.gyro_sample_rate = self.num_data_points / (self.data[-1,0] - self.data[0,0])
+
         # initial orientation quaternion
         if type(initial_orientation) != type(None):
             self.orientation = np.array(initial_orientation)

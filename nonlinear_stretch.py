@@ -154,7 +154,7 @@ class NonlinearStretch:
         self.recompute_maps()
         print(self.out_size)
 
-        out = cv2.VideoWriter(outpath, -1, fps, self.out_size)
+        out = cv2.VideoWriter(outpath, cv2.VideoWriter_fourcc(*'mp4v'), fps, self.out_size)
 
         # use framecount to prevent weird premature termination bug
         frame_num = 0

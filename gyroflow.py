@@ -9,6 +9,9 @@ from _version import __version__
 import calibrate_video
 import time
 import nonlinear_stretch
+import urllib.request
+import json
+import re
 
 from stabilizer import GPMFStabilizer
 
@@ -21,42 +24,57 @@ class Launcher(QtWidgets.QWidget):
 
         self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
 
+        
+
         self.setFixedWidth(450)
 
-
-        self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
-        self.calibrator_button.setMinimumSize(300,50)
-        self.calibrator_button.setToolTip("Use this to generate camera calibration files")
-
-        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer (Doesn't work yet)")
-        self.stabilizer_button.setMinimumSize(300,50)
-
-        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (barebone dev version)")
-        self.stabilizer_barebone_button.setMinimumSize(300,50)
-
-        self.stretch_button = QtWidgets.QPushButton("Non-linear Stretch")
-        self.stretch_button.setMinimumSize(300,50)
 
         self.text = QtWidgets.QLabel("<h1>Gyroflow {}</h1>".format(__version__))
         self.text.setAlignment(QtCore.Qt.AlignCenter)
 
-        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Contribute or support on Github</a>''')
+        self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
+        self.calibrator_button.setMinimumSize(300,50)
+        self.calibrator_button.setStyleSheet("font-size: 14px;")
+        self.calibrator_button.setToolTip("Use this to generate camera calibration files")
+
+        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer (Doesn't work yet)")
+        self.stabilizer_button.setMinimumSize(300,50)
+        self.stabilizer_button.setStyleSheet("font-size: 14px;")
+
+        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (barebone dev version)")
+        self.stabilizer_barebone_button.setMinimumSize(300,50)
+        self.stabilizer_barebone_button.setStyleSheet("font-size: 14px;")
+
+        self.stretch_button = QtWidgets.QPushButton("Non-linear Stretch")
+        self.stretch_button.setMinimumSize(300,50)
+        self.stretch_button.setStyleSheet("font-size: 14px;")
+
+
+        self.version_button = QtWidgets.QPushButton("Check version")
+        self.version_button.setMinimumSize(300,50)
+        self.version_button.setStyleSheet("font-size: 14px;")
+
+        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Support on Github</a>''')
         self.footer.setOpenExternalLinks(True)
+        self.footer.setAlignment(QtCore.Qt.AlignCenter)
+
+
         self.layout = QtWidgets.QVBoxLayout()
         self.layout.addWidget(self.text)
         self.layout.addWidget(self.calibrator_button)
         self.layout.addWidget(self.stabilizer_button)
         self.layout.addWidget(self.stabilizer_barebone_button)
         self.layout.addWidget(self.stretch_button)
-        
-        self.setLayout(self.layout)
-
+        self.layout.addWidget(self.version_button)
         self.layout.addWidget(self.footer)
+
+        self.setLayout(self.layout)
 
         self.calibrator_button.clicked.connect(self.open_calib_util)
         self.stabilizer_button.clicked.connect(self.open_stab_util)
         self.stabilizer_barebone_button.clicked.connect(self.open_stab_util_barebone)
         self.stretch_button.clicked.connect(self.open_stretch_util)
+        self.version_button.clicked.connect(self.check_version)
 
         # Placeholder for utility windows.
         self.calibrator_utility = None
@@ -109,6 +127,35 @@ class Launcher(QtWidgets.QWidget):
         self.stretch_utility = StretchUtility()
         self.stretch_utility.resize(500, 500)
         self.stretch_utility.show()
+
+    def check_version(self):
+        with urllib.request.urlopen("https://api.github.com/repos/elvinc/gyroflow/releases") as url:
+            releases = json.loads(url.read())
+            newest_version = releases[0]["tag_name"]
+            new = re.match("(\d+).(\d+).(\d+).*", newest_version).groups()
+            current = re.match("(\d+).(\d+).(\d+).*", __version__).groups()
+
+            extra = ""
+
+            diff = [int(A) - int(B) for A,B in zip(new,current)]
+            val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
+            print(val)
+            if newest_version.strip() == __version__.strip():
+                extra = "Not much to see here:"
+            elif val > 0:
+                extra = "Oh look, there's a shiny new update. <a href='https://github.com/ElvinC/gyroflow'>Here's a link just for you.</a> "
+            elif val < 0:
+                extra = "Looks like somebody is time traveling..."
+            else:
+                extra = "Spot the difference:"
+
+           
+            msg_window = QtWidgets.QMessageBox(self)
+            msg_window.setIcon(QtWidgets.QMessageBox.Information)
+            msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
+            msg_window.setWindowTitle("Version check")
+            msg_window.show()
+
 
 
 class VideoThread(QtCore.QThread):
@@ -1138,10 +1185,25 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.open_preset_button)
 
 
-        self.open_bbl_button = QtWidgets.QPushButton("Open BBL file (leave empty for GPMF, not implemented yet)")
+        self.open_bbl_button = QtWidgets.QPushButton("Open BBL file (leave empty for GPMF)")
         self.open_bbl_button.setMinimumHeight(30)
         self.open_bbl_button.clicked.connect(self.open_bbl_func)
         self.main_controls_layout.addWidget(self.open_bbl_button)
+
+        self.fpv_tilt_text = QtWidgets.QLabel("FPV uptilt in degrees:")
+        self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
+        self.fpv_tilt_control.setMinimum(-90)
+        self.fpv_tilt_control.setMaximum(90)
+        self.fpv_tilt_control.setValue(0)
+
+        # Only show when blackbox file is loaded
+        self.fpv_tilt_text.setVisible(False)
+        self.fpv_tilt_control.setVisible(False)
+
+        self.main_controls_layout.addWidget(self.fpv_tilt_text)
+        self.main_controls_layout.addWidget(self.fpv_tilt_control)
+
+
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
         self.smooth_text = QtWidgets.QLabel("Smoothness (85%):")
@@ -1177,33 +1239,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.fov_text)
         self.main_controls_layout.addWidget(self.fov_slider)        
 
-        # output size choice
-        self.out_size_text = QtWidgets.QLabel("Output crop: ")
-        self.main_controls_layout.addWidget(self.out_size_text)
-
-        self.out_width_control = QtWidgets.QSpinBox(self)
-        self.out_width_control.setMinimum(16)
-        self.out_width_control.setMaximum(7680) # 8K max is probably fine
-        self.out_width_control.setValue(1920)
-        self.out_width_control.valueChanged.connect(self.update_out_size)
-
-        # output size choice
-        self.out_height_control = QtWidgets.QSpinBox(self)
-        self.out_height_control.setMinimum(9)
-        self.out_height_control.setMaximum(4320)
-        self.out_height_control.setValue(1080)
-        self.out_height_control.valueChanged.connect(self.update_out_size)
-
-        self.main_controls_layout.addWidget(self.out_width_control)
-        self.main_controls_layout.addWidget(self.out_height_control)   
-        
-
-
-        explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
-        "and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
-        explaintext.setWordWrap(True)
-        explaintext.setMinimumHeight(60)
-        self.main_controls_layout.addWidget(explaintext)
 
         # output size choice
         self.main_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds (Sync requires +/- 2 sec. Set to 0 for GPMF):"))
@@ -1265,6 +1300,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.d1_control.setMinimum(-1000)
         self.d1_control.setMaximum(1000)
         self.d1_control.setValue(0)
+        self.d1_control.setSingleStep(0.01)
         self.second_controls_layout.addWidget(self.d1_control)
 
         self.second_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 2"))
@@ -1273,6 +1309,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.d2_control.setMinimum(-1000)
         self.d2_control.setMaximum(1000)
         self.d2_control.setValue(0)
+        self.d2_control.setSingleStep(0.01)
         self.second_controls_layout.addWidget(self.d2_control)
 
 
@@ -1282,6 +1319,34 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_correction_button.clicked.connect(self.correct_sync)
         self.second_controls_layout.addWidget(self.sync_correction_button)
 
+
+        # output size choice
+        self.out_size_text = QtWidgets.QLabel("Output crop: ")
+        self.second_controls_layout.addWidget(self.out_size_text)
+
+        self.out_width_control = QtWidgets.QSpinBox(self)
+        self.out_width_control.setMinimum(16)
+        self.out_width_control.setMaximum(7680) # 8K max is probably fine
+        self.out_width_control.setValue(1920)
+        self.out_width_control.valueChanged.connect(self.update_out_size)
+
+
+        # output size choice
+        self.out_height_control = QtWidgets.QSpinBox(self)
+        self.out_height_control.setMinimum(9)
+        self.out_height_control.setMaximum(4320)
+        self.out_height_control.setValue(1080)
+        self.out_height_control.valueChanged.connect(self.update_out_size)
+
+        self.second_controls_layout.addWidget(self.out_width_control)
+        self.second_controls_layout.addWidget(self.out_height_control)   
+
+
+        explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
+        "and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
+        explaintext.setWordWrap(True)
+        explaintext.setMinimumHeight(60)
+        self.second_controls_layout.addWidget(explaintext)
 
         self.second_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
         self.export_starttime = QtWidgets.QDoubleSpinBox(self)
@@ -1357,8 +1422,33 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_preset_button.setStyleSheet("font-weight:bold;")
 
     def open_bbl_func(self):
-        pass
-        
+        # Remove file if already added
+        if self.BBL_path:
+            self.BBL_path = ""
+            
+            self.open_bbl_button.setText("Open BBL file (leave empty for GPMF)".format(self.BBL_path.split("/")[-1]))
+            self.open_bbl_button.setStyleSheet("font-weight: normal;")
+
+            self.fpv_tilt_text.setVisible(False)
+            self.fpv_tilt_control.setVisible(False)
+
+            return
+
+
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open blackbox file", filter="Blackbox log (*.bbl)")
+
+        if (len(path[0]) == 0):
+            print("No file selected")
+            return
+
+        self.BBL_path = path[0]
+        self.open_bbl_button.setText("Blackbox file: {} (click to remove)".format(self.BBL_path.split("/")[-1]))
+        self.open_bbl_button.setStyleSheet("font-weight:bold;")
+
+        self.fpv_tilt_text.setVisible(True)
+        self.fpv_tilt_control.setVisible(True)
+
+
 
     def closeEvent(self, event):
         print("Closing now")
@@ -1502,16 +1592,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         err_window.show()
 
 def main():
+    QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
+
     app = QtWidgets.QApplication([])
 
     widget = Launcher()
     widget.resize(500, 500)
-    import time
-
 
     widget.show()
-
-    
 
     sys.exit(app.exec_())
 

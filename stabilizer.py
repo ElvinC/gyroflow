@@ -10,10 +10,12 @@ from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
 
 
-from scipy.fftpack import fft,ifft
-from scipy.signal import resample
+from scipy import signal, interpolate
+
 import time
 
+
+    # https://stackoverflow.com/questions/52683440/quaternion-lerp-with-different-velocities-for-yaw-pitch-roll
 
 class Stabilizer:
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50):
@@ -45,23 +47,35 @@ class Stabilizer:
 
         print("Interval {}, slope {}".format(interval, correction_slope))
 
+        # Sync and final stabilization match but direct plots may have ~1 frame offset.
+        # Probably because optical flow is given _between_ frames instead of at the frames
+        # TODO: Find out why. In the meantime:
+        viz_correction = 0.5/self.fps
 
+        corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
+        #corrected_times = (self.integrator.get_raw_data("t"))*(alpha + 1) + beta
 
-        plt.plot(times1, transforms1[:,2] * self.fps)
-        plt.plot(times2, transforms2[:,2] * self.fps)
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("z"))
-        #plt.plot((self.integrator.get_raw_data("t") + d2), self.integrator.get_raw_data("z"))
-        #plt.plot((self.integrator.get_raw_data("t") + d1), self.integrator.get_raw_data("z"))
-        plt.figure()
+        xplot = plt.subplot(311)
+
         plt.plot(times1, -transforms1[:,0] * self.fps)
         plt.plot(times2, -transforms2[:,0] * self.fps)
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("x"))
-        
-        plt.figure()
+        plt.plot(corrected_times, self.integrator.get_raw_data("x"))
+        plt.ylabel("omega x [rad/s]")
+
+        plt.subplot(312, sharex=xplot)
         
         plt.plot(times1, -transforms1[:,1] * self.fps)
         plt.plot(times2, -transforms2[:,1] * self.fps)
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("y"))
+        plt.plot(corrected_times, self.integrator.get_raw_data("y"))
+        plt.ylabel("omega y [rad/s]")
+
+        plt.subplot(313, sharex=xplot)
+
+        plt.plot(times1, transforms1[:,2] * self.fps)
+        plt.plot(times2, transforms2[:,2] * self.fps)
+        plt.plot(corrected_times, self.integrator.get_raw_data("z"))
+        plt.xlabel("time [s]")
+        plt.ylabel("omega z [rad/s]")
 
         plt.show()
 
@@ -327,12 +341,12 @@ class Stabilizer:
         costs = []
         offsets = []
 
-        N = 600
-        dt = 4
+        N = 1200
+        dt = 15 # Search +/- 3 seconds
 
         for i in range(N):
             offset = dt/2 - i * (dt/N) + self.initial_offset
-            cost = self.better_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
+            cost = self.fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
 
@@ -356,8 +370,25 @@ class Stabilizer:
         costs = []
         offsets = []
 
+        # Find better sync with smaller search space
         N = 800
         dt = 0.15
+        do_hpf = False
+
+        # run both gyro and video through high pass filter
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.butter.html
+        
+        if do_hpf:
+            filterorder = 10
+            filterfreq = 4 # hz
+            sosgyro = signal.butter(filterorder, filterfreq, "highpass", fs=self.integrator.gyro_sample_rate, output="sos")
+            sosvideo = signal.butter(filterorder, filterfreq, "highpass", fs=self.fps, output="sos")
+
+            gyro_data = signal.sosfilt(sosgyro, gyro_data, 0) # Filter along "vertical" time axis
+            OF_transforms = signal.sosfilt(sosvideo, OF_transforms, 0)
+
+        #plt.plot(gyro_times, gyro_data[:,0])
+        #plt.plot(gyro_times, filtered_gyro_data[:,0])
 
         for i in range(N):
             offset = dt/2 - i * (dt/N) + rough_offset
@@ -405,6 +436,7 @@ class Stabilizer:
 
 
         new_OF_transforms = np.copy(OF_transforms) * self.fps
+        # Optical flow movements gives pixel movement, not camera movement
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
         new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
@@ -417,7 +449,7 @@ class Stabilizer:
         #gyro_z = gyro_data[:,2]
         #OF_z = OF_transforms[:,2]
 
-        axes_weight = np.array([0.5,1,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. More weight to roll
+        axes_weight = np.array([0.9,0.9,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
         sum_squared_diff = 0
         gyro_idx = 1
@@ -461,9 +493,46 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True):
+    def fast_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
-        out = cv2.VideoWriter(outpath, -1, self.fps, (out_size[0]*2 if split_screen else out_size[0] ,out_size[1]))
+
+        if OF_times[0] < gyro_times[0]:
+            return 100
+
+        if OF_times[-1] > gyro_times[-1]:
+            return 100
+
+        new_OF_transforms = np.copy(OF_transforms) * self.fps
+        # Optical flow movements gives pixel movement, not camera movement
+        new_OF_transforms[:,0] = -new_OF_transforms[:,0]
+        new_OF_transforms[:,1] = -new_OF_transforms[:,1]
+
+
+        axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
+
+
+        t1 = OF_times[0]
+        t2 = OF_times[-1]
+
+        mask = ((t1 <= gyro_times) & (gyro_times <= t2))
+
+        sliced_gyro_data = gyro_data[mask,:]
+        sliced_gyro_times = gyro_times[mask]
+
+        nearest = interpolate.interp1d(gyro_times, gyro_data, kind='nearest', assume_sorted=True, axis = 0)
+        gyro_dat_resampled = nearest(OF_times)
+
+        squared_diff = (gyro_dat_resampled - new_OF_transforms)**2
+        sum_squared_diff = (squared_diff.sum(0) * axes_weight).sum()
+
+        return sum_squared_diff
+
+
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True, scale=1):
+
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+        out = cv2.VideoWriter(outpath, fourcc, self.fps, (out_size[0]*2 if split_screen else out_size[0], out_size[1]))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
@@ -477,7 +546,8 @@ class Stabilizer:
         while(True):
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
-            success, frame = self.cap.read() 
+            success, frame = self.cap.read()
+            # Getting frame_num _before_ cap.read gives index of the read frame. 
 
             
             print("FRAME: {}, IDX: {}".format(frame_num, i))
@@ -528,8 +598,9 @@ class Stabilizer:
                 cv2.waitKey(2)
 
         # When everything done, release the capture
-        cv2.destroyAllWindows()
         out.release()
+        cv2.destroyAllWindows()
+        
 
     def release(self):
         self.cap.release()
@@ -718,7 +789,7 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, cam_angle_degrees=0, initial_offset=0):
+    def __init__(self, videopath, calibrationfile, bblpath, cam_angle_degrees=0, initial_offset=0, use_csv=False):
         # General video stuff
         self.cap = cv2.VideoCapture(videopath)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -733,12 +804,61 @@ class BBLStabilizer(Stabilizer):
         self.map1, self.map2 = self.undistort.get_maps(1.6,new_img_dim=(self.width,self.height))
 
         # Get gyro data
-        self.bbe = BlackboxExtractor("test_clips/GX015563.MP4_emuf_004.bbl")
-        self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
+        print(bblpath)
+
+        if use_csv:
+            with open(bblpath) as bblcsv:
+                gyro_index = None
+                
+                csv_reader = csv.reader(bblcsv)
+                for i, row in enumerate(csv_reader):
+                    if(row[0] == "loopIteration"):
+                        gyro_index = row.index('gyroADC[0]')
+                        break
+
+                data_list = []
+                gyroscale = np.pi/180
+                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
+                for row in csv_reader:
+
+                    gx = float(row[gyro_index+1])* gyroscale
+                    gy = float(row[gyro_index+2])* gyroscale
+                    gz = float(row[gyro_index]) * gyroscale
+                    
+                    to_rotate = [-(gx),
+                                    (gy),
+                                    -(gz)]
+                    
+                    rotated = r.apply(to_rotate)
+                    
+                    f = [float(row[1]) / 1000000,
+                            rotated[0],
+                            rotated[1],
+                            rotated[2]]
+
+                    data_list.append(f)
+
+                self.gyro_data = np.array(data_list)
+
+
+
+        else:
+            self.bbe = BlackboxExtractor(bblpath)
+            self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
+
 
         # This seems to make the orientation match. Implement auto match later
-        self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+        #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+        #self.gyro_data[:,2] = -self.gyro_data[:,2]
+
+        #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
         self.gyro_data[:,2] = -self.gyro_data[:,2]
+        #self.gyro_data[:,3] = -self.gyro_data[:,3]
+
+        sosgyro = signal.butter(10, 90, "lowpass", fs=1000, output="sos")
+
+        self.gyro_data[:,1:3] = signal.sosfilt(sosgyro, self.gyro_data[:,1:3], 0) # Filter along "vertical" time axis
+
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -916,7 +1036,7 @@ class OpticalStabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080)):
 
-        out = cv2.VideoWriter(outpath, -1, 30, (1920*2,1080))
+        out = cv2.VideoWriter(outpath, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1920*2,1080))
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
@@ -970,6 +1090,7 @@ class OpticalStabilizer:
 
         # When everything done, release the capture
         out.release()
+        cv2.destroyAllWindows()
 
     def release(self):
         self.cap.release()
@@ -999,21 +1120,22 @@ if __name__ == "__main__":
 
     # insta360 test
     
-    stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/gopro_calib2.JSON", gyrocsv="test_clips/insta360_gyro.csv")
-    stab.auto_sync_stab(0.985,30 *24, 66 * 24, 170)
+    #stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/Hero_7_2.7K_60_4by3_wide_V2.json", gyrocsv="test_clips/insta360_gyro.csv")
+    #stab.auto_sync_stab(0.985,30 *24, 66 * 24, 170)
+    
     #stab.renderfile(19, 40, "insta360test.mp4",out_size = (2560,1440))
 
-    exit()
+    #exit()
     #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json") # Walk
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    stab = BBLStabilizer("test_clips/GX015563.MP4", "camera_presets/gopro_calib2.JSON", "test_clips/GX015563.MP4_emuf_004.bbl", initial_offset=-2) # FPV clip
+    stab = BBLStabilizer("test_clips/albertkim1.mp4", "camera_presets/CaddxVista_4by3.json", "test_clips/albertkim1.bbl.csv", cam_angle_degrees=10, initial_offset=0, use_csv=True) # FPV clip
 
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.985,5*24, 18 * 60, 70) # FPV clip
+    stab.auto_sync_stab(0.967,9*60, 173 * 60, 90) # FPV clip
     #stab.stabilization_settings()
 
 
@@ -1024,8 +1146,8 @@ if __name__ == "__main__":
 
 
     #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
-    stab.renderfile(4, 26, "FPV_stab.mp4",out_size = (1920,1080))
-    stab.release()
+    stab.renderfile(6, 120, "albert_kim_FPV_stab5.mp4",out_size = (768,432), split_screen = False, scale=2)
+    #stab.release()
 
     # 20 / self.fps: 0.042
     # 200 / self.fps: -0.048

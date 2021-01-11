@@ -65,7 +65,7 @@ class BlackboxExtractor:
 
 #testing
 if __name__ == "__main__":
-    bbe = BlackboxExtractor("test_clips/GX015563.MP4_emuf_004.bbl") # btfl_all.bbl
+    bbe = BlackboxExtractor("test_clips/GX010010.MP4.bbl") # btfl_all.bbl
     gyro_data = bbe.get_gyro_data()
     print(gyro_data)
     print(bbe.n_of_logs)
