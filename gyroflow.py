@@ -1302,9 +1302,22 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.split_screen_select.setChecked(True)
         self.second_controls_layout.addWidget(self.split_screen_select)
 
-        self.hw_acceleration_select = QtWidgets.QCheckBox("Encode with HW acceleration (req. FFmpeg compiled HW accel")
+        self.hw_acceleration_select = QtWidgets.QCheckBox("HW Encoding (experimental)")
         self.hw_acceleration_select.setChecked(False)
         self.second_controls_layout.addWidget(self.hw_acceleration_select)
+
+        self.display_preview = QtWidgets.QCheckBox("Display preview during rendering")
+        self.display_preview.setChecked(False)
+        self.second_controls_layout.addWidget(self.display_preview)
+
+        self.second_controls_layout.addWidget(QtWidgets.QLabel("HW encoding export bitrate [Mbit/s] (Only affects HW encoding!)"))
+        self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
+        self.export_bitrate.setDecimals(0)
+        self.export_bitrate.setMinimum(1)
+        self.export_bitrate.setMaximum(40)
+        self.export_bitrate.setValue(20)
+        self.second_controls_layout.addWidget(self.export_bitrate)
+
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
@@ -1313,6 +1326,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_button.clicked.connect(self.export_video)
         
         self.second_controls_layout.addWidget(self.export_button)
+
+        # warning for HW encoding
+        render_description = QtWidgets.QLabel(
+        "<b>Note:</b> HW Encoding requires FFMpeg with hardware acceleration support!")
+        render_description.setWordWrap(True)
+        self.second_controls_layout.addWidget(render_description)
 
         # add control bar to main layout
         self.layout.addWidget(self.main_controls)
@@ -1493,8 +1512,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         split_screen = self.split_screen_select.isChecked()
         hardware_acceleration = self.hw_acceleration_select.isChecked()
+        bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
+        preview = self.display_preview.isChecked()
 
-        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size, split_screen = split_screen, hw_accel = hardware_acceleration)
+
+        self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
+                             split_screen = split_screen, hw_accel = hardware_acceleration,
+                             bitrate_mbits = bitrate, display_preview=preview)
 
         
 

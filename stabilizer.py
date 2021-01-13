@@ -463,19 +463,55 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True, hw_accel = False):
-        if platform.system() == "Darwin" and hw_accel:
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
+                   split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False):
+        if hw_accel:
+            if platform.system() == "Darwin":  # macOS
+                output_params = {
+                    "-input_framerate": self.fps, 
+                    "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
+                    "-vcodec": "h264_videotoolbox",
+                    "-profile": "main", 
+                    #"-b:v": "20000k",
+                    "-b:v": "%sM" % bitrate_mbits,  # Needs testing if videotoolbox supports M
+                    "-pix_fmt": "yuv420p",
+                }
+            elif platform.system() == "Windows":
+                output_params = {
+                    "-input_framerate": self.fps, 
+                    "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
+                    "-vcodec": "h264_nvenc",
+                    "-profile:v": "main", 
+                    "-b:v": "%sM" % bitrate_mbits,
+                    "-bufsize:v": "%sM" % bitrate_mbits * 2,
+                    "-pix_fmt": "yuv420p",
+                }
+            elif platform.system() == "Linux":
+                output_params = {
+                    "-input_framerate": self.fps, 
+                    "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
+                    "-vcodec": "h264_vaapi",
+                    "-profile": "main", 
+                    "-b:v": "%sM" % bitrate_mbits,
+                    "-profile:v": "high",
+                    "-pix_fmt": "yuv420p",
+                }
+            out = WriteGear(output_filename=outpath, **output_params)
+
+        else:
             output_params = {
                 "-input_framerate": self.fps, 
                 "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
-                "-vcodec": "h264_videotoolbox",
-                "-profile": "main", 
-                "-b:v": "20000k",
+                "-c:v": "libx264",
+                "-preset": "medium",
+                "-b:v": "%sM" % bitrate_mbits,
+                "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
+                "-profile:v": "high",
+                "-tune": "film",
                 "-pix_fmt": "yuv420p",
-                }
+            }
             out = WriteGear(output_filename=outpath, **output_params)
-        else:
-            out = cv2.VideoWriter(outpath, -1, self.fps, (out_size[0]*2 if split_screen else out_size[0] ,out_size[1]))
+        
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
@@ -516,7 +552,6 @@ class Stabilizer:
 
                 # Fix border artifacts
                 frame_out = frame_out[crop[1]:crop[1]+out_size[1], crop[0]:crop[0]+out_size[0]]
-                frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1], crop[0]:crop[0]+out_size[0]]
 
 
                 #out.write(frame_out)
@@ -529,23 +564,25 @@ class Stabilizer:
                 size = np.array(frame_out.shape)
                 frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
-                frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
                 if split_screen:
+                    # Fix border artifacts
+                    frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1], crop[0]:crop[0]+out_size[0]]
+                    frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
                     concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (out_size[0]*2,out_size[1]))
                     out.write(concatted)
-                    #cv2.imshow("Before and After", concatted)
+                    if display_preview:
+                        cv2.imshow("Before and After", concatted)
+                        cv2.waitKey(2)
                 else:
                     out.write(frame_out)
-                    #cv2.imshow("Stabilized?", frame_out)
-                #cv2.waitKey(2)
+                    if display_preview:
+                        cv2.imshow("Stabilized?", frame_out)
+                        cv2.waitKey(2)
 
         # When everything done, release the capture
         #out.release()
         cv2.destroyAllWindows()
-        if hw_accel:
-            out.close()
-        else:
-            out.release()
+        out.close()
 
     def release(self):
         self.cap.release()
