@@ -481,9 +481,10 @@ class Stabilizer:
                     "-input_framerate": self.fps, 
                     "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                     "-vcodec": "h264_nvenc",
-                    "-profile:v": "main", 
+                    "-profile:v": "main",
+                    "-rc:v": "cbr", 
                     "-b:v": "%sM" % bitrate_mbits,
-                    "-bufsize:v": "%sM" % bitrate_mbits * 2,
+                    "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
                     "-pix_fmt": "yuv420p",
                 }
             elif platform.system() == "Linux":
