@@ -472,8 +472,7 @@ class Stabilizer:
                     "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                     "-vcodec": "h264_videotoolbox",
                     "-profile": "main", 
-                    #"-b:v": "20000k",
-                    "-b:v": "%sM" % bitrate_mbits,  # Needs testing if videotoolbox supports M
+                    "-b:v": "%sM" % bitrate_mbits,
                     "-pix_fmt": "yuv420p",
                 }
             elif platform.system() == "Windows":
@@ -494,7 +493,6 @@ class Stabilizer:
                     "-vcodec": "h264_vaapi",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
-                    "-profile:v": "high",
                     "-pix_fmt": "yuv420p",
                 }
             out = WriteGear(output_filename=outpath, **output_params)
@@ -504,11 +502,9 @@ class Stabilizer:
                 "-input_framerate": self.fps, 
                 "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                 "-c:v": "libx264",
-                "-preset": "medium",
-                "-b:v": "%sM" % bitrate_mbits,
+                "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
+                "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
-                "-profile:v": "high",
-                "-tune": "film",
                 "-pix_fmt": "yuv420p",
             }
             out = WriteGear(output_filename=outpath, **output_params)

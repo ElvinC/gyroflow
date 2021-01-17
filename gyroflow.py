@@ -1310,7 +1310,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.display_preview.setChecked(False)
         self.second_controls_layout.addWidget(self.display_preview)
 
-        self.second_controls_layout.addWidget(QtWidgets.QLabel("HW encoding export bitrate [Mbit/s] (Only affects HW encoding!)"))
+        self.second_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
         self.export_bitrate.setMinimum(1)
