@@ -463,6 +463,7 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
+
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
                    split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False):
         if hw_accel:
@@ -509,6 +510,7 @@ class Stabilizer:
             }
             out = WriteGear(output_filename=outpath, **output_params)
         
+
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
