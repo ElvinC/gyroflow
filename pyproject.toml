@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "gyroflow"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.6,<3.10"
+numpy = "^1.19.5"
+opencv-python = "^4.5.1"
+construct = "^2.10.56"
+matplotlib = "^3.3.3"
+hachoir = "^3.1.1"
+orangebox = "^0.2.0"
+crisp = "^2.2"
+pygame = "^2.0.1"
+python-dateutil = "^2.8.1"
+sympy = "^1.7.1"
+PySide2 = "^5.15.2"
+vidgear = "^0.2.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
