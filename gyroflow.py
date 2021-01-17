@@ -1314,7 +1314,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
         self.export_bitrate.setMinimum(1)
-        self.export_bitrate.setMaximum(40)
+        self.export_bitrate.setMaximum(200)
         self.export_bitrate.setValue(20)
         self.second_controls_layout.addWidget(self.export_bitrate)
 
