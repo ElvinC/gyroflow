@@ -63,8 +63,21 @@ class BlackboxExtractor:
 
         return self.final_gyro_data
 
+
+
+
+
 #testing
 if __name__ == "__main__":
+
+
+    with open("test_clips/GX010010.MP4.bbl") as f:
+        #print(f.readline())
+        pass
+
+
+    #exit()
+
     bbe = BlackboxExtractor("test_clips/GX010010.MP4.bbl") # btfl_all.bbl
     gyro_data = bbe.get_gyro_data()
     print(gyro_data)

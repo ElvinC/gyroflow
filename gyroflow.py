@@ -54,7 +54,7 @@ class Launcher(QtWidgets.QWidget):
         self.version_button.setMinimumSize(300,50)
         self.version_button.setStyleSheet("font-size: 14px;")
 
-        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Support on Github</a>''')
+        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Contribute or support on Github</a>''')
         self.footer.setOpenExternalLinks(True)
         self.footer.setAlignment(QtCore.Qt.AlignCenter)
 
@@ -556,7 +556,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def open_file_func(self):
         """Open file using Qt filedialog
         """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov *.MP4 *.AVI *.MOV)")
         self.infile_path = path[0]
         self.video_viewer.set_video_path(path[0])
 
@@ -1203,6 +1203,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.fpv_tilt_text)
         self.main_controls_layout.addWidget(self.fpv_tilt_control)
 
+        #self.fpv_tilt_text = QtWidgets.QLabel("")
+        #self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
+        #self.fpv_tilt_control.setMinimum(-90)
+        #self.fpv_tilt_control.setMaximum(90)
+        #self.fpv_tilt_control.setValue(0)
 
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
@@ -1397,7 +1402,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def open_file_func(self):
         """Open file using Qt filedialog 
         """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov *.MP4 *.AVI *.MOV)")
 
         if (len(path[0]) == 0):
             print("No file selected")
@@ -1495,8 +1500,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 self.export_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
 
+
+            fov_val = self.fov_slider.value() / 10
+
             # initiate stabilization
-            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum) # FPV clip
+            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val) # FPV clip
 
             smoothness = self.smooth_slider.value() / 100
             fps = self.stab.fps
