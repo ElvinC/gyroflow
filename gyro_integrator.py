@@ -116,9 +116,10 @@ class GyroIntegrator:
 
 
     def get_smoothed_orientation(self, smooth = 0.94):
+        # https://en.wikipedia.org/wiki/Exponential_smoothing
+        # the smooth value corresponds to the time constant
 
-        smothness = smooth**(1/6)
-
+        alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth)
 
         smoothed_orientation = np.zeros(self.orientation_list.shape)
 
@@ -126,7 +127,7 @@ class GyroIntegrator:
 
 
         for i in range(self.num_data_points):
-            value = quat.slerp(value, self.orientation_list[i,:],[1-smothness])[0]
+            value = quat.slerp(value, self.orientation_list[i,:],[alpha])[0]
             smoothed_orientation[i] = value
 
         # reverse pass
@@ -135,7 +136,7 @@ class GyroIntegrator:
         value2 = smoothed_orientation[-1,:]
 
         for i in range(self.num_data_points-1, -1, -1):
-            value2 = quat.slerp(value2, smoothed_orientation[i,:],[(1-smothness)])[0]
+            value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha])[0]
             smoothed_orientation2[i] = value2
 
         # Test rotation lock (doesn't work)

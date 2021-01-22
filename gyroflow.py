@@ -1211,10 +1211,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
-        self.smooth_text = QtWidgets.QLabel("Smoothness (85%):")
+        self.smooth_max_period = 50 # seconds
+        self.smooth_text_template = "Smoothness (time constant: {:.3f} s, {}%):"
+        self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**2 * self.smooth_max_period  ,20))
         self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.smooth_slider.setMinimum(0)
-        self.smooth_slider.setValue(85)
+        self.smooth_slider.setValue(20)
         self.smooth_slider.setMaximum(100)
         self.smooth_slider.setSingleStep(1)
         self.smooth_slider.setTickInterval(1)
@@ -1464,8 +1466,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def smooth_changed(self):
         """Smoothness has changed
         """
-        smooth_val = self.smooth_slider.value()
-        self.smooth_text.setText("Smoothness ({}%):".format(smooth_val))
+        raw_val = self.smooth_slider.value()
+        smooth_val = (raw_val/100)**2 * self.smooth_max_period
+        self.smooth_text.setText(self.smooth_text_template.format(smooth_val, raw_val))
 
 
 
@@ -1506,7 +1509,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             # initiate stabilization
             self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val) # FPV clip
 
-            smoothness = self.smooth_slider.value() / 100
+            smoothness_time_constant = (self.smooth_slider.value()/100)**2 * self.smooth_max_period
             fps = self.stab.fps
             num_frames = self.stab.num_frames
 
@@ -1519,13 +1522,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
                 return
 
-            print("Starting sync. Smoothness: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
-                    smoothness, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
+            print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
+                    smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
 
             # Known to work: test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json
             # 5 40
 
-            self.stab.auto_sync_stab(smoothness,sync1_frame, sync2_frame, OF_slice_length)
+            self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame, OF_slice_length)
 
             self.recompute_stab_button.setText("Recompute sync")
 

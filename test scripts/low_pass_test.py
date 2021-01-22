@@ -6,11 +6,15 @@ from matplotlib import pyplot as plt
 N = 1000
 
 
-Smothness_input = 0.8
-
-Smothness = Smothness_input**(1/6)
+time_constant = 4 # s
 
 
+#Smoothness = 1-np.exp(-1/Smoothness_input) # Smothness_input**(1/6)
+
+Smoothness = 1 - np.exp(-1 / time_constant)
+
+# https://en.wikipedia.org/wiki/Exponential_smoothing
+# https://dsp.stackexchange.com/questions/28308/exponential-weighted-moving-average-time-constant
 
 raw_clean = np.sin(np.arange(0,N)/30)
 
@@ -30,7 +34,7 @@ value = raw[0]
 
 
 for i in range(raw.shape[0]):
-    value = value * Smothness + raw[i] * (1-Smothness)
+    value = value * (1-Smoothness) + raw[i] * Smoothness
     processed[i] = value
 
 
@@ -40,7 +44,7 @@ processed2 = np.zeros(N)
 value2 = processed[-1]
 
 for i in range(raw.shape[0]-1, -1, -1):
-    value2 = value2 * Smothness + processed[i] * (1-Smothness)
+    value2 = value2 * (1-Smoothness) + processed[i] * Smoothness
     processed2[i] = value2
 
 #final = (processed + processed2)/2
