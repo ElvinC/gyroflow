@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import csv
+import platform
 
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
 from scipy.spatial.transform import Rotation
@@ -8,6 +9,7 @@ from gyro_integrator import GyroIntegrator, FrameRotationIntegrator
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
+from vidgear.gears import WriteGear
 
 
 from scipy import signal, interpolate
@@ -119,23 +121,30 @@ class Stabilizer:
 
         print("Interval {}, slope {}".format(interval, correction_slope))
 
+        viz_correction = 0.5/self.fps
+        corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
 
+        xplot = plt.subplot(311)
 
-        plt.plot(times1, transforms1[:,2] * self.fps)
-        plt.plot(times2, transforms2[:,2] * self.fps)
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("z"))
-        #plt.plot((self.integrator.get_raw_data("t") + d2), self.integrator.get_raw_data("z"))
-        #plt.plot((self.integrator.get_raw_data("t") + d1), self.integrator.get_raw_data("z"))
-        plt.figure()
         plt.plot(times1, -transforms1[:,0] * self.fps)
         plt.plot(times2, -transforms2[:,0] * self.fps)
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("x"))
-        
-        plt.figure()
+        plt.plot(corrected_times, self.integrator.get_raw_data("x"))
+        plt.ylabel("omega x [rad/s]")
+
+        plt.subplot(312, sharex=xplot)
         
         plt.plot(times1, -transforms1[:,1] * self.fps)
         plt.plot(times2, -transforms2[:,1] * self.fps)
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)*correction_slope, self.integrator.get_raw_data("y"))
+        plt.plot(corrected_times, self.integrator.get_raw_data("y"))
+        plt.ylabel("omega y [rad/s]")
+
+        plt.subplot(313, sharex=xplot)
+
+        plt.plot(times1, transforms1[:,2] * self.fps)
+        plt.plot(times2, transforms2[:,2] * self.fps)
+        plt.plot(corrected_times, self.integrator.get_raw_data("z"))
+        plt.xlabel("time [s]")
+        plt.ylabel("omega z [rad/s]")
 
         plt.show()
 
@@ -315,9 +324,9 @@ class Stabilizer:
 
         interval = correction_slope * 1/self.fps
 
-        plt.plot(frame_times, transforms[:,2])
-        plt.plot((self.integrator.get_raw_data("t") + gyro_start)* correction_slope, self.integrator.get_raw_data("z"))
-        plt.show()
+        #plt.plot(frame_times, transforms[:,2])
+        #plt.plot((self.integrator.get_raw_data("t") + gyro_start)* correction_slope, self.integrator.get_raw_data("z"))
+        #plt.show()
 
     def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list):
         #print(prev_pts_list)
@@ -364,8 +373,8 @@ class Stabilizer:
         print("Estimated offset: {}".format(rough_offset))
 
 
-        plt.plot(offsets, costs)
-        plt.show()
+        #plt.plot(offsets, costs)
+        #plt.show()
 
         costs = []
         offsets = []
@@ -400,8 +409,8 @@ class Stabilizer:
 
         print("Better offset: {}".format(better_offset))
 
-        plt.plot(offsets, costs)
-        plt.show()
+        #plt.plot(offsets, costs)
+        #plt.show()
 
         return better_offset
 
@@ -493,6 +502,7 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
+
     def fast_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
 
@@ -528,12 +538,56 @@ class Stabilizer:
         return sum_squared_diff
 
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True, scale=1):
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
+                   split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False, scale=1):
+        
+        export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
-        #fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        fourcc = cv2.VideoWriter_fourcc(*'apch')
+        if hw_accel:
+            if platform.system() == "Darwin":  # macOS
+                output_params = {
+                    "-input_framerate": self.fps, 
+                    "-vf": "scale=%sx%s" % export_out_size,
+                    "-vcodec": "h264_videotoolbox",
+                    "-profile": "main", 
+                    "-b:v": "%sM" % bitrate_mbits,
+                    "-pix_fmt": "yuv420p",
+                }
+            elif platform.system() == "Windows":
+                output_params = {
+                    "-input_framerate": self.fps, 
+                    "-vf": "scale=%sx%s" % export_out_size,
+                    "-vcodec": "h264_nvenc",
+                    "-profile:v": "main",
+                    "-rc:v": "cbr", 
+                    "-b:v": "%sM" % bitrate_mbits,
+                    "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
+                    "-pix_fmt": "yuv420p",
+                }
+            elif platform.system() == "Linux":
+                output_params = {
+                    "-input_framerate": self.fps, 
+                    "-vf": "scale=%sx%s" % export_out_size,
+                    "-vcodec": "h264_vaapi",
+                    "-profile": "main", 
+                    "-b:v": "%sM" % bitrate_mbits,
+                    "-pix_fmt": "yuv420p",
+                }
+            out = WriteGear(output_filename=outpath, **output_params)
 
-        out = cv2.VideoWriter(outpath, fourcc, self.fps, (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale)))
+        else:
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vf": "scale=%sx%s" % export_out_size,
+                "-c:v": "libx264",
+                "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
+                "-maxrate": "%sM" % bitrate_mbits,
+                "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
+                "-pix_fmt": "yuv420p",
+            }
+            out = WriteGear(output_filename=outpath, **output_params)
+        
+
         crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
 
 
@@ -567,7 +621,7 @@ class Stabilizer:
                 
 
 
-                frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_CUBIC,
+                frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
                 #cv2.imshow("Stabilized?", frame_undistort)
 
@@ -578,10 +632,9 @@ class Stabilizer:
 
 
                 # Fix border artifacts
+
                 frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
-                frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1]* scale, crop[0]:crop[0]+out_size[0]* scale]
-
-
+                
                 #out.write(frame_out)
                 #print(frame_out.shape)
 
@@ -592,20 +645,28 @@ class Stabilizer:
                 size = np.array(frame_out.shape)
                 #frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
-                frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
                 if split_screen:
+
+                    # Fix border artifacts
+                    frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1]* scale, crop[0]:crop[0]+out_size[0]* scale]
+                    frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
                     concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (int(out_size[0]*2*scale),int(out_size[1]*scale)))
+
                     out.write(concatted)
-                    cv2.imshow("Before and After", concatted)
+                    if display_preview:
+                        cv2.imshow("Before and After", concatted)
+                        cv2.waitKey(2)
                 else:
-                    out.write(cv2.resize(frame_out, (int(out_size[0]*scale),int(out_size[1]*scale))))
-                    cv2.imshow("Stabilized?", frame_out)
-                cv2.waitKey(2)
+
+                    out.write(frame_out)
+                    if display_preview:
+                        cv2.imshow("Stabilized?", frame_out)
+                        cv2.waitKey(2)
 
         # When everything done, release the capture
-        out.release()
+        #out.release()
         cv2.destroyAllWindows()
-        
+        out.close()
 
     def release(self):
         self.cap.release()
