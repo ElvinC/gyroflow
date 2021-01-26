@@ -1,6 +1,8 @@
 #https://stackoverflow.com/questions/45811421/python-create-image-with-new-camera-position
 import cv2
 import numpy as np
+from scipy.spatial.transform import Rotation
+
 
 f = 500
 rotXval = 90
@@ -61,6 +63,11 @@ if __name__ == '__main__':
     k = -1
     while k != 27:
 
+        
+
+
+
+
         if f <= 0: f = 1
         rotX = (rotXval - 90)*np.pi/180
         rotY = (rotYval - 90)*np.pi/180
@@ -68,6 +75,11 @@ if __name__ == '__main__':
         distX = distXval - 500
         distY = distYval - 500
         distZ = distZval - 500
+
+        combined_rotation = np.eye(4)
+        #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
+        combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [rotX, rotY, rotZ], degrees=False).as_matrix() #Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
+        #eul = Rotation(quart).as_euler('xyz')[0]
 
         # Camera intrinsic matrix
         K = np.array([[f, 0, w/2, 0],
@@ -97,7 +109,7 @@ if __name__ == '__main__':
 
         # Composed rotation matrix with (RX,RY,RZ)
         R = np.eye(4,4)
-        R = np.linalg.multi_dot([ RX , RY , RZ ])
+        R = combined_rotation
 
         
         

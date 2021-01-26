@@ -1185,10 +1185,25 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.open_preset_button)
 
 
-        self.open_bbl_button = QtWidgets.QPushButton("Open BBL file (leave empty for GPMF)")
+        self.open_bbl_button = QtWidgets.QPushButton("Open BBL/Gyro log (leave empty for GPMF)")
         self.open_bbl_button.setMinimumHeight(30)
         self.open_bbl_button.clicked.connect(self.open_bbl_func)
         self.main_controls_layout.addWidget(self.open_bbl_button)
+
+
+        self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
+        self.gyro_log_format_select = QtWidgets.QComboBox()
+        self.gyro_log_format_select.addItem("Raw Betaflight Blackbox (doesn't work)")
+        self.gyro_log_format_select.addItem("Betaflight Blackbox CSV (doesn't work)")
+        self.gyro_log_format_select.addItem("Gyroflow CSV Log (Hmmm..., totally doesn't work)")
+        self.gyro_log_format_select.setMinimumHeight(20)
+
+        self.gyro_log_format_text.setVisible(False)
+        self.gyro_log_format_select.setVisible(False)
+
+        self.main_controls_layout.addWidget(self.gyro_log_format_text)
+        self.main_controls_layout.addWidget(self.gyro_log_format_select)
+
 
         self.fpv_tilt_text = QtWidgets.QLabel("FPV uptilt in degrees:")
         self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
@@ -1213,7 +1228,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
         self.smooth_max_period = 50 # seconds
         self.smooth_text_template = "Smoothness (time constant: {:.3f} s, {}%):"
-        self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**2 * self.smooth_max_period  ,20))
+        self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**3 * self.smooth_max_period  ,20))
         self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.smooth_slider.setMinimum(0)
         self.smooth_slider.setValue(20)
@@ -1460,6 +1475,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
             self.fpv_tilt_text.setVisible(False)
             self.fpv_tilt_control.setVisible(False)
+            self.gyro_log_format_text.setVisible(False)
+            self.gyro_log_format_select.setVisible(False)
 
             return
 
@@ -1476,6 +1493,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.fpv_tilt_text.setVisible(True)
         self.fpv_tilt_control.setVisible(True)
+        self.gyro_log_format_text.setVisible(True)
+        self.gyro_log_format_select.setVisible(True)
+
 
 
 
@@ -1489,7 +1509,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """Smoothness has changed
         """
         raw_val = self.smooth_slider.value()
-        smooth_val = (raw_val/100)**2 * self.smooth_max_period
+        smooth_val = (raw_val/100)**3 * self.smooth_max_period
         self.smooth_text.setText(self.smooth_text_template.format(smooth_val, raw_val))
 
 

@@ -6,6 +6,8 @@ from _version import __version__
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
+from scipy.spatial.transform import Rotation
+
 import sys
 
 # https://www.imatest.com/support/docs/pre-5-2/geometric-calibration/projective-camera
@@ -325,7 +327,7 @@ class FisheyeCalibrator:
         rotZ = (rotZval)*np.pi/180
         rot_mat = np.eye(4)
 
-        from scipy.spatial.transform import Rotation
+        
         #print(Rotation([quart[0,1],quart[0,2],quart[0,3],quart[0,0]]).as_euler('xyz'))
         quart = quart.flatten()
         eul = Rotation([quart[1],quart[2],quart[3],quart[0]]).as_euler('xyz')
@@ -837,10 +839,9 @@ class StandardCalibrator:
         rotZ = (rotZval)*np.pi/180
         rot_mat = np.eye(4)
 
-        from scipy.spatial.transform import Rotation
         #print(Rotation([quart[0,1],quart[0,2],quart[0,3],quart[0,0]]).as_euler('xyz'))
         quart = quart.flatten()
-        eul = Rotation([quart[1],quart[2],quart[3],quart[0]]).as_euler('xyz')
+        #eul = Rotation([quart[1],quart[2],quart[3],quart[0]]).as_euler('xyz')
 
         combined_rotation = np.eye(4)
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()

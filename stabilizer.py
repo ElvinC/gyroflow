@@ -239,17 +239,17 @@ class Stabilizer:
                 # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
                 roteul = None
                 smallest_mag = 1000
-                for rot in rots:
-                    thisrot = Rotation.from_matrix(rots[0]) # First one?
-                    #thisrot = Rotation.from_matrix(rot)
-                    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.6:
-                        # For some reason some camera calibrations lead to super high rotation magnitudes... Still testing.
-                        roteul = Rotation.from_matrix(rot).as_euler("xyz")
-                        smallest_mag = thisrot.magnitude()
+                #for rot in rots:
+                #    thisrot = Rotation.from_matrix(rots[0]) # First one?
+                #    #thisrot = Rotation.from_matrix(rot)
+                #    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.6:
+                #        # For some reason some camera calibrations lead to super high rotation magnitudes... Still testing.
+                #        roteul = Rotation.from_matrix(rot).as_euler("xyz")
+                #        smallest_mag = thisrot.magnitude()
 
-                if type(roteul) == type(None):
-                    print("Optical flow rotation determination failed")
-                    roteul = [0, 0, 0]
+                #if type(roteul) == type(None):
+                #    print("Optical flow rotation determination failed")
+                #    roteul = [0, 0, 0]
 
                 # Compute fundamental matrix
                 #F, mask = cv2.findFundamentalMat(np.array(filtered_src), np.array(filtered_dst),cv2.FM_LMEDS)
@@ -373,8 +373,8 @@ class Stabilizer:
         print("Estimated offset: {}".format(rough_offset))
 
 
-        #plt.plot(offsets, costs)
-        #plt.show()
+        plt.plot(offsets, costs)
+        plt.show()
 
         costs = []
         offsets = []
@@ -409,8 +409,8 @@ class Stabilizer:
 
         print("Better offset: {}".format(better_offset))
 
-        #plt.plot(offsets, costs)
-        #plt.show()
+        plt.plot(offsets, costs)
+        plt.show()
 
         return better_offset
 
@@ -547,43 +547,39 @@ class Stabilizer:
             if platform.system() == "Darwin":  # macOS
                 output_params = {
                     "-input_framerate": self.fps, 
-                    "-vf": "scale=%sx%s" % export_out_size,
+                    #"-vf": "scale=%sx%s" % export_out_size,
                     "-vcodec": "h264_videotoolbox",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
-                    "-pix_fmt": "yuv420p",
                 }
             elif platform.system() == "Windows":
                 output_params = {
                     "-input_framerate": self.fps, 
-                    "-vf": "scale=%sx%s" % export_out_size,
+                    #"-vf": "scale=%sx%s" % export_out_size,
                     "-vcodec": "h264_nvenc",
                     "-profile:v": "main",
                     "-rc:v": "cbr", 
                     "-b:v": "%sM" % bitrate_mbits,
                     "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
-                    "-pix_fmt": "yuv420p",
                 }
             elif platform.system() == "Linux":
                 output_params = {
                     "-input_framerate": self.fps, 
-                    "-vf": "scale=%sx%s" % export_out_size,
+                    #"-vf": "scale=%sx%s" % export_out_size,
                     "-vcodec": "h264_vaapi",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
-                    "-pix_fmt": "yuv420p",
                 }
             out = WriteGear(output_filename=outpath, **output_params)
 
         else:
             output_params = {
                 "-input_framerate": self.fps, 
-                "-vf": "scale=%sx%s" % export_out_size,
+                #"-vf": "scale=%sx%s" % export_out_size,
                 "-c:v": "libx264",
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
-                "-pix_fmt": "yuv420p",
             }
             out = WriteGear(output_filename=outpath, **output_params)
         
@@ -614,8 +610,11 @@ class Stabilizer:
             if success:
                 i +=1
 
-            if i > num_frames or i == len(self.stab_transform):
+            if i > num_frames:
                 break
+
+            elif i == len(self.stab_transform):
+            	print("No more stabilization data")
 
             if success and i > 0:
                 
@@ -695,17 +694,18 @@ class GPMFStabilizer(Stabilizer):
         # Hero 6??
         if hero == 6:
             self.gyro_data[:,1] = self.gyro_data[:,1]
-            self.gyro_data[:,2] = -self.gyro_data[:,2]
+            self.gyro_data[:,2] = self.gyro_data[:,2]
             self.gyro_data[:,3] = self.gyro_data[:,3]
         elif hero == 5:
             self.gyro_data[:,1] = -self.gyro_data[:,1]
             self.gyro_data[:,2] = self.gyro_data[:,2]
-            self.gyro_data[:,3] = -self.gyro_data[:,3]
+            self.gyro_data[:,3] = self.gyro_data[:,3]
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         elif hero == 8:
             # Hero 8??
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+            self.gyro_data[:,2] = -self.gyro_data[:,2]
 
         
 
@@ -929,7 +929,7 @@ class BBLStabilizer(Stabilizer):
         #self.gyro_data[:,2] = -self.gyro_data[:,2]
 
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-        self.gyro_data[:,2] = -self.gyro_data[:,2]
+        self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
 
         sosgyro = signal.butter(10, 150, "lowpass", fs=1000, output="sos")
@@ -1227,12 +1227,12 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    stab = BBLStabilizer("test_clips/DJIG0004nurk.mp4", "camera_presets/CaddxVista_4by3.json", "test_clips/DJIG0004nurk.BFL.csv", cam_angle_degrees=15, initial_offset=0, use_csv=True) # FPV clip
+    stab = BBLStabilizer("test_clips/night_test.mp4", "camera_presets/Session5_16by9.json", "test_clips/night_test.csv", cam_angle_degrees=0, initial_offset=-10.5, use_csv=True) # FPV clip
 
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.967,3*60, 20 * 60, 60) # FPV clip
+    stab.auto_sync_stab(0.3,0.5*30, 26 * 30, 60) # FPV clip
     #stab.stabilization_settings()
 
     # Visual stabilizer test
@@ -1246,7 +1246,7 @@ if __name__ == "__main__":
 
 
     #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
-    stab.renderfile(1, 30, "nurk_dji_stabi2.mp4",out_size = (720,500), split_screen = False, scale=2)
+    stab.renderfile(0, 12, "night_test_stabi2.mp4",out_size = (1280,720), split_screen = True, scale=1, display_preview = True)
     #stab.stabilization_settings(smooth=0.6)
     #stab.renderfile(113, 130, "nurk_stabi3.mp4",out_size = (3072,1728))
 
