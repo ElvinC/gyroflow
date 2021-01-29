@@ -17,15 +17,20 @@ from scipy import signal, interpolate
 import time
 
 
-    # https://stackoverflow.com/questions/52683440/quaternion-lerp-with-different-velocities-for-yaw-pitch-roll
-
 class Stabilizer:
-    def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50):
+    def __init__():
+
+        self.initial_offset = 0
+
+    def set_initial_offset(self, initial_offset):
+        self.initial_offset = initial_offset
+
+    def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
-        d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength)
+        d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
         #self.initial_offset = d1
-        d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength)
+        d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
 
         self.times1 = times1
         self.times2 = times2
@@ -160,7 +165,7 @@ class Stabilizer:
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
 
-        # Doesn't work for BBL for some reason. TODO: Figure out why
+        # Doesn't work for BBL for some reason.
         #self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
 
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
@@ -168,7 +173,7 @@ class Stabilizer:
 
 
 
-    def optical_flow_comparison(self, start_frame=0, analyze_length = 50):
+    def optical_flow_comparison(self, start_frame=0, analyze_length = 50, debug_plots = True):
         frame_times = []
         frame_idx = []
         transforms = []
@@ -229,12 +234,11 @@ class Stabilizer:
 
 
 
-                H, mask = cv2.findHomography(np.array(filtered_src), np.array(filtered_dst))
-                retval, rots, trans, norms = self.undistort.decompose_homography(H, new_img_dim=(self.width,self.height))
+                #H, mask = cv2.findHomography(np.array(filtered_src), np.array(filtered_dst))
+                #retval, rots, trans, norms = self.undistort.decompose_homography(H, new_img_dim=(self.width,self.height))
 
 
-                # rots contains for solutions for the rotation. Get one with smallest magnitude. Idk
-                # TODO: Implement rotation determination using essential matrix instead:
+                # rots contains for solutions for the rotation. Get one with smallest magnitude.
                 # https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
                 # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
                 roteul = None
@@ -272,63 +276,26 @@ class Stabilizer:
                         roteul = rot2.as_euler("xyz")
 
 
-                #w, u, vt = cv2.SVDecomp(E) # , flag = cv2.SVD.FULL_UV
-                
-                #W = np.array([[0, -1.0, 0],[1.0, 0, 0],[0, 0, 1.0]])
-
-                #U_W_Vt = np.linalg.multi_dot([u, W, vt])
-                #U_Wt_Vt = np.linalg.multi_dot([u, W.transpose(), vt]) # Rotation matrix?
-                #
-                
-
-                #points_drawn = curr
-
-                #for point in curr_pts:
-                #    print(point)
-                #    cv2.circle(points_drawn,tuple(point[0]),1,(0,0,255))
-
-                #for point in dst_pts:
-                #    #print(point)
-                #    cv2.circle(points_drawn,tuple(point[0]),1,(255,0,0))
-
-                #cv2.imshow("Dot test", points_drawn)
-                #cv2.waitKey(300)
-
-                m, inliers = cv2.estimateAffine2D(src_pts, dst_pts) 
-
-                dx = m[0,2]
-                dy = m[1,2]
-                
+                #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts) 
+                #dx = m[0,2]
+                #dy = m[1,2]
                 # Extract rotation angle
-                da = np.arctan2(m[1,0], m[0,0])
+                #da = np.arctan2(m[1,0], m[0,0])
                 #transforms.append([dx,dy,da]) 
                 transforms.append(list(roteul))
+                
+                
                 prev_gray = curr_gray
 
             else:
                 print("Frame {}".format(i))
         
         transforms = np.array(transforms)
-        estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst)
+        estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
         return estimated_offset, frame_times, transforms
 
-        # Test stuff 
-        v1 = 20 / self.fps
-        v2 = 1300 / self.fps
-        d1 = 0.042
-        d2 = -0.604
 
-        err_slope = (d2-d1)/(v2-v1)
-        correction_slope = err_slope + 1
-        gyro_start = (d1 - err_slope*v1)
-
-        interval = correction_slope * 1/self.fps
-
-        #plt.plot(frame_times, transforms[:,2])
-        #plt.plot((self.integrator.get_raw_data("t") + gyro_start)* correction_slope, self.integrator.get_raw_data("z"))
-        #plt.show()
-
-    def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list):
+    def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list, debug_plots = True):
         #print(prev_pts_list)
         # Estimate offset between small optical flow slice and gyro data
 
@@ -409,8 +376,9 @@ class Stabilizer:
 
         print("Better offset: {}".format(better_offset))
 
-        plt.plot(offsets, costs)
-        plt.show()
+        if debug_plots:
+            plt.plot(offsets, costs)
+            plt.show()
 
         return better_offset
 
@@ -673,6 +641,9 @@ class Stabilizer:
 
 class GPMFStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6):
+
+        super().__init__()
+
         # General video stuff
         self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
@@ -693,6 +664,10 @@ class GPMFStabilizer(Stabilizer):
 
         # Hero 6??
         if hero == 6:
+            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,2] = self.gyro_data[:,2]
+            self.gyro_data[:,3] = self.gyro_data[:,3]
+        if hero == 7:
             self.gyro_data[:,1] = self.gyro_data[:,1]
             self.gyro_data[:,2] = self.gyro_data[:,2]
             self.gyro_data[:,3] = self.gyro_data[:,3]
@@ -728,9 +703,6 @@ class GPMFStabilizer(Stabilizer):
         self.times = None
         self.stab_transform = None
 
-
-        self.initial_offset = 0
-
     
     def stabilization_settings(self, smooth = 0.95):
 
@@ -759,6 +731,9 @@ class GPMFStabilizer(Stabilizer):
 
 class InstaStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6):
+        
+        super().__init__()
+        
         # General video stuff
         self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
@@ -866,7 +841,10 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, cam_angle_degrees=0, initial_offset=0, use_csv=False):
+    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False):
+        
+        super().__init__()
+        
         # General video stuff
         self.cap = cv2.VideoCapture(videopath)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -878,7 +856,7 @@ class BBLStabilizer(Stabilizer):
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
         self.undistort.load_calibration_json(calibrationfile, True)
-        self.map1, self.map2 = self.undistort.get_maps(1.6,new_img_dim=(self.width,self.height))
+        self.map1, self.map2 = self.undistort.get_maps(fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
         print(bblpath)
@@ -931,11 +909,11 @@ class BBLStabilizer(Stabilizer):
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
         self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
+        
 
         sosgyro = signal.butter(10, 150, "lowpass", fs=1000, output="sos")
 
         self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
-
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -1227,12 +1205,12 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    stab = BBLStabilizer("test_clips/night_test.mp4", "camera_presets/Session5_16by9.json", "test_clips/night_test.csv", cam_angle_degrees=0, initial_offset=-10.5, use_csv=True) # FPV clip
+    stab = BBLStabilizer("test_clips/night_test.mp4", "camera_presets/Canon_M6_MarkII_7Artisans_7_5_mm.json", "test_clips/night_test.csv", cam_angle_degrees=0, initial_offset=-10.5, use_csv=True) # FPV clip
 
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.3,0.5*30, 26 * 30, 60) # FPV clip
+    stab.auto_sync_stab(0.21,0.5*30, 26 * 30, 50) # FPV clip
     #stab.stabilization_settings()
 
     # Visual stabilizer test
@@ -1246,7 +1224,7 @@ if __name__ == "__main__":
 
 
     #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
-    stab.renderfile(0, 12, "night_test_stabi2.mp4",out_size = (1280,720), split_screen = True, scale=1, display_preview = True)
+    stab.renderfile(0, 25, "night_test_stabi3.mp4",out_size = (1580,600), split_screen = False, scale=1, display_preview = True)
     #stab.stabilization_settings(smooth=0.6)
     #stab.renderfile(113, 130, "nurk_stabi3.mp4",out_size = (3072,1728))
 

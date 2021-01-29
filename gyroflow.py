@@ -27,9 +27,14 @@ class Launcher(QtWidgets.QWidget):
         
 
         self.setFixedWidth(450)
+        
+        # image
+        pixmap = QtGui.QPixmap('largelogo_w400.png')
+        self.top_logo = QtWidgets.QLabel()
+        self.top_logo.setPixmap(pixmap.scaled(400,450,QtCore.Qt.KeepAspectRatio))
+        self.top_logo.setAlignment(QtCore.Qt.AlignCenter)
 
-
-        self.text = QtWidgets.QLabel("<h1>Gyroflow {}</h1>".format(__version__))
+        self.text = QtWidgets.QLabel("<h2>Version {}</h2>".format(__version__))
         self.text.setAlignment(QtCore.Qt.AlignCenter)
 
         self.calibrator_button = QtWidgets.QPushButton("Camera Calibrator")
@@ -37,11 +42,12 @@ class Launcher(QtWidgets.QWidget):
         self.calibrator_button.setStyleSheet("font-size: 14px;")
         self.calibrator_button.setToolTip("Use this to generate camera calibration files")
 
-        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer (Doesn't work yet)")
+        self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer (Fancy version)")
         self.stabilizer_button.setMinimumSize(300,50)
+        self.stabilizer_button.setEnabled(False)
         self.stabilizer_button.setStyleSheet("font-size: 14px;")
 
-        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (barebone dev version)")
+        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (barebone version)")
         self.stabilizer_barebone_button.setMinimumSize(300,50)
         self.stabilizer_barebone_button.setStyleSheet("font-size: 14px;")
 
@@ -50,7 +56,7 @@ class Launcher(QtWidgets.QWidget):
         self.stretch_button.setStyleSheet("font-size: 14px;")
 
 
-        self.version_button = QtWidgets.QPushButton("Check version")
+        self.version_button = QtWidgets.QPushButton("Check for updates")
         self.version_button.setMinimumSize(300,50)
         self.version_button.setStyleSheet("font-size: 14px;")
 
@@ -60,6 +66,8 @@ class Launcher(QtWidgets.QWidget):
 
 
         self.layout = QtWidgets.QVBoxLayout()
+
+        self.layout.addWidget(self.top_logo)
         self.layout.addWidget(self.text)
         self.layout.addWidget(self.calibrator_button)
         self.layout.addWidget(self.stabilizer_button)
@@ -1172,6 +1180,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.second_controls_layout.setAlignment(QtCore.Qt.AlignTop)
         self.second_controls.setMinimumWidth(500)
 
+        text = QtWidgets.QLabel("<h2>Input parameters:</h2>".format(__version__))
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        self.main_controls_layout.addWidget(text)
+
         self.open_vid_button = QtWidgets.QPushButton("Open video file")
         self.open_vid_button.setMinimumHeight(30)
         self.open_vid_button.clicked.connect(self.open_file_func)
@@ -1190,12 +1202,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_bbl_button.clicked.connect(self.open_bbl_func)
         self.main_controls_layout.addWidget(self.open_bbl_button)
 
+        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with same names are detected automatically ")
+        explaintext.setWordWrap(True)
+        explaintext.setMinimumHeight(60)
+        self.main_controls_layout.addWidget(explaintext)
+
+
+
+
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
-        self.gyro_log_format_select.addItem("Raw Betaflight Blackbox (doesn't work)")
-        self.gyro_log_format_select.addItem("Betaflight Blackbox CSV (doesn't work)")
-        self.gyro_log_format_select.addItem("Gyroflow CSV Log (Hmmm..., totally doesn't work)")
+        self.gyro_log_format_select.addItem("Raw Betaflight Blackbox")
+        self.gyro_log_format_select.addItem("Betaflight Blackbox CSV")
+        self.gyro_log_format_select.addItem("Gyroflow CSV Log (doesn't work)")
+        self.gyro_log_format_select.addItem("GoPro GPMF as log?? (doesn't work)")
         self.gyro_log_format_select.setMinimumHeight(20)
 
         self.gyro_log_format_text.setVisible(False)
@@ -1211,6 +1232,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fpv_tilt_control.setMaximum(90)
         self.fpv_tilt_control.setValue(0)
 
+
         # Only show when blackbox file is loaded
         self.fpv_tilt_text.setVisible(False)
         self.fpv_tilt_control.setVisible(False)
@@ -1218,52 +1240,33 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(self.fpv_tilt_text)
         self.main_controls_layout.addWidget(self.fpv_tilt_control)
 
-        #self.fpv_tilt_text = QtWidgets.QLabel("")
-        #self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
-        #self.fpv_tilt_control.setMinimum(-90)
-        #self.fpv_tilt_control.setMaximum(90)
-        #self.fpv_tilt_control.setValue(0)
+
+        
+        self.main_controls_layout.addWidget(QtWidgets.QLabel('Camera type (integrated gyro)'))
+
+        self.camera_type_control = QtWidgets.QComboBox()
+        self.camera_type_control.addItem("hero5")
+        self.camera_type_control.addItem("hero6")
+        self.camera_type_control.addItem("hero7")
+        self.camera_type_control.addItem("hero8")
+        self.camera_type_control.addItem("smo4k")
+
+        self.main_controls_layout.addWidget(self.camera_type_control)
 
 
-        # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
-        self.smooth_max_period = 50 # seconds
-        self.smooth_text_template = "Smoothness (time constant: {:.3f} s, {}%):"
-        self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**3 * self.smooth_max_period  ,20))
-        self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.smooth_slider.setMinimum(0)
-        self.smooth_slider.setValue(20)
-        self.smooth_slider.setMaximum(100)
-        self.smooth_slider.setSingleStep(1)
-        self.smooth_slider.setTickInterval(1)
-        self.smooth_slider.valueChanged.connect(self.smooth_changed)
-
-        self.main_controls_layout.addWidget(self.smooth_text)
-        self.main_controls_layout.addWidget(self.smooth_slider)
-
-        explaintext = QtWidgets.QLabel("<b>Note:</b> 0% corresponds to no smoothing and 100% corresponds to a locked camera. " \
-        "intermediate values are non-linear and depend on gyro sample rate in current implementation.")
-        explaintext.setWordWrap(True)
-        explaintext.setMinimumHeight(60)
-        self.main_controls_layout.addWidget(explaintext)
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.main_controls_layout.addWidget(line)
 
 
-        # slider for adjusting non linear crop
-        self.fov_text = QtWidgets.QLabel("FOV scale (1.5):")
-        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.fov_slider.setMinimum(10)
-        self.fov_slider.setValue(15)
-        self.fov_slider.setMaximum(40)
-        self.fov_slider.setSingleStep(1)
-        self.fov_slider.setTickInterval(1)
-        self.fov_slider.valueChanged.connect(self.fov_scale_changed)
+        text = QtWidgets.QLabel("<h2>Sync and stabilization:</h2>".format(__version__))
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        self.main_controls_layout.addWidget(text)
 
+        # SYNC AND STABILIZATION SETTINGS
 
-        self.main_controls_layout.addWidget(self.fov_text)
-        self.main_controls_layout.addWidget(self.fov_slider)        
-
-
-        # output size choice
-        self.main_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds (Sync requires +/- 2 sec. Set to 0 for GPMF):"))
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds (Keep 0 for GPMF):"))
 
         self.offset_control = QtWidgets.QDoubleSpinBox(self)
         self.offset_control.setMinimum(-100)
@@ -1271,6 +1274,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.offset_control.setValue(0)
 
         self.main_controls_layout.addWidget(self.offset_control)
+
+
+
+        #self.fpv_tilt_text = QtWidgets.QLabel("")
+        #self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
+        #self.fpv_tilt_control.setMinimum(-90)
+        #self.fpv_tilt_control.setMaximum(90)
+        #self.fpv_tilt_control.setValue(0)
 
 
 
@@ -1297,12 +1308,60 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.main_controls_layout.addWidget(self.OF_frames_control)
 
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Sync search size (seconds)"))
+        self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
+        self.sync_search_size.setMinimum(0)
+        self.sync_search_size.setMaximum(30)
+        self.sync_search_size.setValue(8)
+        self.main_controls_layout.addWidget(self.sync_search_size)
 
-        self.main_controls_layout.addWidget(QtWidgets.QLabel('Gyro orientation. Write "hero5", "hero6", or "hero8". Orientation presets to be added later.'))
-        self.gyro_control = QtWidgets.QLineEdit(self)
-        self.gyro_control.setText("hero6")
-        self.main_controls_layout.addWidget(self.gyro_control)
+        # Select method for doing low-pass filtering
+        self.main_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
+        self.stabilization_algo_select = QtWidgets.QComboBox()
+        self.stabilization_algo_select.addItem("SLERP-based IIR (standard)")
+        self.stabilization_algo_select.addItem("(More methods under development)")
+        self.main_controls_layout.addWidget(self.stabilization_algo_select)
         
+
+        # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
+        self.smooth_max_period = 30 # seconds
+        self.smooth_text_template = "Smoothness (time constant: {:.3f} s, {}%):"
+        self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**3 * self.smooth_max_period  ,20))
+        self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.smooth_slider.setMinimum(0)
+        self.smooth_slider.setValue(20)
+        self.smooth_slider.setMaximum(100)
+        self.smooth_slider.setSingleStep(1)
+        self.smooth_slider.setTickInterval(1)
+        self.smooth_slider.valueChanged.connect(self.smooth_changed)
+
+        self.main_controls_layout.addWidget(self.smooth_text)
+        self.main_controls_layout.addWidget(self.smooth_slider)
+
+        #explaintext = QtWidgets.QLabel("<b>Note:</b> 0% corresponds to no smoothing and 100% corresponds to a locked camera. " \
+        #"intermediate values are non-linear and depend on gyro sample rate in current implementation.")
+        #explaintext.setWordWrap(True)
+        #explaintext.setMinimumHeight(60)
+        #self.main_controls_layout.addWidget(explaintext)
+
+
+        # slider for adjusting non linear crop
+        self.fov_text = QtWidgets.QLabel("FOV scale (1.5):")
+        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_slider.setMinimum(10)
+        self.fov_slider.setValue(15)
+        self.fov_slider.setMaximum(40)
+        self.fov_slider.setSingleStep(1)
+        self.fov_slider.setTickInterval(1)
+        self.fov_slider.valueChanged.connect(self.fov_scale_changed)
+
+
+        self.main_controls_layout.addWidget(self.fov_text)
+        self.main_controls_layout.addWidget(self.fov_slider)   
+        
+        self.sync_debug_select = QtWidgets.QCheckBox("Display sync plots")
+        self.sync_debug_select.setChecked(True)
+        self.main_controls_layout.addWidget(self.sync_debug_select)
 
         # button for (re)computing sync
         self.recompute_stab_button = QtWidgets.QPushButton("Apply settings and compute sync")
@@ -1341,6 +1400,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_correction_button.clicked.connect(self.correct_sync)
         self.second_controls_layout.addWidget(self.sync_correction_button)
 
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.second_controls_layout.addWidget(line)
+
+        # OUTPUT OPTIONS
+
+        text = QtWidgets.QLabel("<h2>Output parameters:</h2>".format(__version__))
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        self.second_controls_layout.addWidget(text)
 
         # output size choice
         self.out_size_text = QtWidgets.QLabel("Output crop: ")
@@ -1362,6 +1431,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.second_controls_layout.addWidget(self.out_width_control)
         self.second_controls_layout.addWidget(self.out_height_control)   
+
+        self.second_controls_layout.addWidget(QtWidgets.QLabel("Output upscale"))
+
+        self.out_scale_control = QtWidgets.QSpinBox(self)
+        self.out_scale_control.setMinimum(1)
+        self.out_scale_control.setMaximum(4)
+        self.out_scale_control.setValue(1)
+        self.second_controls_layout.addWidget(self.out_scale_control)
 
 
         explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
@@ -1419,6 +1496,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         "<b>Note:</b> HW Encoding requires FFMpeg with hardware acceleration support!")
         render_description.setWordWrap(True)
         self.second_controls_layout.addWidget(render_description)
+
+
+
+
+
 
         # add control bar to main layout
         self.layout.addWidget(self.main_controls)
@@ -1531,8 +1613,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """
         if self.BBL_path == "":
             # GPMF file
-            gyro_orientation_text = self.gyro_control.text().lower().strip()
-            if gyro_orientation_text not in ["hero6","hero5", "hero8"]:
+            print(self.camera_type_control.currentText())
+            gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
+            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8"]:
                 self.show_error("{} is not a valid orientation preset, if you can even call it a preset. This will be easier eventually... but you were the one who decided to test alpha software (thanks btw)".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
@@ -1549,7 +1632,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             fov_val = self.fov_slider.value() / 10
 
             # initiate stabilization
-            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val) # FPV clip
+            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val)
 
             smoothness_time_constant = (self.smooth_slider.value()/100)**2 * self.smooth_max_period
             fps = self.stab.fps
