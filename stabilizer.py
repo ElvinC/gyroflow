@@ -470,16 +470,13 @@ class Stabilizer:
             if platform.system() == "Darwin":  # macOS
                 output_params = {
                     "-input_framerate": self.fps, 
-                    "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                     "-vcodec": "h264_videotoolbox",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
-                    "-pix_fmt": "yuv420p",
                 }
             elif platform.system() == "Windows":
                 output_params = {
                     "-input_framerate": self.fps, 
-                    "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                     "-vcodec": "h264_nvenc",
                     "-profile:v": "main",
                     "-rc:v": "cbr", 
@@ -490,23 +487,19 @@ class Stabilizer:
             elif platform.system() == "Linux":
                 output_params = {
                     "-input_framerate": self.fps, 
-                    "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                     "-vcodec": "h264_vaapi",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
-                    "-pix_fmt": "yuv420p",
                 }
             out = WriteGear(output_filename=outpath, **output_params)
 
         else:
             output_params = {
                 "-input_framerate": self.fps, 
-                "-vf": "scale=%sx%s" % (out_size[0]*2 if split_screen else out_size[0], out_size[1]),
                 "-c:v": "libx264",
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
-                "-pix_fmt": "yuv420p",
             }
             out = WriteGear(output_filename=outpath, **output_params)
         
