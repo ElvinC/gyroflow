@@ -29,7 +29,7 @@ class Launcher(QtWidgets.QWidget):
         self.setFixedWidth(450)
         
         # image
-        pixmap = QtGui.QPixmap('largelogo_w400.png')
+        pixmap = QtGui.QPixmap('media/logo_rev0_w400.png')
         self.top_logo = QtWidgets.QLabel()
         self.top_logo.setPixmap(pixmap.scaled(400,450,QtCore.Qt.KeepAspectRatio))
         self.top_logo.setAlignment(QtCore.Qt.AlignCenter)
@@ -47,7 +47,7 @@ class Launcher(QtWidgets.QWidget):
         self.stabilizer_button.setEnabled(False)
         self.stabilizer_button.setStyleSheet("font-size: 14px;")
 
-        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (barebone version)")
+        self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (Barebone version)")
         self.stabilizer_barebone_button.setMinimumSize(300,50)
         self.stabilizer_barebone_button.setStyleSheet("font-size: 14px;")
 
