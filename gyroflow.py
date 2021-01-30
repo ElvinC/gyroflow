@@ -3,6 +3,7 @@
 import sys
 import random
 import cv2
+import os
 import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
 from _version import __version__
@@ -1173,6 +1174,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls = QtWidgets.QWidget()
         self.main_controls_layout = QtWidgets.QVBoxLayout()
         self.main_controls.setLayout(self.main_controls_layout)
+        self.main_controls.setMinimumWidth(500)
 
         self.second_controls = QtWidgets.QWidget()
         self.second_controls_layout = QtWidgets.QVBoxLayout()
@@ -1186,7 +1188,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.open_vid_button = QtWidgets.QPushButton("Open video file")
         self.open_vid_button.setMinimumHeight(30)
-        self.open_vid_button.clicked.connect(self.open_file_func)
+        self.open_vid_button.clicked.connect(self.open_video_func)
         
         self.main_controls_layout.addWidget(self.open_vid_button)
 
@@ -1202,7 +1204,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_bbl_button.clicked.connect(self.open_bbl_func)
         self.main_controls_layout.addWidget(self.open_bbl_button)
 
-        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with same names are detected automatically ")
+        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically ")
         explaintext.setWordWrap(True)
         explaintext.setMinimumHeight(60)
         self.main_controls_layout.addWidget(explaintext)
@@ -1242,16 +1244,24 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         
-        self.main_controls_layout.addWidget(QtWidgets.QLabel('Camera type (integrated gyro)'))
+        self.camera_type_text = QtWidgets.QLabel('Camera type (integrated gyro)')
+        self.main_controls_layout.addWidget(self.camera_type_text)
 
         self.camera_type_control = QtWidgets.QComboBox()
         self.camera_type_control.addItem("hero5")
         self.camera_type_control.addItem("hero6")
         self.camera_type_control.addItem("hero7")
         self.camera_type_control.addItem("hero8")
-        self.camera_type_control.addItem("smo4k")
+        self.camera_type_control.addItem("smo4k (N/A)")
 
         self.main_controls_layout.addWidget(self.camera_type_control)
+
+        self.main_controls_layout.addWidget(QtWidgets.QLabel('Input low-pass filter cutoff (Hz). Set to -1 to disable'))
+        self.input_lpf_control = QtWidgets.QSpinBox(self)
+        self.input_lpf_control.setMinimum(10)
+        self.input_lpf_control.setMaximum(1000)
+        self.input_lpf_control.setValue(200)
+        self.main_controls_layout.addWidget(self.input_lpf_control)
 
 
         line = QtWidgets.QFrame()
@@ -1498,10 +1508,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.second_controls_layout.addWidget(render_description)
 
 
-
-
-
-
         # add control bar to main layout
         self.layout.addWidget(self.main_controls)
         self.layout.addWidget(self.second_controls)
@@ -1509,10 +1515,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.infile_path = ""
         self.preset_path = ""
-        self.BBL_path = ""
+        self.gyro_log_path = ""
         self.stab = None
         self.analyzed = False
         
+        self.update_gyro_input_settings()
+
+
         self.show()
 
         self.main_widget.show()
@@ -1520,7 +1529,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # non linear setup
         
 
-    def open_file_func(self):
+    def open_video_func(self):
         """Open file using Qt filedialog 
         """
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov *.MP4 *.AVI *.MOV)")
@@ -1532,6 +1541,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.infile_path = path[0]
         self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
         self.open_vid_button.setStyleSheet("font-weight:bold;")
+
+        no_suffix = os.path.splitext(self.infile_path)[0]
+
+        # check gyro logs by priority
+        log_suffixes = [".bbl.csv", ".bfl.csv", ".csv", ".bbl"]
+        for suffix in log_suffixes:
+            if os.path.isfile(no_suffix + suffix):
+                self.gyro_log_path = no_suffix + suffix
+                print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
+                break
+
+
+        self.update_gyro_input_settings()
 
 
 
@@ -1547,18 +1569,39 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
         self.open_preset_button.setStyleSheet("font-weight:bold;")
 
-    def open_bbl_func(self):
-        # Remove file if already added
-        if self.BBL_path:
-            self.BBL_path = ""
-            
-            self.open_bbl_button.setText("Open BBL file (leave empty for GPMF)".format(self.BBL_path.split("/")[-1]))
+    def update_gyro_input_settings(self):
+        # display/hide relevant gyro log settings
+
+        external = bool(self.gyro_log_path) # display more settings if external log is selected
+
+        self.fpv_tilt_text.setVisible(external)
+        self.fpv_tilt_control.setVisible(external)
+        self.gyro_log_format_text.setVisible(external)
+        self.gyro_log_format_select.setVisible(external)
+
+        if external:
+            self.open_bbl_button.setText("Blackbox file: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
+            self.open_bbl_button.setStyleSheet("font-weight:bold;")
+
+        else:
+            self.open_bbl_button.setText("Open BBL file (leave empty for GPMF)")
             self.open_bbl_button.setStyleSheet("font-weight: normal;")
 
-            self.fpv_tilt_text.setVisible(False)
-            self.fpv_tilt_control.setVisible(False)
-            self.gyro_log_format_text.setVisible(False)
-            self.gyro_log_format_select.setVisible(False)
+        videofile_selected = bool(self.infile_path)
+
+        internal = videofile_selected and not external
+
+        self.camera_type_control.setVisible(internal)
+        self.camera_type_text.setVisible(internal)
+
+
+    def open_bbl_func(self):
+        # Remove file if already added
+        
+
+        if self.gyro_log_path:
+            self.gyro_log_path = ""
+            self.update_gyro_input_settings()
 
             return
 
@@ -1569,16 +1612,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             print("No file selected")
             return
 
-        self.BBL_path = path[0]
-        self.open_bbl_button.setText("Blackbox file: {} (click to remove)".format(self.BBL_path.split("/")[-1]))
-        self.open_bbl_button.setStyleSheet("font-weight:bold;")
-
-        self.fpv_tilt_text.setVisible(True)
-        self.fpv_tilt_control.setVisible(True)
-        self.gyro_log_format_text.setVisible(True)
-        self.gyro_log_format_select.setVisible(True)
-
-
+        self.gyro_log_path = path[0]
+        self.update_gyro_input_settings()
 
 
     def closeEvent(self, event):
@@ -1594,7 +1629,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         smooth_val = (raw_val/100)**3 * self.smooth_max_period
         self.smooth_text.setText(self.smooth_text_template.format(smooth_val, raw_val))
 
-
+    def get_smoothness_timeconstant(self):
+        """ Nonlinear smoothness slider
+        """
+        return (self.smooth_slider.value()/100)**2 * self.smooth_max_period
 
     def fov_scale_changed(self):
         """Undistort FOV scale changed
@@ -1607,11 +1645,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """
         #print(self.out_width_control.value())
         pass
+        
 
     def recompute_stab(self):
         """Update sync and stabilization
         """
-        if self.BBL_path == "":
+        if self.gyro_log_path == "":
             # GPMF file
             print(self.camera_type_control.currentText())
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
@@ -1634,7 +1673,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             # initiate stabilization
             self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val)
 
-            smoothness_time_constant = (self.smooth_slider.value()/100)**2 * self.smooth_max_period
+            smoothness_time_constant = self.get_smoothness_timeconstant()
             fps = self.stab.fps
             num_frames = self.stab.num_frames
 
@@ -1668,6 +1707,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         else:
             self.stab = None # TODO: BBL stabilizer
+            print("Blackbox support coming")
 
 
     def correct_sync(self):

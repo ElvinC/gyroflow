@@ -18,9 +18,11 @@ import time
 
 
 class Stabilizer:
-    def __init__():
+    def __init__(self):
 
         self.initial_offset = 0
+
+
 
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
@@ -317,12 +319,12 @@ class Stabilizer:
         costs = []
         offsets = []
 
-        N = 1200
         dt = 10 # Search +/- 3 seconds
+        N = dt * 100 # 1/100 of a second in rough sync
 
         for i in range(N):
             offset = dt/2 - i * (dt/N) + self.initial_offset
-            cost = self.better_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data) #fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
+            cost = self.fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data) #fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
 
@@ -1205,12 +1207,12 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    stab = BBLStabilizer("test_clips/night_test.mp4", "camera_presets/Canon_M6_MarkII_7Artisans_7_5_mm.json", "test_clips/night_test.csv", cam_angle_degrees=0, initial_offset=-10.5, use_csv=True) # FPV clip
+    stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/caddx_orca_weirdone.json", "test_clips/MasterTim17_caddx.csv", cam_angle_degrees=10, initial_offset=-55, use_csv=True) # FPV clip
 
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.21,0.5*30, 26 * 30, 50) # FPV clip
+    stab.auto_sync_stab(0.21,1*30, 25 * 30, 50) # FPV clip
     #stab.stabilization_settings()
 
     # Visual stabilizer test
@@ -1224,7 +1226,7 @@ if __name__ == "__main__":
 
 
     #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
-    stab.renderfile(0, 25, "night_test_stabi3.mp4",out_size = (1580,600), split_screen = False, scale=1, display_preview = True)
+    stab.renderfile(0, 25, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     #stab.stabilization_settings(smooth=0.6)
     #stab.renderfile(113, 130, "nurk_stabi3.mp4",out_size = (3072,1728))
 
