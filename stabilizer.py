@@ -494,10 +494,11 @@ class Stabilizer:
                     "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
                     "-pix_fmt": "yuv420p",
                 }
-            elif "h264_vaapi" in available_encoders:  # AMD/Intel
+            elif "h264_vaapi" in available_encoders:  # AMD/Intel, not tested!
                 output_params = {
                     "-input_framerate": self.fps, 
                     "-vcodec": "h264_vaapi",
+                    "-vaapi_device": "/dev/dri/renderD128",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
                     "-pix_fmt": "yuv420p",
