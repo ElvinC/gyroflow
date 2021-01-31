@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import csv
-import platform
+import subprocess
 
 from calibrate_video import FisheyeCalibrator
 from scipy.spatial.transform import Rotation
@@ -10,6 +10,7 @@ from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
 from vidgear.gears import WriteGear
+from vidgear.gears.helper import get_valid_ffmpeg_path
 
 
 from scipy.fftpack import fft,ifft
@@ -466,15 +467,24 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
                    split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False):
+        # Check for available encoders
+        if(get_valid_ffmpeg_path()):  # Helper function from VidGear
+            ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+            available_encoders = ffmpeg_encoders_sp.stdout
+        else:
+            print("Could not find FFmpeg installation")
+            available_encoders = ""
+
         if hw_accel:
-            if platform.system() == "Darwin":  # macOS
+            if "h264_videotoolbox" in available_encoders:  # macOS
                 output_params = {
                     "-input_framerate": self.fps, 
                     "-vcodec": "h264_videotoolbox",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
+                    "-pix_fmt": "yuv420p",
                 }
-            elif platform.system() == "Windows":
+            elif "h264_nvenc" in available_encoders:  # Nvidia
                 output_params = {
                     "-input_framerate": self.fps, 
                     "-vcodec": "h264_nvenc",
@@ -484,26 +494,32 @@ class Stabilizer:
                     "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
                     "-pix_fmt": "yuv420p",
                 }
-            elif platform.system() == "Linux":
+            elif "h264_vaapi" in available_encoders:  # AMD/Intel
                 output_params = {
                     "-input_framerate": self.fps, 
                     "-vcodec": "h264_vaapi",
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
+                    "-pix_fmt": "yuv420p",
                 }
-            out = WriteGear(output_filename=outpath, **output_params)
+            else:
+                print("No HW encoders found!")
+                output_params = {}
 
-        else:
+        elif "libx264" in available_encoders:
             output_params = {
                 "-input_framerate": self.fps, 
                 "-c:v": "libx264",
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
+                "-pix_fmt": "yuv420p",  
             }
-            out = WriteGear(output_filename=outpath, **output_params)
-        
 
+        else:  # No x264 encoder detected, OpenCV video writer will be used instead
+            output_params = {}
+
+        out = WriteGear(output_filename=outpath, **output_params)
         crop = (int((self.width-out_size[0])/2), int((self.height-out_size[1])/2))
 
 
