@@ -16,6 +16,9 @@ import re
 
 import stabilizer
 
+# https://en.wikipedia.org/wiki/List_of_digital_camera_brands
+cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Phone"]
+
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
     """
@@ -435,6 +438,16 @@ class VideoPlayerWidget(QtWidgets.QWidget):
     def destroy_thread(self):
         self.thread.terminate()
 
+class Form(QtWidgets.QDialog):
+
+    def __init__(self, parent=None, title="Dialog"):
+        super(Form, self).__init__(parent)
+        self.setWindowTitle(title)
+
+    def addField(description = "Write something:", id = "field1"):
+
+        self.edit = QLineEdit("Write my name here..")
+        self.button = QPushButton("Show Greetings")
 
 class CalibratorUtility(QtWidgets.QMainWindow):
     def __init__(self):
@@ -444,7 +457,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Calibrator {}".format(__version__))
-
 
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QVBoxLayout()
@@ -547,6 +559,15 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.show_chessboard.triggered.connect(self.chessboard_func)
         filemenu.addAction(self.show_chessboard)
 
+
+        completer = QtWidgets.QCompleter(cam_company_list)
+        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+
+        # create line edit and add auto complete                                
+        self.lineedit = QtWidgets.QLineEdit()
+        self.lineedit.setCompleter(completer)
+        self.layout.addWidget(self.lineedit)
+
         self.chess_window = None
 
         self.statusBar()
@@ -648,7 +669,42 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         """
         print("Exporting preset")
 
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", filter="JSON preset (*.json)")
+        # Window to set export data
+        preset_options = QtWidgets.QInputDialog()
+        preset_options.setWindowTitle("Preset information")
+        preset_options.show()
+        cam_brand, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
+                                     self.tr("Camera brand:"), QtWidgets.QLineEdit.Normal,
+                                     "")
+        if not ret:
+            return
+
+        cam_model, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
+                                     self.tr("Camera model:"), QtWidgets.QLineEdit.Normal,
+                                     "")
+        if not ret:
+            return
+
+        lens_name, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
+                                     self.tr("Lens + focal length (if applicable):"), QtWidgets.QLineEdit.Normal,
+                                     "")
+
+
+        if not ret:
+            return
+
+        extra_info, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
+                                     self.tr("Extra info/setting (if applicable):"), QtWidgets.QLineEdit.Normal,
+                                     "")
+
+        if not ret:
+            return
+
+        calib_name = f"{cam_brand}_{cam_model}_{lens_name}" + (f"_{extra_info}" if extra_info else "")
+
+        print(lens_name)
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", calib_name,
+                                                        filter="JSON preset (*.json)")
         print(filename[0])
 
         if len(filename[0]) == 0:
@@ -1258,7 +1314,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.main_controls_layout.addWidget(QtWidgets.QLabel('Input low-pass filter cutoff (Hz). Set to -1 to disable'))
         self.input_lpf_control = QtWidgets.QSpinBox(self)
-        self.input_lpf_control.setMinimum(10)
+        self.input_lpf_control.setMinimum(-1)
         self.input_lpf_control.setMaximum(1000)
         self.input_lpf_control.setValue(200)
         self.main_controls_layout.addWidget(self.input_lpf_control)
@@ -1322,7 +1378,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
         self.sync_search_size.setMinimum(0)
         self.sync_search_size.setMaximum(30)
-        self.sync_search_size.setValue(8)
+        self.sync_search_size.setValue(10)
         self.main_controls_layout.addWidget(self.sync_search_size)
 
         # Select method for doing low-pass filtering
@@ -1700,7 +1756,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
             print("Going skiing?" if uptilt < 0 else "That's a lotta angle" if uptilt > 70 else "{} degree uptilt".format(uptilt))
 
-            self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, cam_angle_degrees=uptilt, use_csv=True)
+            gyro_lpf = self.input_lpf_control.value()
+
+            self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, cam_angle_degrees=uptilt, use_csv=True,
+                                                 gyro_lpf_cutoff = gyro_lpf) #TODO add bbl/bfl
 
 
         self.stab.set_initial_offset(self.offset_control.value())
@@ -1791,7 +1850,8 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    widget = Launcher()
+    
+    widget = CalibratorUtility() #Launcher()
     widget.resize(500, 500)
 
     widget.show()

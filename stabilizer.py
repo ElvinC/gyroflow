@@ -24,12 +24,47 @@ class Stabilizer:
 
         self.rough_sync_search_interval = 10
         self.better_sync_search_interval = 0.2
+        self.gyro_lpf_cutoff = -1
+
+
+        # General video stuff
+        self.cap = 0
+        self.width = 0
+        self.height = 0
+        self.fps = 0
+        self.num_frames = 0
+
+
+        # Camera undistortion stuff
+        self.undistort = None #FisheyeCalibrator()
+        self.map1 = None
+        self.map2 = None
+
+        self.integrator = None #GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
+        self.times = None
+        self.stab_transform = None
+
+        # self.raw_gyro_data = None
+        self.gyro_data = None # self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
 
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
 
     def set_rough_search(self, interval = 10):
         self.rough_sync_search_interval = interval
+
+    def set_gyro_lpf(self, cutoff_frequency = -1):
+        self.gyro_lpf_cutoff = cutoff_frequency
+
+    def filter_gyro(self):
+
+        # Replaces self.gyrodata and should only be used once
+        num_data_points = self.gyro_data.shape[0]
+        gyro_sample_rate = num_data_points / (self.gyro_data[-1,0] - self.gyro_data[0,0])
+        sosgyro = signal.butter(10, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
+
+        self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
+
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         v1 = (sliceframe1 + slicelength/2) / self.fps
@@ -646,7 +681,7 @@ class Stabilizer:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6):
+    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6, lpf_freq = -1):
 
         super().__init__()
 
@@ -689,17 +724,8 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,2] = -self.gyro_data[:,2]
 
         
-
-        #gyro_data[:,1] = gyro_data[:,1]
-        #gyro_data[:,2] = -gyro_data[:,2]
-        #gyro_data[:,3] = gyro_data[:,3]
-
-        #gyro_data[:,1:] = -gyro_data[:,1:]
-
-        #points_test = np.array([[[0,0],[100,100],[200,300],[400,400]]], dtype = np.float32)
-        #result = self.undistort.undistort_points(points_test, new_img_dim=(self.width,self.height))
-        #print(result)
-        #exit()
+        if self.gyro_lpf_cutoff > 0:
+            self.filter_gyro()
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -786,6 +812,8 @@ class InstaStabilizer(Stabilizer):
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         
+        if self.gyro_lpf_cutoff > 0:
+            self.filter_gyro()
 
         #gyro_data[:,1] = gyro_data[:,1]
         #gyro_data[:,2] = -gyro_data[:,2]
@@ -847,7 +875,7 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False):
+    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False,gyro_lpf_cutoff = 200):
         
         super().__init__()
         
@@ -916,10 +944,10 @@ class BBLStabilizer(Stabilizer):
         self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
         
-
-        sosgyro = signal.butter(10, 150, "lowpass", fs=1000, output="sos")
-
-        self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
+        self.gyro_lpf_cutoff = gyro_lpf_cutoff
+        
+        if self.gyro_lpf_cutoff > 0:
+            self.filter_gyro()
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
