@@ -22,10 +22,14 @@ class Stabilizer:
 
         self.initial_offset = 0
 
-
+        self.rough_sync_search_interval = 10
+        self.better_sync_search_interval = 0.2
 
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
+
+    def set_rough_search(self, interval = 10):
+        self.rough_sync_search_interval = interval
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         v1 = (sliceframe1 + slicelength/2) / self.fps
@@ -319,8 +323,8 @@ class Stabilizer:
         costs = []
         offsets = []
 
-        dt = 10 # Search +/- 3 seconds
-        N = dt * 100 # 1/100 of a second in rough sync
+        dt = self.rough_sync_search_interval # Search +/- 3 seconds
+        N = int(dt * 100) # 1/100 of a second in rough sync
 
         for i in range(N):
             offset = dt/2 - i * (dt/N) + self.initial_offset
@@ -342,15 +346,15 @@ class Stabilizer:
         print("Estimated offset: {}".format(rough_offset))
 
 
-        plt.plot(offsets, costs)
-        plt.show()
-
+        if debug_plots:
+            plt.plot(offsets, costs)
+        #    plt.show()
         costs = []
         offsets = []
 
         # Find better sync with smaller search space
-        N = 800
-        dt = 0.15
+        dt = self.better_sync_search_interval
+        N = int(dt * 5000)
         do_hpf = False
 
         # run both gyro and video through high pass filter
@@ -574,8 +578,8 @@ class Stabilizer:
             
             # Getting frame_num _before_ cap.read gives index of the read frame. 
 
-            
-            print("FRAME: {}, IDX: {}".format(frame_num, i))
+            if i % 5 == 0:
+                print("frame: {}, {}/{} ({}%)".format(frame_num, i, num_frames, round(100 * i/num_frames,1)))
 
             if success:
                 i +=1

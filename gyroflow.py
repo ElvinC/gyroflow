@@ -14,7 +14,7 @@ import urllib.request
 import json
 import re
 
-from stabilizer import GPMFStabilizer
+import stabilizer
 
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
@@ -1217,8 +1217,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.gyro_log_format_select = QtWidgets.QComboBox()
         self.gyro_log_format_select.addItem("Raw Betaflight Blackbox")
         self.gyro_log_format_select.addItem("Betaflight Blackbox CSV")
-        self.gyro_log_format_select.addItem("Gyroflow CSV Log (doesn't work)")
-        self.gyro_log_format_select.addItem("GoPro GPMF as log?? (doesn't work)")
+        #self.gyro_log_format_select.addItem("Gyroflow CSV Log (doesn't work)")
+        #self.gyro_log_format_select.addItem("GoPro GPMF as log?? (doesn't work)")
         self.gyro_log_format_select.setMinimumHeight(20)
 
         self.gyro_log_format_text.setVisible(False)
@@ -1279,8 +1279,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds (Keep 0 for GPMF):"))
 
         self.offset_control = QtWidgets.QDoubleSpinBox(self)
-        self.offset_control.setMinimum(-100)
-        self.offset_control.setMaximum(100)
+        self.offset_control.setMinimum(-1000)
+        self.offset_control.setMaximum(1000)
         self.offset_control.setValue(0)
 
         self.main_controls_layout.addWidget(self.offset_control)
@@ -1632,7 +1632,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def get_smoothness_timeconstant(self):
         """ Nonlinear smoothness slider
         """
-        return (self.smooth_slider.value()/100)**2 * self.smooth_max_period
+        return (self.smooth_slider.value()/100)**3 * self.smooth_max_period
 
     def fov_scale_changed(self):
         """Undistort FOV scale changed
@@ -1650,64 +1650,77 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def recompute_stab(self):
         """Update sync and stabilization
         """
+
+
+        if self.infile_path == "" or self.preset_path == "":
+            self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
+            self.export_button.setEnabled(False)
+            self.sync_correction_button.setEnabled(False)
+
+        fov_val = self.fov_slider.value() / 10
+        smoothness_time_constant = self.get_smoothness_timeconstant()
+        OF_slice_length = self.OF_frames_control.value()
+
+
+        cap = cv2.VideoCapture(self.infile_path)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        cap.release()
+
+        sync1_frame = int(self.sync1_control.value() * fps)
+        sync2_frame = int(self.sync2_control.value() * fps)
+
+        if max(sync1_frame, sync2_frame) + OF_slice_length + 5 > num_frames:
+            self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
+            return
+
+
         if self.gyro_log_path == "":
             # GPMF file
-            print(self.camera_type_control.currentText())
+
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
             if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8"]:
-                self.show_error("{} is not a valid orientation preset, if you can even call it a preset. This will be easier eventually... but you were the one who decided to test alpha software (thanks btw)".format(gyro_orientation_text))
+                self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
                 return
 
             heronum = int(gyro_orientation_text.replace("hero",""))
 
-            if self.infile_path == "" or self.preset_path == "":
-                self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
-                self.export_button.setEnabled(False)
-                self.sync_correction_button.setEnabled(False)
-
-
-            fov_val = self.fov_slider.value() / 10
-
             # initiate stabilization
-            self.stab = GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val)
+            self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val)
 
-            smoothness_time_constant = self.get_smoothness_timeconstant()
-            fps = self.stab.fps
-            num_frames = self.stab.num_frames
-
-            sync1_frame = int(self.sync1_control.value() * fps)
-            sync2_frame = int(self.sync2_control.value() * fps)
-
-            OF_slice_length = self.OF_frames_control.value()
-
-            if max(sync1_frame, sync2_frame) + OF_slice_length + 5 > num_frames:
-                self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
-                return
-
-            print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
-                    smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
-
-            # Known to work: test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json
-            # 5 40
-
-            self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame, OF_slice_length)
-
-            self.recompute_stab_button.setText("Recompute sync")
-
-            self.export_button.setEnabled(True)
-            
-            # Show estimated delays in UI
-            self.sync_correction_button.setEnabled(True)
-            self.d1_control.setValue(self.stab.d1)
-            self.d2_control.setValue(self.stab.d2)
-
-            self.analyzed = True
 
         else:
-            self.stab = None # TODO: BBL stabilizer
-            print("Blackbox support coming")
+            # blackbox file
+            uptilt = self.fpv_tilt_control.value()
+
+            print("Going skiing?" if uptilt < 0 else "That's a lotta angle" if uptilt > 70 else "{} degree uptilt".format(uptilt))
+
+            self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, cam_angle_degrees=uptilt, use_csv=True)
+
+
+        self.stab.set_initial_offset(self.offset_control.value())
+
+        print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
+                smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
+        
+        self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame, OF_slice_length)
+
+        self.recompute_stab_button.setText("Recompute sync")
+        self.export_button.setEnabled(True)
+        
+        # Show estimated delays in UI
+        self.sync_correction_button.setEnabled(True)
+        self.d1_control.setValue(self.stab.d1)
+        self.d2_control.setValue(self.stab.d2)
+
+        self.analyzed = True
+
+
 
 
     def correct_sync(self):
