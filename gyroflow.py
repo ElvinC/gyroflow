@@ -14,10 +14,13 @@ import urllib.request
 import json
 import re
 
+
 import stabilizer
 
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
-cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Phone"]
+cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Arri",
+                    "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
+                    "Phone"]
 
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
@@ -459,12 +462,29 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.setWindowTitle("Gyroflow Calibrator {}".format(__version__))
 
         self.main_widget = QtWidgets.QWidget()
-        self.layout = QtWidgets.QVBoxLayout()
+        self.layout = QtWidgets.QHBoxLayout()
         self.main_widget.setLayout(self.layout)
+
+        # left half of screen with player/buttons
+        self.left_side_widget = QtWidgets.QWidget()
+        self.left_layout = QtWidgets.QVBoxLayout()
+        self.left_side_widget.setLayout(self.left_layout)
+
+        self.layout.addWidget(self.left_side_widget)
+
+        # right half of screen with export options
+        self.right_side_widget = QtWidgets.QWidget()
+        self.right_layout = QtWidgets.QVBoxLayout()
+        self.right_side_widget.setLayout(self.right_layout)
+        self.right_side_widget.setFixedWidth(250)
+        self.right_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.layout.addWidget(self.right_side_widget)
+
+
 
         # video player with controls
         self.video_viewer = VideoPlayerWidget()
-        self.layout.addWidget(self.video_viewer)
+        self.left_layout.addWidget(self.video_viewer)
 
         self.setCentralWidget(self.main_widget)
 
@@ -527,15 +547,60 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.calib_controls_layout.addWidget(self.preview_toggle_btn)
 
-        # button for recomputing image stretching maps
+        # add control bar to main layout
+        self.left_layout.addWidget(self.calib_controls)
+
+
+
+        # Right layout: Export settings
+
+        text = QtWidgets.QLabel("<h2>Preset parameters</h2>")
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        self.right_layout.addWidget(text)
+
+        self.right_layout.addWidget(QtWidgets.QLabel("Camera brand (*):"))
+        completer = QtWidgets.QCompleter(cam_company_list)
+        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        # create line edit and add auto complete
+                            
+        self.cam_company_input = QtWidgets.QLineEdit()
+        self.cam_company_input.setCompleter(completer)
+        self.cam_company_input.setPlaceholderText(random.choice(cam_company_list + ["Potatocam"]))
+        self.right_layout.addWidget(self.cam_company_input)
+        
+        self.right_layout.addWidget(QtWidgets.QLabel("Camera make (*)"))
+        self.cam_model_input = QtWidgets.QLineEdit()
+        self.cam_model_input.setPlaceholderText(random.choice(["Hero5", "D5100", "Hero8", "Komodo", "Pocket Cinema", "2000D", "Alexa", "Potato"])) # Don't ask...
+        self.right_layout.addWidget(self.cam_model_input)
+
+        self.right_layout.addWidget(QtWidgets.QLabel("Lens name (leave blank if not relevant)"))
+        self.cam_lens_input = QtWidgets.QLineEdit()
+        self.cam_lens_input.setPlaceholderText(random.choice(["Nikkor 35mm f/1.8G", "EF-S 18-55mm", "Sigma 16mm F/1.4", "E 50mm F/1.8 OSS", "Tamron 17-28mm f/2.8 Di", "Rokinon 14mm T3.1", "PotatoGlass deluxe"]))
+        self.right_layout.addWidget(self.cam_lens_input)
+
+        self.right_layout.addWidget(QtWidgets.QLabel("Recording setting (*)"))
+        self.cam_setting_input = QtWidgets.QLineEdit()
+        self.cam_setting_input.setPlaceholderText("2160p 4by3 wide")
+        self.right_layout.addWidget(self.cam_setting_input)
+
+        self.right_layout.addWidget(QtWidgets.QLabel("Other relevant note"))
+        self.cam_note_input = QtWidgets.QLineEdit()
+        self.cam_note_input.setPlaceholderText(random.choice(["ND filter installed", "Bad light conditions", "Test calibration, don't use", "Can't believe potatoes can record video"]))
+        self.right_layout.addWidget(self.cam_note_input)
+
+        self.right_layout.addWidget(QtWidgets.QLabel("Name of calibrator (*)"))
+        self.calibrated_by_input = QtWidgets.QLineEdit()
+        self.calibrated_by_input.setText("Anonymous")
+        self.right_layout.addWidget(self.calibrated_by_input)
+
+
+        # button for exporting preset
         self.export_button = QtWidgets.QPushButton("Export preset file")
         self.export_button.setMinimumHeight(self.button_height)
         self.export_button.clicked.connect(self.save_preset_file)
         
-        self.calib_controls_layout.addWidget(self.export_button)
+        self.right_layout.addWidget(self.export_button, alignment=QtCore.Qt.AlignBottom)
 
-        # add control bar to main layout
-        self.layout.addWidget(self.calib_controls)
 
         # file menu setup
         menubar = self.menuBar()
@@ -560,13 +625,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         filemenu.addAction(self.show_chessboard)
 
 
-        completer = QtWidgets.QCompleter(cam_company_list)
-        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
-
-        # create line edit and add auto complete                                
-        self.lineedit = QtWidgets.QLineEdit()
-        self.lineedit.setCompleter(completer)
-        self.layout.addWidget(self.lineedit)
 
         self.chess_window = None
 
@@ -670,55 +728,59 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         print("Exporting preset")
 
         # Window to set export data
-        preset_options = QtWidgets.QInputDialog()
-        preset_options.setWindowTitle("Preset information")
-        preset_options.show()
-        cam_brand, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
-                                     self.tr("Camera brand:"), QtWidgets.QLineEdit.Normal,
-                                     "")
-        if not ret:
+
+        cam_brand = self.cam_company_input.text()
+        cam_model = self.cam_model_input.text()
+        cam_lens = self.cam_lens_input.text()
+        cam_setting = self.cam_setting_input.text()
+        cam_note = self.cam_note_input.text()
+        calibrated_by = self.calibrated_by_input.text()
+
+        if not (cam_brand and cam_model and cam_setting):
+            self.show_error("Missing information about the camera system")
             return
 
-        cam_model, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
-                                     self.tr("Camera model:"), QtWidgets.QLineEdit.Normal,
-                                     "")
-        if not ret:
+        if not calibrated_by:
+            self.show_error("You went through all the trouble to make a calibration profile but don't want credit? I'll just fill in 'Anonymous' for you, but feel free to write a (nick)name or a handle instead.")
+            self.calibrated_by_input.setText("Anonymous")
             return
 
-        lens_name, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
-                                     self.tr("Lens + focal length (if applicable):"), QtWidgets.QLineEdit.Normal,
-                                     "")
 
 
-        if not ret:
-            return
+        calib_name = f"{cam_brand}_{cam_model}_{cam_lens}_{cam_setting}"
 
-        extra_info, ret = QtWidgets.QInputDialog.getText(self, self.tr("QtWidgets.QInputDialog().getText()"),
-                                     self.tr("Extra info/setting (if applicable):"), QtWidgets.QLineEdit.Normal,
-                                     "")
+        # make sure name works
+        default_file_name = calib_name.replace("@", "At") # 18-55mm@18mm -> 18-55mmAt18mm, eh works I guess
+        default_file_name = default_file_name.replace("/", "_").replace(".", "_").replace(" ","_") # f/1.8 -> f_1_8
+        default_file_name = "".join([c for c in default_file_name if c.isalpha() or c.isdigit() or c in "_-"]).rstrip()
+        default_file_name.replace("__", "_")
 
-        if not ret:
-            return
-
-        calib_name = f"{cam_brand}_{cam_model}_{lens_name}" + (f"_{extra_info}" if extra_info else "")
-
-        print(lens_name)
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", calib_name,
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", default_file_name,
                                                         filter="JSON preset (*.json)")
         print(filename[0])
 
         if len(filename[0]) == 0:
-            self.show_error("No output file given")
+            self.show_warning("No output file given")
             return
 
-        self.calibrator.save_calibration_json(filename[0])
+        self.calibrator.save_calibration_json(filename[0], calib_name=calib_name, camera_brand=cam_brand, camera_model=cam_model, 
+                                              lens_model=cam_lens, camera_setting=cam_setting, note=cam_note, calibrated_by=calibrated_by)
 
     def show_error(self, msg):
-        err_window = QtWidgets.QMessageBox(self)
-        err_window.setIcon(QtWidgets.QMessageBox.Critical)
-        err_window.setText(msg)
-        err_window.setWindowTitle("Something's gone awry")
-        err_window.show()
+        QtWidgets.QMessageBox.critical(self, "Something's gone awfully wrong", msg)
+
+        return
+        
+        #self.err_window = QtWidgets.QMessageBox(self)
+        #self.err_window.setIcon(QtWidgets.QMessageBox.Warning)
+        #self.err_window.setText(msg)
+        #self.err_window.setWindowTitle("Something's gone awry")
+        #self.err_window.exec_()
+        #self.err_window.close()
+
+    def show_warning(self, msg):
+        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+
 
     def add_current_frame(self):
         print("Adding frame")
@@ -997,6 +1059,9 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.nonlin.stretch_save_video(self.infile_path, filename[0])
 
     def show_error(self, msg):
+        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+
+        return
         err_window = QtWidgets.QMessageBox(self)
         err_window.setIcon(QtWidgets.QMessageBox.Critical)
         err_window.setText(msg)
@@ -1200,6 +1265,9 @@ class StabUtility(QtWidgets.QMainWindow):
         pass
 
     def show_error(self, msg):
+        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+
+        return
         err_window = QtWidgets.QMessageBox(self)
         err_window.setIcon(QtWidgets.QMessageBox.Critical)
         err_window.setText(msg)

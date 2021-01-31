@@ -403,7 +403,7 @@ class FisheyeCalibrator:
 
 
 
-    def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", camera_brand="", camera_model="", lens_model="",  note="", calibrated_by=""):
+    def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", camera_brand="", camera_model="", lens_model="", camera_setting="", note="", calibrated_by=""):
         """Save camera calibration parameters as JSON file
 
         Args:
@@ -421,6 +421,7 @@ class FisheyeCalibrator:
             "camera_brand": camera_brand,
             "camera_model": camera_model,
             "lens_model": lens_model,
+            "camera_setting": camera_setting,
             "calibrator_version": __version__,
             "date": str(date.today()),
             
