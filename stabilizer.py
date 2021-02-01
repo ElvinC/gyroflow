@@ -61,6 +61,12 @@ class Stabilizer:
         # Replaces self.gyrodata and should only be used once
         num_data_points = self.gyro_data.shape[0]
         gyro_sample_rate = num_data_points / (self.gyro_data[-1,0] - self.gyro_data[0,0])
+
+        # Nyquist frequency
+        if (gyro_sample_rate / 2) <= self.gyro_lpf_cutoff:
+            self.gyro_lpf_cutoff = gyro_sample_rate / 2 - 1
+
+
         sosgyro = signal.butter(10, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
 
         self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis

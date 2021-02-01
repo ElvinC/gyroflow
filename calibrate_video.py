@@ -490,6 +490,26 @@ class FisheyeCalibrator:
                 self.RMS_error = presets["fisheye_params"]["RMS_error"]
                 self.K = np.array(presets["fisheye_params"]["camera_matrix"])
                 self.D = np.array(presets["fisheye_params"]["distortion_coeffs"])
+
+                #if presets["calibrator_version"].split(".")[0:1] != ["0","1"]:
+                # version 0.1.x doesn't have cam information
+                extra_cam_info = {
+                    "name": presets.get("calib_name"),
+                    "note": presets.get("note"),
+                    "calibrated_by": presets.get("calibrated_by", "N/A"),
+                    "camera_brand": presets.get("camera_brand", "N/A"),
+                    "camera_model": presets.get("camera_model", "N/A"),
+                    "lens_model": presets.get("lens_model", "N/A"),
+                    "calibrator_version": presets.get("calibrator_version"),
+                    "date": presets.get("date"),
+                    "width": width,
+                    "height": height,
+                    "aspect": width/height,
+                    "num_images": self.num_images
+                }
+
+                return extra_cam_info
+
             except KeyError:
                 raise KeyError("Error loading preset file")
 
@@ -970,6 +990,7 @@ class StandardCalibrator:
             filename (string): path and filename to load
             printinfo (bool, optional): Print extra info from preset file. Defaults to False.
         """
+
         with open(filename, "r") as infile:
             presets = json.load(infile)
 
