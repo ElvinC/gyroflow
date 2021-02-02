@@ -1343,7 +1343,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
 
-        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV")]
+        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log")]
         self.gyro_log_model = QtGui.QStandardItemModel()
         for i, text in data:
             itm = QtGui.QStandardItem(text)
@@ -1648,7 +1648,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         
         self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
-        self.split_screen_select.setChecked(True)
+        self.split_screen_select.setChecked(False)
         self.export_controls_layout.addWidget(self.split_screen_select)
 
         self.hw_acceleration_select = QtWidgets.QCheckBox("HW Encoding (experimental)")
@@ -1656,7 +1656,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.hw_acceleration_select)
 
         self.display_preview = QtWidgets.QCheckBox("Display preview during rendering")
-        self.display_preview.setChecked(False)
+        self.display_preview.setChecked(True)
         self.export_controls_layout.addWidget(self.display_preview)
 
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
@@ -1919,18 +1919,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             log_type_id = self.gyro_log_model.item(log_select_index).data()
 
             use_csv = False
+            logtype = ""
 
             if log_type_id == "csvblackbox":
                 print("using blackbox csv")
                 use_csv = True
             elif log_type_id == "rawblackbox":
                 pass
+            elif log_type_id == "csvgyroflow":
+                logtype = "gyroflow"
             else:
                 print("Unknown log type selected")
                 return
             
             self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, cam_angle_degrees=uptilt, use_csv=use_csv,
-                                                 gyro_lpf_cutoff = gyro_lpf)
+                                                 gyro_lpf_cutoff = gyro_lpf, logtype=logtype)
 
 
         self.stab.set_initial_offset(self.offset_control.value())
@@ -1938,7 +1941,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
                 smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
         
-        self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame, OF_slice_length)
+        
+
+        self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame,
+                                 OF_slice_length, debug_plots=self.sync_debug_select.isChecked())
 
         self.recompute_stab_button.setText("Recompute sync")
         self.export_button.setEnabled(True)
@@ -2001,11 +2007,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         hardware_acceleration = self.hw_acceleration_select.isChecked()
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
         preview = self.display_preview.isChecked()
-
+        output_scale = int(self.out_scale_control.value())
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, hw_accel = hardware_acceleration,
-                             bitrate_mbits = bitrate, display_preview=preview)
+                             bitrate_mbits = bitrate, display_preview=preview, scale=output_scale)
 
         
 
@@ -2030,7 +2036,7 @@ def main():
     #widget.addTab(Launcher(), "General")
     #widget.addTab(CalibratorUtility() , "Whatever")
     
-    widget = StabUtilityBarebone() # CalibratorUtility()
+    widget = CalibratorUtility() # CalibratorUtility()
     widget.resize(500, 500)
 
     widget.show()

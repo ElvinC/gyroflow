@@ -252,7 +252,7 @@ class FisheyeCalibrator:
 
         return undistorted_image
 
-    def get_maps(self, fov_scale = 1.0, new_img_dim = None):
+    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True):
         """Get undistortion maps
 
         Args:
@@ -271,8 +271,8 @@ class FisheyeCalibrator:
         new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
                 img_dim, np.eye(3), fov_scale=fov_scale)
 
-
-        self.new_K = new_K
+        if update_new_K:
+            self.new_K = new_K
 
         map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 
@@ -309,7 +309,7 @@ class FisheyeCalibrator:
 
         return R1, R2, t
 
-    def get_rotation_map(self, img, quart):
+    def get_rotation_map(self, img, quat):
         """Get maps for doing perspective rotations
         
             WORK IN PROGRESS. Currently for testing
@@ -328,14 +328,14 @@ class FisheyeCalibrator:
         rot_mat = np.eye(4)
 
         
-        #print(Rotation([quart[0,1],quart[0,2],quart[0,3],quart[0,0]]).as_euler('xyz'))
-        quart = quart.flatten()
-        eul = Rotation([quart[1],quart[2],quart[3],quart[0]]).as_euler('xyz')
+        #print(Rotation([quat[0,1],quat[0,2],quat[0,3],quat[0,0]]).as_euler('xyz'))
+        quat = quat.flatten()
+        eul = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_euler('xyz')
 
         combined_rotation = np.eye(4)
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
-        combined_rotation[0:3,0:3] = Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
-        #eul = Rotation(quart).as_euler('xyz')[0]
+        combined_rotation[0:3,0:3] = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
+        #eul = Rotation(quat).as_euler('xyz')[0]
 
         #rot1 = np.eye(4)
         #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
@@ -347,7 +347,7 @@ class FisheyeCalibrator:
         #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
         
         #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
-        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quart)
+        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quat)
 
         rot_mat = combined_rotation
 
@@ -842,7 +842,7 @@ class StandardCalibrator:
 
         return R1, R2, t
 
-    def get_rotation_map(self, img, quart):
+    def get_rotation_map(self, img, quat):
         """Get maps for doing perspective rotations
         
             WORK IN PROGRESS. Currently for testing
@@ -860,14 +860,14 @@ class StandardCalibrator:
         rotZ = (rotZval)*np.pi/180
         rot_mat = np.eye(4)
 
-        #print(Rotation([quart[0,1],quart[0,2],quart[0,3],quart[0,0]]).as_euler('xyz'))
-        quart = quart.flatten()
-        #eul = Rotation([quart[1],quart[2],quart[3],quart[0]]).as_euler('xyz')
+        #print(Rotation([quat[0,1],quat[0,2],quat[0,3],quat[0,0]]).as_euler('xyz'))
+        quat = quat.flatten()
+        #eul = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_euler('xyz')
 
         combined_rotation = np.eye(4)
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
-        combined_rotation[0:3,0:3] = Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
-        #eul = Rotation(quart).as_euler('xyz')[0]
+        combined_rotation[0:3,0:3] = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
+        #eul = Rotation(quat).as_euler('xyz')[0]
 
         #rot1 = np.eye(4)
         #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
@@ -879,7 +879,7 @@ class StandardCalibrator:
         #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
         
         #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
-        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quart)
+        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quat)
 
         rot_mat = combined_rotation
 
@@ -893,10 +893,9 @@ class StandardCalibrator:
 
         # Scaled 3x4 camera matrix
         K = np.zeros((3,4))
-        K[:3,:3] = self.K
+        K[:3,:3] = self.new_K[0,0]
 
         # should make the rotation match fov change
-        # Might not work, idk
         K[0,0] = self.new_K[0,0]
         K[1,1] = self.new_K[1,1]
 

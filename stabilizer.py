@@ -473,7 +473,7 @@ class Stabilizer:
         #gyro_z = gyro_data[:,2]
         #OF_z = OF_transforms[:,2]
 
-        axes_weight = np.array([0.9,0.9,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
+        axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
         sum_squared_diff = 0
         gyro_idx = 1
@@ -607,9 +607,11 @@ class Stabilizer:
 
         num_frames = int((stoptime - starttime) * self.fps) 
 
-        tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
-        tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
+        #tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
+        #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
 
+        
+        tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
         i = 0
         while(True):
@@ -633,14 +635,28 @@ class Stabilizer:
 
             if success and i > 0:
                 
+                if scale != 1:
+                    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+                
+                #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                #                              borderMode=cv2.BORDER_CONSTANT)
 
-
-                frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+                frame_undistort2 = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
+
+                #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
+                #cv2.imshow("Before and After", frame_undistort)
+                #cv2.waitKey(100)
+                #cv2.imshow("Before and After", frame_undistort2)
+                
+                #cv2.waitKey(100)
+                #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                #                              borderMode=cv2.BORDER_CONSTANT)
                 #cv2.imshow("Stabilized?", frame_undistort)
 
                 #print(self.stab_transform[frame_num])
-                frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
+                frame_out = self.undistort.get_rotation_map(frame_undistort2, self.stab_transform[frame_num])
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
@@ -881,11 +897,12 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False,gyro_lpf_cutoff = 200):
+    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype=""):
         
         super().__init__()
         
         # General video stuff
+        self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -896,7 +913,7 @@ class BBLStabilizer(Stabilizer):
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
         self.undistort.load_calibration_json(calibrationfile, True)
-        self.map1, self.map2 = self.undistort.get_maps(fov_scale,new_img_dim=(self.width,self.height))
+        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
         print(bblpath)
@@ -936,6 +953,28 @@ class BBLStabilizer(Stabilizer):
                 self.gyro_data = np.array(data_list)
 
 
+        elif logtype == "gyroflow":
+            with open(bblpath) as csvfile:
+                next(csvfile)
+
+                lines = csvfile.readlines()
+                
+                
+
+                data_list = []
+                gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet. 
+                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
+                
+                for line in lines:
+                    splitdata = [int(x) for x in line.split(",")]
+                    t = splitdata[0]/1000
+                    gx = splitdata[1] * gyroscale
+                    gy = splitdata[2] * gyroscale
+                    gz = splitdata[3] * gyroscale
+                
+                    data_list.append([t, gx, gy, gz])
+                self.gyro_data = np.array(data_list)
+                print(self.gyro_data)
 
         else:
             self.bbe = BlackboxExtractor(bblpath)
@@ -1245,8 +1284,8 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/caddx_orca_weirdone.json", "test_clips/MasterTim17_caddx.csv", cam_angle_degrees=10, initial_offset=-55, use_csv=True) # FPV clip
-
+    stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json", "test_clips/starling.csv", use_csv=False, logtype = "gyroflow")
+    exit()
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
