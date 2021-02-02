@@ -1368,7 +1368,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.gyro_log_format_select)
 
 
-        self.fpv_tilt_text = QtWidgets.QLabel("FPV uptilt in degrees:")
+        self.fpv_tilt_text = QtWidgets.QLabel("FPV camera angle:")
         self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
         self.fpv_tilt_control.setMinimum(-90)
         self.fpv_tilt_control.setMaximum(90)
@@ -1400,7 +1400,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_lpf_control = QtWidgets.QSpinBox(self)
         self.input_lpf_control.setMinimum(-1)
         self.input_lpf_control.setMaximum(1000)
-        self.input_lpf_control.setValue(200)
+        self.input_lpf_control.setValue(-1)
         self.input_controls_layout.addWidget(self.input_lpf_control)
 
 
@@ -1592,11 +1592,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_correction_button.setEnabled(False)
         self.sync_correction_button.clicked.connect(self.correct_sync)
         self.sync_controls_layout.addWidget(self.sync_correction_button)
-
-        line = QtWidgets.QFrame()
-        line.setFrameShape(QtWidgets.QFrame.HLine)
-        line.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.sync_controls_layout.addWidget(line)
 
         # OUTPUT OPTIONS
 
@@ -1931,6 +1926,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         sync1_frame = int(self.sync1_control.value() * fps)
         sync2_frame = int(self.sync2_control.value() * fps)
 
+        gyro_lpf = self.input_lpf_control.value()
+
         if max(sync1_frame, sync2_frame) + OF_slice_length + 5 > num_frames:
             self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
             return
@@ -1949,7 +1946,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             heronum = int(gyro_orientation_text.replace("hero",""))
 
             # initiate stabilization
-            self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val)
+            self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val, gyro_lpf_cutoff = gyro_lpf)
 
 
         else:
@@ -1957,8 +1954,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             uptilt = self.fpv_tilt_control.value()
 
             print("Going skiing?" if uptilt < 0 else "That's a lotta angle" if uptilt > 70 else "{} degree uptilt".format(uptilt))
-
-            gyro_lpf = self.input_lpf_control.value()
 
             log_select_index = self.gyro_log_format_select.currentIndex()
             #print("Current index {}".format(log_select_index))

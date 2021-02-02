@@ -97,14 +97,7 @@ class Stabilizer:
 
         interval = 1/(correction_slope * self.fps)
 
-        print("Start {}".format(gyro_start))
-
-        print("Interval {}, slope {}".format(interval, correction_slope))
-
-        # Sync and final stabilization match but direct plots may have ~1 frame offset.
-        # Probably because optical flow is given _between_ frames instead of at the frames
-        # TODO: Find out why. In the meantime:
-        viz_correction = 0.5/self.fps
+        # viz_correction = 0.5/self.fps
 
         #corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
         #corrected_times = (self.integrator.get_raw_data("t"))*(alpha + 1) + beta
@@ -114,6 +107,9 @@ class Stabilizer:
         slope =  (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
 
+        #print("Start {}".format(gyro_start))
+
+        print("Gyro correction slope {}".format(slope))
 
         xplot = plt.subplot(311)
 
@@ -134,7 +130,7 @@ class Stabilizer:
         plt.plot(times1, transforms1[:,2] * self.fps)
         plt.plot(times2, transforms2[:,2] * self.fps)
         plt.plot(corrected_times, self.integrator.get_raw_data("z"))
-        plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+        #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
         plt.xlabel("time [s]")
         plt.ylabel("omega z [rad/s]")
 
@@ -144,18 +140,17 @@ class Stabilizer:
 
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
-        new_gyro_data = self.gyro_data
+        new_gyro_data = np.copy(self.gyro_data)
 
         # Correct time scale
-        new_gyro_data[:,0] = (new_gyro_data[:,0]+gyro_start) *correction_slope
+        new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=True, initial_orientation=initial_orientation)
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
 
-        # Doesn't work for BBL for some reason. TODO: Figure out why
-        #self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
 
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+        #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
     def manual_sync_correction(self, d1, d2, smooth=0.8):
         v1 = self.v1
@@ -168,20 +163,19 @@ class Stabilizer:
 
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
 
+        #err_slope = (d2-d1)/(v2-v1)
+        #correction_slope = err_slope + 1
+        #gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
 
+        #interval = 1/(correction_slope * self.fps)
 
-        err_slope = (d2-d1)/(v2-v1)
-        correction_slope = err_slope + 1
-        gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
+        #print("Start {}".format(gyro_start))
 
-        interval = 1/(correction_slope * self.fps)
-
-        print("Start {}".format(gyro_start))
-
-        print("Interval {}, slope {}".format(interval, correction_slope))
-
-        viz_correction = 0.5/self.fps
-        corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start*correction_slope + viz_correction
+        g1 = v1 - d1
+        g2 = v2 - d2
+        slope =  (v2 - v1) / (g2 - g1)
+        corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
+        print("Gyro correction slope {}".format(slope))
 
         xplot = plt.subplot(311)
 
@@ -211,18 +205,17 @@ class Stabilizer:
 
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
-        new_gyro_data = self.gyro_data
+        new_gyro_data = np.copy(self.gyro_data)
 
         # Correct time scale
-        new_gyro_data[:,0] = (new_gyro_data[:,0]+gyro_start) *correction_slope
+        new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
 
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
 
-        # Doesn't work for BBL for some reason.
-        #self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
 
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+        #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
 
 
@@ -656,7 +649,7 @@ class Stabilizer:
             if i > num_frames:
                 break
 
-            elif i == len(self.stab_transform):
+            elif frame_num >= len(self.stab_transform):
                 print("No more stabilization data")
                 break
 
@@ -730,7 +723,7 @@ class Stabilizer:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6, lpf_freq = -1):
+    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1):
 
         super().__init__()
 
@@ -772,6 +765,7 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
             self.gyro_data[:,2] = -self.gyro_data[:,2]
 
+        self.gyro_lpf_cutoff = gyro_lpf_cutoff
         
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
@@ -811,7 +805,7 @@ class GPMFStabilizer(Stabilizer):
 
 
 class InstaStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6):
+    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1):
         
         super().__init__()
         
@@ -860,6 +854,7 @@ class InstaStabilizer(Stabilizer):
             # Hero 8??
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
+        self.gyro_lpf_cutoff = gyro_lpf_cutoff
         
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
