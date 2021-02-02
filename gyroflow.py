@@ -1331,10 +1331,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.open_preset_button)
 
 
-        self.open_bbl_button = QtWidgets.QPushButton("Open BBL/Gyro log (leave empty for GPMF)")
-        self.open_bbl_button.setMinimumHeight(30)
-        self.open_bbl_button.clicked.connect(self.open_bbl_func)
-        self.input_controls_layout.addWidget(self.open_bbl_button)
+        self.open_gyro_button = QtWidgets.QPushButton("Open BBL/Gyro log (leave empty for GPMF)")
+        self.open_gyro_button.setMinimumHeight(30)
+        self.open_gyro_button.clicked.connect(self.open_gyro_func)
+        self.input_controls_layout.addWidget(self.open_gyro_button)
 
         explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically ")
         explaintext.setWordWrap(True)
@@ -1344,15 +1344,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log")]
-        self.gyro_log_model = QtGui.QStandardItemModel()
-        for i, text in data:
-            itm = QtGui.QStandardItem(text)
-            itm.setData(i)
-            self.gyro_log_model.appendRow(itm)
+
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
-        self.gyro_log_format_select.setModel(self.gyro_log_model)
+
+        #self.gyro_log_model = QtGui.QStandardItemModel()
+        for i, text in data:
+            #itm = QtGui.QStandardItem(text)
+            #itm.setData(i)
+            #self.gyro_log_model.appendRow(itm)
+            self.gyro_log_format_select.addItem(text, i)
+
+        #self.gyro_log_format_select.setModel(self.gyro_log_model)
         #self.gyro_log_format_select.addItem("Gyroflow CSV Log (doesn't work)")
         #self.gyro_log_format_select.addItem("GoPro GPMF as log?? (doesn't work)")
         self.gyro_log_format_select.setMinimumHeight(20)
@@ -1441,8 +1445,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                                     "Number of calibration frames: {num_images}"
 
         self.preset_info_text = QtWidgets.QLabel()
-        self.preset_info_text
         self.input_controls_layout.addWidget(self.preset_info_text)
+
+        self.aspect_warning_text = QtWidgets.QLabel()
+        self.aspect_warning_text.setStyleSheet("color: #ee3333")
+        self.aspect_warning_text.setWordWrap(True)
+        self.input_controls_layout.addWidget(self.aspect_warning_text)
 
         # SYNC AND STABILIZATION SETTINGS
 
@@ -1496,7 +1504,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Sync search size (seconds)"))
         self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
         self.sync_search_size.setMinimum(0)
-        self.sync_search_size.setMaximum(30)
+        self.sync_search_size.setMaximum(60)
         self.sync_search_size.setValue(10)
         self.sync_controls_layout.addWidget(self.sync_search_size)
 
@@ -1710,9 +1718,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def open_video_func(self):
         """Open file using Qt filedialog 
         """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov *.MP4 *.AVI *.MOV)")
-
-        if (len(path[0]) == 0):
+        #path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file")
+        dialog = QtWidgets.QFileDialog()
+        dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime"])
+        dialog.exec_()
+        path = dialog.selectedFiles()
+        if (len(path) == 0 or len(path[0]) == 0):
             print("No file selected")
             return
         
@@ -1758,13 +1769,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.video_info_text.setText(info)
 
+        # set default export options
+        self.out_width_control.setValue(self.video_info_dict["width"])
+        self.out_height_control.setValue(self.video_info_dict["height"])
+        self.export_stoptime.setValue(int(self.video_info_dict["time"])) # round down
+        self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
+
+        self.check_aspect()
+
     def open_preset_func(self):
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open preset file", filter="JSON preset (*.json)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open preset file", filter="JSON preset (*.json *.JSON)")
 
         if (len(path[0]) == 0):
             print("No file selected")
             return
-        print(path)
+        #print(path)
         self.preset_path = path[0]
         self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
         self.open_preset_button.setStyleSheet("font-weight:bold;")
@@ -1773,11 +1792,25 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #print(self.preset_info_dict)
         self.display_preset_info()
 
-
     def display_preset_info(self):
 
         info = self.preset_info_template.format(**self.preset_info_dict)
         self.preset_info_text.setText(info)
+
+        self.check_aspect()
+
+    def check_aspect(self):
+        if self.preset_path and self.infile_path:
+            # Check if the aspect ratios match
+            self.preset_info_dict.get("aspect")
+            v_aspect = self.preset_info_dict.get("aspect")
+            p_aspect = self.video_info_dict.get("aspect")
+            if abs(v_aspect - p_aspect) > 0.01:
+                self.aspect_warning_text.setText(f"<h3>Seems like the aspect ratios don't quite match. Video: {v_aspect:.3f}, preset: {p_aspect:.3f}</h3>")
+            else:
+                self.aspect_warning_text.setText("")
+
+
 
 
 
@@ -1792,12 +1825,25 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.gyro_log_format_select.setVisible(external)
 
         if external:
-            self.open_bbl_button.setText("Blackbox file: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
-            self.open_bbl_button.setStyleSheet("font-weight:bold;")
+            self.open_gyro_button.setText("Blackbox file: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
+            self.open_gyro_button.setStyleSheet("font-weight:bold;")
+
+            suffix = os.path.splitext(self.gyro_log_path)[1].lower()
+            # Guess log type
+            print(suffix)
+            gyro_type_id = "rawblackbox"
+            idx = 0
+            if suffix == ".bbl" or suffix == ".bfl":
+                idx = self.gyro_log_format_select.findData("rawblackbox")
+            elif suffix == ".csv":
+                idx = self.gyro_log_format_select.findData("csvblackbox")
+                print(idx)
+            if idx != -1:
+                self.gyro_log_format_select.setCurrentIndex(idx)
 
         else:
-            self.open_bbl_button.setText("Open BBL file (leave empty for GPMF)")
-            self.open_bbl_button.setStyleSheet("font-weight: normal;")
+            self.open_gyro_button.setText("Open BBL/Gyro log (leave empty for GPMF)")
+            self.open_gyro_button.setStyleSheet("font-weight: normal;")
 
         videofile_selected = bool(self.infile_path)
 
@@ -1807,18 +1853,18 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.camera_type_text.setVisible(internal)
 
 
-    def open_bbl_func(self):
+    def open_gyro_func(self):
         # Remove file if already added
         
 
         if self.gyro_log_path:
             self.gyro_log_path = ""
             self.update_gyro_input_settings()
-
             return
 
 
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open blackbox file", filter="Blackbox log (*.bbl)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open blackbox file",
+                                                     filter="Blackbox log (*.bbl *.bfl *.bbl.csv *.BBL .BFL *.BBL.CSV);; CSV file (*.csv *.CSV)")
 
         if (len(path[0]) == 0):
             print("No file selected")
@@ -1916,7 +1962,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
             log_select_index = self.gyro_log_format_select.currentIndex()
             #print("Current index {}".format(log_select_index))
-            log_type_id = self.gyro_log_model.item(log_select_index).data()
+            log_type_id = self.gyro_log_format_select.currentData()#self.gyro_log_model.item(log_select_index).data()
 
             use_csv = False
             logtype = ""
@@ -1925,6 +1971,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 print("using blackbox csv")
                 use_csv = True
             elif log_type_id == "rawblackbox":
+                print("using raw blackbox file")
                 pass
             elif log_type_id == "csvgyroflow":
                 logtype = "gyroflow"
@@ -1937,6 +1984,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.stab.set_initial_offset(self.offset_control.value())
+        self.stab.set_rough_search(self.sync_search_size.value())
 
         print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
                 smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
@@ -1962,8 +2010,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def correct_sync(self):
         d1 = self.d1_control.value()
         d2 = self.d2_control.value()
-        smoothness = self.smooth_slider.value() / 100
-        self.stab.manual_sync_correction(d1, d2, smoothness)
+        #smoothness = self.smooth_slider.value() / 100
+        smoothness_time_constant = self.get_smoothness_timeconstant()
+        self.stab.manual_sync_correction(d1, d2, smoothness_time_constant)
 
 
     def export_video(self):
@@ -2022,7 +2071,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         err_window.setWindowTitle("Something's gone awry")
         err_window.show()
 
-
+    def show_warning(self, msg):
+        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
 
 
 
@@ -2032,11 +2082,7 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    #widget = QtWidgets.QTabWidget()
-    #widget.addTab(Launcher(), "General")
-    #widget.addTab(CalibratorUtility() , "Whatever")
-    
-    widget = CalibratorUtility() # CalibratorUtility()
+    widget = StabUtilityBarebone() # Launcher()
     widget.resize(500, 500)
 
     widget.show()

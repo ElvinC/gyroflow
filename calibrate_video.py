@@ -893,7 +893,7 @@ class StandardCalibrator:
 
         # Scaled 3x4 camera matrix
         K = np.zeros((3,4))
-        K[:3,:3] = self.new_K[0,0]
+        K[:3,:3] = self.K
 
         # should make the rotation match fov change
         K[0,0] = self.new_K[0,0]

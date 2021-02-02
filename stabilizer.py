@@ -69,7 +69,7 @@ class Stabilizer:
 
         sosgyro = signal.butter(10, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
 
-        self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
+        self.gyro_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
 
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
@@ -106,8 +106,14 @@ class Stabilizer:
         # TODO: Find out why. In the meantime:
         viz_correction = 0.5/self.fps
 
-        corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
+        #corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
         #corrected_times = (self.integrator.get_raw_data("t"))*(alpha + 1) + beta
+
+        g1 = v1 - d1
+        g2 = v2 - d2
+        slope =  (v2 - v1) / (g2 - g1)
+        corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
+
 
         xplot = plt.subplot(311)
 
@@ -128,6 +134,7 @@ class Stabilizer:
         plt.plot(times1, transforms1[:,2] * self.fps)
         plt.plot(times2, transforms2[:,2] * self.fps)
         plt.plot(corrected_times, self.integrator.get_raw_data("z"))
+        plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
         plt.xlabel("time [s]")
         plt.ylabel("omega z [rad/s]")
 
@@ -174,7 +181,7 @@ class Stabilizer:
         print("Interval {}, slope {}".format(interval, correction_slope))
 
         viz_correction = 0.5/self.fps
-        corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
+        corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start*correction_slope + viz_correction
 
         xplot = plt.subplot(311)
 
@@ -458,6 +465,11 @@ class Stabilizer:
 
     def better_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
+        if OF_times[0] < gyro_times[0]:
+            return 100
+
+        if OF_times[-1] > gyro_times[-1]:
+            return 100
 
         new_OF_transforms = np.copy(OF_transforms) * self.fps
         # Optical flow movements gives pixel movement, not camera movement
@@ -481,12 +493,26 @@ class Stabilizer:
         next_gyro_snip = np.array([0, 0, 0], dtype=np.float64)
         next_cumulative_time = 0
 
-        while gyro_times[gyro_idx + 1] < OF_times[0]:
+        # Start close to match
+        mask = gyro_times > (OF_times[0] - 0.5)
+        first_idx = np.argmax(mask)
+        if gyro_times[first_idx] > (OF_times[0] - 0.5):
+            gyro_idx = first_idx
+        else:
+            return 100
+
+        while gyro_times[gyro_idx + 1] < OF_times[0] and gyro_idx + 2 < len(gyro_times):
             gyro_idx += 1
+
 
         for OF_idx in range(len(OF_times)):			
             cumulative = next_gyro_snip
             cumulative_time =  next_cumulative_time
+
+            # if near edge of gyro track
+            if gyro_idx + 100 > len(gyro_times):
+                #print("Outside of gyro range")
+                return 100
 
             while gyro_times[gyro_idx] < OF_times[OF_idx]:
                 delta_time = gyro_times[gyro_idx] - gyro_times[gyro_idx-1]
@@ -631,7 +657,8 @@ class Stabilizer:
                 break
 
             elif i == len(self.stab_transform):
-            	print("No more stabilization data")
+                print("No more stabilization data")
+                break
 
             if success and i > 0:
                 
@@ -642,7 +669,7 @@ class Stabilizer:
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                frame_undistort2 = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                frame_undistort = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
 
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
@@ -656,7 +683,7 @@ class Stabilizer:
                 #cv2.imshow("Stabilized?", frame_undistort)
 
                 #print(self.stab_transform[frame_num])
-                frame_out = self.undistort.get_rotation_map(frame_undistort2, self.stab_transform[frame_num])
+                frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
