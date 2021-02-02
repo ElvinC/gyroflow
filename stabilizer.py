@@ -10,7 +10,7 @@ from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
 from vidgear.gears import WriteGear
-
+from _version import __version__
 
 from scipy import signal, interpolate
 
@@ -147,7 +147,7 @@ class Stabilizer:
 
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
-
+        self.last_smooth = smooth
         self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
@@ -212,7 +212,7 @@ class Stabilizer:
 
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
-
+        self.last_smooth = smooth
         self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
@@ -684,7 +684,12 @@ class Stabilizer:
                 # Fix border artifacts
 
                 frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
-                
+
+                # temp debug text
+                frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),3)
+                frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(60,60,60),2)
                 #out.write(frame_out)
                 #print(frame_out.shape)
 
