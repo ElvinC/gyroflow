@@ -461,7 +461,21 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def __init__(self):
         """Qt window containing camera calibration utility
         """
+
+        
+
         super().__init__()
+
+        calib_input = QtWidgets.QInputDialog.getText(self, "Calibration setting","Calibration chessboard size. w, h",
+                                                     QtWidgets.QLineEdit.Normal, "9,6")[0].split(",")
+        
+        try:
+            w, h = [min(max(int(x), 1),30) for x in calib_input]
+            self.chessboard_size = (w,h)
+
+        except:
+            print("setting to default 9,6 pattern")
+            self.chessboard_size = (9,6)
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Calibrator {}".format(__version__))
@@ -644,7 +658,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.main_widget.show()
 
         # initialize instance of calibrator class
-        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=(9,6))
+        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=self.chessboard_size)
 
 
     def open_file_func(self):
@@ -657,7 +671,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.video_viewer.next_frame()
 
         # reset calibrator and info
-        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=(9,6))
+        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=self.chessboard_size)
         self.update_calib_info()
 
     def open_preset_func(self):
@@ -678,8 +692,11 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         """
         print("Showing chessboard")
 
+        board_width = self.chessboard_size[0]
+        board_height = self.chessboard_size[1]
+
         self.chess_window = QtWidgets.QWidget()
-        self.chess_window.setWindowTitle("Calibration target")
+        self.chess_window.setWindowTitle(f"Calibration target ({board_width}x{board_height})")
         self.chess_window.setStyleSheet("background-color:white;")
 
         self.chess_layout = QtWidgets.QVBoxLayout()
@@ -689,7 +706,9 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         
 
         # generate chessboard pattern so no external images are needed
-        chess_pic = np.zeros((9,12), np.uint8)
+
+
+        chess_pic = np.zeros((board_height + 3,board_width + 3), np.uint8)
 
         # Set white squares
         chess_pic[::2,::2] = 255
@@ -702,7 +721,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         chess_pic[:,-1]= 255
 
         # double size and reduce borders slightly
-        chess_pic = cv2.resize(chess_pic,(12*2, 9*2), interpolation=cv2.INTER_NEAREST)
+        chess_pic = cv2.resize(chess_pic,((board_width+3)*2, (board_height+3)*2), interpolation=cv2.INTER_NEAREST)
         chess_pic = chess_pic[1:-1,:]
 
         # convert to Qt image
