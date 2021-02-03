@@ -340,6 +340,10 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.player.pixmap = pixmap
         self.player.setPixmap(pixmap)
 
+    def set_cv_frame(self, frame):
+        self.thread.frame = frame
+        self.thread.update_once = True
+
     def stop(self):
         self.thread.playing = False
         self.play_button.setText("Play")
@@ -599,6 +603,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.export_button = QtWidgets.QPushButton("Export preset file")
         self.export_button.setMinimumHeight(self.button_height)
         self.export_button.clicked.connect(self.save_preset_file)
+        self.export_button.setEnabled(False)
         
         self.right_layout.addWidget(self.export_button, alignment=QtCore.Qt.AlignBottom)
 
@@ -788,6 +793,9 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         ret, self.calib_msg, corners = self.calibrator.add_calib_image(self.video_viewer.thread.frame)
 
+        if ret:
+            self.video_viewer.set_cv_frame(cv2.drawChessboardCorners(self.video_viewer.thread.frame, self.calibrator.chessboard_size,corners,True) )
+
         self.update_calib_info()
 
         if self.calibrator.num_images > 0:
@@ -821,9 +829,11 @@ class CalibratorUtility(QtWidgets.QMainWindow):
  
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
+            self.export_button.setEnabled(True)
         else:
             self.preview_toggle_btn.setChecked(False)
             self.preview_toggle_btn.setEnabled(False)
+            self.export_button.setEnabled(False)
 
     def calibrate_frames(self):
         self.calibrator.compute_calibration()
@@ -1974,8 +1984,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 print("Unknown log type selected")
                 return
             
-            self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, cam_angle_degrees=uptilt, use_csv=use_csv,
-                                                 gyro_lpf_cutoff = gyro_lpf, logtype=logtype)
+            self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
+                                                 use_csv=use_csv, gyro_lpf_cutoff = gyro_lpf, logtype=logtype)
 
 
         self.stab.set_initial_offset(self.offset_control.value())
@@ -2077,7 +2087,7 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    widget = StabUtilityBarebone() # Launcher()
+    widget = CalibratorUtility() # Launcher()
     widget.resize(500, 500)
 
     widget.show()

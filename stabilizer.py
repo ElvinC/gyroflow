@@ -686,10 +686,10 @@ class Stabilizer:
                 frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
 
                 # temp debug text
-                frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
-                                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),3)
-                frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
-                                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(60,60,60),2)
+                frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
+                #frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                #                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(60,60,60),2)
                 #out.write(frame_out)
                 #print(frame_out.shape)
 
