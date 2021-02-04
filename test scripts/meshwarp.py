@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import timeit
 from scipy import signal
+from skimage.transform import resize
 
 # Literature:
 # https://en.wikipedia.org/wiki/Bilinear_interpolation
@@ -9,8 +10,7 @@ from scipy import signal
 # https://www.mathworks.com/help/vision/ug/interpolation-methods.html
 # https://github.com/subeeshvasu/Awesome-Image-Distortion-Correction
 
-if __name__ == '__main__':
-
+def test1():
     #Read input image, and create output image
     width = 2000
     height = 2000
@@ -81,3 +81,79 @@ if __name__ == '__main__':
     print("Time {}".format(stop - start))
     cv2.imshow("img", dist)
     k = cv2.waitKey()
+
+def scale_test():
+    meshw = 4
+    meshh = 1
+
+    for i in range(1, 100):
+
+        outw = meshw * i
+        outh = meshh * 1
+
+        a = np.arange(meshw * meshh).reshape((meshh,meshw)) * 10
+        a = np.array(a, dtype="float64")
+        start = timeit.default_timer()
+        b = cv2.resize(a, (outw,outh), fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
+        #b = resize(a, (outh,outw), order=1, mode='edge')
+        stop = timeit.default_timer()
+
+        #print(stop - start)
+        #print(a)
+        #print(b)
+
+        p = np.sum(b == 0) - 1
+        c = (i -1)/2
+
+        print("s {}, p: {}, c {}, outw: {}".format(i, p, c, outw))
+
+        fw = outw - 2 * c
+
+        print(f"final: {fw}")
+
+
+def mwarp():
+    # size of mesh points
+    meshw = 10
+    meshh = 10
+
+    width = 1300
+    height = 1000
+    print(np.linspace(0, width, meshw)[..., None])
+    start = timeit.default_timer()
+    meshx = np.broadcast_to(np.linspace(0, width, meshw)[..., None], (meshw, meshh)).T.copy()
+    meshy = np.broadcast_to(np.linspace(0, height, meshh)[..., None], (meshh, meshw)).copy()
+
+    #print(meshx)
+    #print(meshy)
+    #meshx[1,1] = meshx[1,1]
+    #meshy[1,1] = meshy[1,1]
+    meshx += np.random.random((meshh,meshw)) * 100
+    meshy += np.random.random((meshh,meshw)) * 100
+    
+    meshx = meshx.astype('float64')
+    meshy = meshy.astype('float64')
+
+    src = cv2.imread('pattern.png')
+    src = cv2.resize(src,(width,height))
+    dst = np.zeros_like(src)
+    
+    map1 = cv2.resize(meshx, (width, height), interpolation=cv2.INTER_CUBIC)
+    map2 = cv2.resize(meshy, (width, height), interpolation=cv2.INTER_CUBIC)
+    map1 = map1.astype('float32')
+    map2 = map2.astype('float32')
+    stop = timeit.default_timer()
+    dst = cv2.remap(src, map1, map2, interpolation=cv2.INTER_LINEAR)
+    print(f"time {start-stop}")
+
+    # draw points
+    for i in range(meshw):
+        for j in range(meshh):
+            pass
+            #cv2.circle(dst,(int(meshx[j,i]),int(meshy[j,i])), 3, (255,100,20), thickness=5)
+
+    cv2.imshow("img", dst)
+    k = cv2.waitKey()
+
+if __name__ == '__main__':
+    mwarp()

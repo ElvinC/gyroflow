@@ -778,7 +778,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         default_file_name = calib_name.replace("@", "At") # 18-55mm@18mm -> 18-55mmAt18mm, eh works I guess
         default_file_name = default_file_name.replace("/", "_").replace(".", "_").replace(" ","_") # f/1.8 -> f_1_8
         default_file_name = "".join([c for c in default_file_name if c.isalpha() or c.isdigit() or c in "_-"]).rstrip()
-        default_file_name.replace("__", "_").replace("__", "_")
+        default_file_name = default_file_name.replace("__", "_").replace("__", "_")
 
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", default_file_name,
                                                         filter="JSON preset (*.json)")
@@ -1793,10 +1793,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.video_info_text.setText(info)
 
-        # set default export options
+        # set default sync and export options
         self.out_width_control.setValue(self.video_info_dict["width"])
         self.out_height_control.setValue(self.video_info_dict["height"])
         self.export_stoptime.setValue(int(self.video_info_dict["time"])) # round down
+        self.sync1_control.setValue(5)
         self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
 
         self.check_aspect()
@@ -2106,8 +2107,9 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    widget = CalibratorUtility() # Launcher()
+    widget = Launcher() # Launcher()
     widget.resize(500, 500)
+
 
     widget.show()
 
