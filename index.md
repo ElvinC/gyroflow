@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---
 title: "Gyroflow"
 layout: splash
@@ -34,6 +35,8 @@ feature_row:
 
 {% include feature_row %}
 
+=======
+>>>>>>> 6e358f5ee15512cd7117b8aaa01e8835de3c1d81
 ## Gyroflow video stabilization - coming soon
 
 
@@ -44,3 +47,4 @@ feature_row:
 [RSgoBlackbox discord server](https://discord.gg/6Yk2dJQv)
 
 [Donate a cup of \<beverage\>](http://paypal.me/chenelvin)
+
