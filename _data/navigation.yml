@@ -1,9 +1,36 @@
 main:
   - title: "Download"
-    url: https://github.com/ElvinC/gyroflow
-  - title: "Instructions"
-    url: /docs/quick-start-guide/
+    url: /download/
+  - title: "Guide"
+    url: /guide/
+  - title: Add lens profile
+    url: /lens/
   - title: "Gallery"
-    url: /docs/quick-start-guide/
+    url: /gallery/
   - title: "FAQ"
     url: /FAQ/
+
+
+sidebar-sample:
+  - title: "Getting started"
+    children:
+      - title: "Windows"
+        url: /guide
+      - title: "Linux"
+        url: /guide
+      - title: "MacOS"
+        url: /guide
+      - title: "Python"
+        url: /guide
+  - title: "Blacbox logging"
+    children:
+      - title: "Child Page B1"
+        url: /guide
+  - title: "Camera calibration"
+    children:
+      - title: "Child Page C1"
+        url: /guide
+  - title: "Video stabilization"
+    children:
+      - title: "Child Page D1"
+        url: /guide

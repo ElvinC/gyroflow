@@ -1,6 +1,5 @@
-<<<<<<< HEAD
 ---
-title: "Gyroflow"
+title: "Gyroflow - If you're seeing this then the website is still under construction - Proceed with care!"
 layout: splash
 date: 2016-03-23T11:48:41-04:00
 header:
@@ -8,8 +7,11 @@ header:
   overlay_filter: "0.5"
   overlay_image: assets/images/banner.jpg
   actions:
+    - label: "Git Repo"
+      url: "https://github.com/ElvinC/gyroflow"
     - label: "Download"
-      url: "https://github.com/ElvinC/gyroflow/releases"
+      url: "/download/"
+      class: "btn--primary"
 excerpt: "A work-in-progress gyro-assisted video stabilization tool for aerial videography and stuff"
 intro: 
   - excerpt: "Ever wanted to be smooth like [insert favourite FPV pilot] without the skills or budget? This tool probably won't do that, but it might do something..."
@@ -35,8 +37,6 @@ feature_row:
 
 {% include feature_row %}
 
-=======
->>>>>>> 6e358f5ee15512cd7117b8aaa01e8835de3c1d81
 ## Gyroflow video stabilization - coming soon
 
 
