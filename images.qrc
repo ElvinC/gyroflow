@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/" >
+    <file>media/logo_rev0_w400.png</file>
+    <file>media/icon.png</file>
+  </qresource>
+</RCC>

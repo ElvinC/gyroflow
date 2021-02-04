@@ -15,6 +15,8 @@ import json
 import re
 import calibrate_video
 
+import bundled_images
+
 
 import stabilizer
 
@@ -31,13 +33,12 @@ class Launcher(QtWidgets.QWidget):
         super().__init__()
 
         self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
-
-        
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.setFixedWidth(450)
         
         # image
-        pixmap = QtGui.QPixmap('media/logo_rev0_w400.png')
+        pixmap = QtGui.QPixmap(':/media/logo_rev0_w400.png')
         self.top_logo = QtWidgets.QLabel()
         self.top_logo.setPixmap(pixmap.scaled(400,450,QtCore.Qt.KeepAspectRatio))
         self.top_logo.setAlignment(QtCore.Qt.AlignCenter)
@@ -274,11 +275,12 @@ class VideoPlayer(QtWidgets.QLabel):
         size = self.size()
         painter = QtGui.QPainter(self)
         point = QtCore.QPoint(0,0)
-        scaledPix = self.pixmap.scaled(size, QtCore.Qt.KeepAspectRatio, transformMode = QtCore.Qt.SmoothTransformation)
-        point.setX((size.width() - scaledPix.width())/2)
-        point.setY((size.height() - scaledPix.height())/2)
-        # print point.x(), ' ', point.y()
-        painter.drawPixmap(point, scaledPix)
+        if not self.pixmap.isNull():
+            scaledPix = self.pixmap.scaled(size, QtCore.Qt.KeepAspectRatio, transformMode = QtCore.Qt.SmoothTransformation)
+            point.setX((size.width() - scaledPix.width())/2)
+            point.setY((size.height() - scaledPix.height())/2)
+            # print point.x(), ' ', point.y()
+            painter.drawPixmap(point, scaledPix)
 
 
 class VideoPlayerWidget(QtWidgets.QWidget):
@@ -451,6 +453,7 @@ class Form(QtWidgets.QDialog):
     def __init__(self, parent=None, title="Dialog"):
         super(Form, self).__init__(parent)
         self.setWindowTitle(title)
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
     def addField(description = "Write something:", id = "field1"):
 
@@ -479,6 +482,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Calibrator {}".format(__version__))
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QHBoxLayout()
@@ -886,6 +890,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stretcher {}".format(__version__))
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QVBoxLayout()
@@ -1108,6 +1113,7 @@ class StabUtility(QtWidgets.QMainWindow):
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QVBoxLayout()
@@ -1314,6 +1320,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer Barebone {}".format(__version__))
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.main_widget = QtWidgets.QTabWidget()
         self.layout = QtWidgets.QHBoxLayout()
@@ -2107,7 +2114,7 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    widget = Launcher() # Launcher()
+    widget = CalibratorUtility() # Launcher()
     widget.resize(500, 500)
 
 
@@ -2120,5 +2127,6 @@ if __name__ == "__main__":
     # Pack to exe using:
     # pyinstaller gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll
     # in my case:
-    # pyinstaller -F gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
+    # pyside2-rcc images.qrc -o bundled_images.py
+    # poetry run pyinstaller --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
     # -F == one file, -w == no command window
