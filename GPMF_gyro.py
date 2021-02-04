@@ -74,15 +74,44 @@ class Extractor:
         self.parsed_gyro[:,3] = omega[:,0] # z
         self.parsed_gyro[:,1] = omega[:,1] # x
         self.parsed_gyro[:,2] = omega[:,2] # y
+        
+    def parse_accl(self):
+        for frame in self.parsed:
+            for stream in frame["DEVC"]["STRM"]:
+                if "ACCL" in stream:
+                    #print(stream["STNM"]) # print stream name
+                    self.accl += stream["ACCL"]
+                    
+                    # Calibration scale shouldn't change
+                    self.accl_scal = stream["SCAL"]
+                    #print(self.accl_scal)
+        
+        
+        # Convert to angular vel. vector in rad/s ??
+        omega = np.array(self.accl) / self.accl_scal
+        self.num_accl_samples = omega.shape[0]
 
+        self.accl_rate = self.num_accl_samples / self.video_length 
+        print("Accl rate: {} Hz, should be close to 200 or 400 Hz".format(self.accl_rate))
+
+
+        self.parsed_accl = np.zeros((self.num_accl_samples, 4))
+        self.parsed_accl[:,0] = np.arange(self.num_accl_samples) * 1/self.accl_rate
+
+        # Data order for gopro gyro is (z,x,y)
+        self.parsed_accl[:,3] = omega[:,0] # z
+        self.parsed_accl[:,1] = omega[:,1] # x
+        self.parsed_accl[:,2] = omega[:,2] # y
 
     def get_gyro(self, with_timestamp = False):
         if with_timestamp:
             return self.parsed_gyro
         return self.parsed_gyro[:,1:]
-
-    def get_accl(self):
-        return 0
+    
+    def get_accl(self, with_timestanp = False):
+        if with_timestanp:
+            return self.parsed_accl
+        return self.parsed_accl[:,1:]
 
     def get_video_length(self):
         return self.video_length
