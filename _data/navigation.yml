@@ -1,0 +1,9 @@
+main:
+  - title: "Download"
+    url: https://github.com/ElvinC/gyroflow
+  - title: "Instructions"
+    url: /docs/quick-start-guide/
+  - title: "Gallery"
+    url: /docs/quick-start-guide/
+  - title: "FAQ"
+    url: /FAQ/
