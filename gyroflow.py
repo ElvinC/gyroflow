@@ -1698,6 +1698,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.display_preview.setChecked(True)
         self.export_controls_layout.addWidget(self.display_preview)
 
+        self.export_debug_text = QtWidgets.QCheckBox("Render with debug text")
+        self.export_debug_text.setChecked(False)
+        self.export_controls_layout.addWidget(self.export_debug_text)
+
+
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
@@ -2089,10 +2094,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
         preview = self.display_preview.isChecked()
         output_scale = int(self.out_scale_control.value())
+        debug_text = self.export_debug_text.isChecked()
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, hw_accel = hardware_acceleration,
-                             bitrate_mbits = bitrate, display_preview=preview, scale=output_scale)
+                             bitrate_mbits = bitrate, display_preview=preview, scale=output_scale,
+                             debug_text=debug_text)
 
         
 
@@ -2114,7 +2121,7 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    widget = CalibratorUtility() # Launcher()
+    widget = Launcher() # Launcher()
     widget.resize(500, 500)
 
 

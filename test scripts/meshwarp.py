@@ -137,13 +137,15 @@ def mwarp():
     src = cv2.imread('pattern.png')
     src = cv2.resize(src,(width,height))
     dst = np.zeros_like(src)
-    
-    map1 = cv2.resize(meshx, (width, height), interpolation=cv2.INTER_CUBIC)
-    map2 = cv2.resize(meshy, (width, height), interpolation=cv2.INTER_CUBIC)
+    meshx.shape += (1,)
+    meshy.shape+= (1,)
+    combined = np.concatenate((meshx, meshy), axis=2)
+    map1 = cv2.resize(combined , (width, height), interpolation=cv2.INTER_CUBIC)
+    map2 = map1 # cv2.resize(meshy, (width, height), interpolation=cv2.INTER_CUBIC)
     map1 = map1.astype('float32')
     map2 = map2.astype('float32')
     stop = timeit.default_timer()
-    dst = cv2.remap(src, map1, map2, interpolation=cv2.INTER_LINEAR)
+    dst = cv2.remap(src, map1, np.array([]), interpolation=cv2.INTER_LINEAR)
     print(f"time {start-stop}")
 
     # draw points

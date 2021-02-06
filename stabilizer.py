@@ -573,7 +573,8 @@ class Stabilizer:
 
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
-                   split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False, scale=1):
+                   split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False, scale=1,
+                   debug_text = False):
         
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
@@ -686,8 +687,9 @@ class Stabilizer:
                 frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
 
                 # temp debug text
-                frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
-                                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
+                if debug_text:
+                    frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                                            (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
                 #frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
                 #                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(60,60,60),2)
                 #out.write(frame_out)
@@ -709,12 +711,17 @@ class Stabilizer:
 
                     out.write(concatted)
                     if display_preview:
+                        # Resize if preview is huge
+                        if concatted.shape[1] > 1280:
+                            concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_LINEAR)
                         cv2.imshow("Before and After", concatted)
                         cv2.waitKey(2)
                 else:
 
                     out.write(frame_out)
                     if display_preview:
+                        if frame_out.shape[1] > 1280:
+                            frame_out = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
                         cv2.imshow("Stabilized?", frame_out)
                         cv2.waitKey(2)
 
