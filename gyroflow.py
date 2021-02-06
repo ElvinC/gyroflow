@@ -1685,14 +1685,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
-        
-        self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
-        self.split_screen_select.setChecked(False)
-        self.export_controls_layout.addWidget(self.split_screen_select)
 
         self.hw_acceleration_select = QtWidgets.QCheckBox("HW Encoding (experimental)")
         self.hw_acceleration_select.setChecked(False)
         self.export_controls_layout.addWidget(self.hw_acceleration_select)
+
+        self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
+        self.split_screen_select.setChecked(False)
+        self.export_controls_layout.addWidget(self.split_screen_select)
 
         self.display_preview = QtWidgets.QCheckBox("Display preview during rendering")
         self.display_preview.setChecked(True)
@@ -1702,7 +1702,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
-
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
@@ -1711,6 +1710,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_bitrate.setValue(20)
         self.export_controls_layout.addWidget(self.export_bitrate)
 
+        #yuv420p
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
+        self.pixfmt_select = QtWidgets.QLineEdit()
+        self.export_controls_layout.addWidget(self.pixfmt_select)
+
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg encoder (untested), overwrites HW setting (<tt>ffmpeg -encoders</tt>):"))
+        self.encoder_select = QtWidgets.QLineEdit()
+        self.export_controls_layout.addWidget(self.encoder_select)
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
@@ -2095,11 +2102,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         preview = self.display_preview.isChecked()
         output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
+        vcodec = self.encoder_select.text()
+        pix_fmt = self.pixfmt_select.text()
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, hw_accel = hardware_acceleration,
                              bitrate_mbits = bitrate, display_preview=preview, scale=output_scale,
-                             debug_text=debug_text)
+                             vcodec=vcodec, pix_fmt = pix_fmt, debug_text=debug_text)
 
         
 

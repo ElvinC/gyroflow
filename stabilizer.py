@@ -574,11 +574,22 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
                    split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False, scale=1,
-                   debug_text = False):
+                   vcodec = "", pix_fmt = "", debug_text = False):
         
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
-        if hw_accel:
+        if vcodec:
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": vcodec,
+                "-b:v": "%sM" % bitrate_mbits,
+            }
+            if pix_fmt:
+                output_params["-pix_fmt"] = pix_fmt
+
+            out = WriteGear(output_filename=outpath, logging=True, **output_params)
+
+        elif hw_accel:
             if platform.system() == "Darwin":  # macOS
                 output_params = {
                     "-input_framerate": self.fps, 
@@ -605,6 +616,10 @@ class Stabilizer:
                     "-profile": "main", 
                     "-b:v": "%sM" % bitrate_mbits,
                 }
+
+            if pix_fmt:
+                output_params["-pix_fmt"] = pix_fmt
+
             out = WriteGear(output_filename=outpath, **output_params)
 
         else:
@@ -616,6 +631,9 @@ class Stabilizer:
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
             }
+            if pix_fmt:
+                output_params["-pix_fmt"] = pix_fmt
+
             out = WriteGear(output_filename=outpath, **output_params)
         
 
