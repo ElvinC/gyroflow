@@ -7,7 +7,7 @@ title: FAQ
 No.
 
 ## Is this better than SteadXP?
-Probably not, but I haven't SteadXP.
+Probably not, but I haven't tried SteadXP.
 
 ## Any other tools/ressources I should know about?
 * [BlackboxToGPMF](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui) by Attilafustos and Cleric-K for emulating GoPro files for use with Reelsteady Go. Works best for action-style cameras with similar distortions as the GoPro.
@@ -29,11 +29,11 @@ This [companion video](https://youtu.be/I54X4NRuB-Q) to the the paper _Digital V
 Watch the tutorial if you haven't (note: tutorial is currently being made) and try asking in the Discord or Facebook group.
 
 ## There is no lens profile for X. What do I do?
-Create a new lens profile by following the guide. If it works well, please submit it to be added as a default profile so others can use it.
-Since you can add a name to the profile, future users can tell who was the awesome person who did the calibration.
+Create a new lens profile by following the guide (in the works). If it works well, please submit it to be added as a default profile so others can use it.
+Since you can add a name to the profile, future users can tell who the awesome calibrator was.
 
 ## I tried out a lens profile for my camera, but it doesn't work very well?
-Try making a new lens profile to see if that helps. If it works better, please submit the new profile as well.
+Try making a new lens profile to see if that helps. If it works better, please submit the new profile as well. Bad lens profiles typically move too much or too little during panning or tilting, and has "wobbling" at the edges.
 
 ## Does this work for DSLR/handheld footage?
 It works *alright* for wide angle footage, but rolling shutter artifacts will be present in handheld/walking footage, especially at longer focal lengths.

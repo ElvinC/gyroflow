@@ -29,22 +29,10 @@ feature_row:
     # btn_class: "btn--primary"
   - image_path: /assets/images/blackbox_picture.jpg
     title: "Arduous workflow"
-    excerpt: '"Why spend so much time and effort with logging, calibration, and messing around with sync when I can just run it through warp stabilizer?"'
+    excerpt: '"Why spend so much time and effort with logging, calibration, and messing around with sync when I can just run it through warp stabilizer?" - Potential user'
 ---
 
 
 {% include feature_row id="intro" type="center" %}
 
 {% include feature_row %}
-
-## Gyroflow video stabilization - coming soon
-
-
-[Youtube channel with updates](https://www.youtube.com/channel/UCr0Hh-AUc4CU-36yTjx-lTA)
-
-[FPV stabilization tools FB group](https://www.facebook.com/groups/fpvtools)
-
-[RSgoBlackbox discord server](https://discord.gg/6Yk2dJQv)
-
-[Donate a cup of \<beverage\>](http://paypal.me/chenelvin)
-

@@ -3,24 +3,8 @@ layout: single
 title: Lens Presets
 ---
 
-<form action="" method="post">
-      <label>Name*</label>
-      <input type="text" placeholder="Name*" name="" required>
-  
-      <label>Email Address*</label>
-      <input type="email" placeholder="Email address*" name="" required>
-    
-      <label>Subject</label>
-      <input type="text" placeholder="Subject" name="">
-    
-      <label>Message*</label>
-      <textarea rows="5" placeholder="Message*" name="" required></textarea>
-     
-      <button type="submit">Send</button>
-</form>
+### To submit a lens profile, fill out this form and upload the JSON files:
 
-<input id="image-file" type="file" />
+<a href="https://forms.gle/6iKrUQWqCFxVghLd6" class="btn btn--primary btn--large">Link to form</a>
 
-<script type="text/javascript">
-	
-</script>>
+This will likely be updated to make the process more elegant, but this works for now. Let me know if there are issues with the form. Alternatively you can share the files over Facebook, Discord or something else.

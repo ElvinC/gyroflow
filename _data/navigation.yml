@@ -9,6 +9,8 @@ main:
     url: /gallery/
   - title: "FAQ"
     url: /FAQ/
+  - title: "Donate"
+    url: /donate/
 
 
 sidebar-sample:
