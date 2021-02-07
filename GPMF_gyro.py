@@ -55,7 +55,7 @@ class Extractor:
                     
                     # Calibration scale shouldn't change
                     self.gyro_scal = stream["SCAL"]
-                    print(self.gyro_scal)
+                    #print(self.gyro_scal)
         
         
         # Convert to angular vel. vector in rad/s

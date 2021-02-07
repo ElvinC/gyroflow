@@ -33,22 +33,24 @@ The launcher containing all the utilities is available by executing `gyroflow.py
 * Symmetrical slerp-based quaternion low-pass filter
 * Blackbox data import
 * Undistort and rotation perspective transform
-* Semi-automatic temporal gyro/video sync. Not super robust but works most of the time.
+* Semi-automatic temporal gyro/video sync.
+* Blackbox orientation handling and wide interval sync.
+* Stabilization UI without video player
+* (Basic) gyro orientation presets for GoPro cameras
 
 
 **Work in progress:**
+* Documentation
+* Improved low-pass filter and more stabilization modes (Time-lapse, separate pitch/yaw/roll smoothness control etc.)
 
-* Stabilization UI. Working barebone version without video player added. Feel free to try it out using Hero 6 or Hero 8 files or files modified with BlackboxToGPMF, but this is still work in progress.
-* Gyro orientation presets
-* blackbox orientation handling. Testing ways of avoiding the need for manual sync in blackbox explorer using more robust sync algorithm.
 
 **Not working (yet) and _potential_ future additions and ideas:**
-* Improved low-pass filter and more stabilization modes (Time-lapse, separate pitch/yaw/roll smoothness control etc.)
 * Incorporate acceleration data in orientation estimation for horizon lock (Probably just a complementary filter. Kalman is overkill but could be fun to learn).
 * Automatic camera alignment identification with respect to gyro
-* Streamlining/optimizing the image processing pipeline
-* Rolling shutter correction (and determination?)
+* Try different calibration pattern? Asymmetric circles/ChArUco?
+* Streamlining/optimizing the image processing pipeline (more hardware acceleration etc.)
+* Rolling shutter correction (and determination?) + RS-aware gyro sync.
 * Automatic determination of required crop
 * Integration with external logger hardware
-* Native support for other cameras with internal gyro if there's interest (insta360, sony A7 series?)
-* Support for reading and writing professional video formats
+* Native support for other cameras with internal gyro (insta360, sony A7 series?)
+* Support for reading and writing professional video formats (video editor plugin?)

@@ -21,17 +21,24 @@ class GyroIntegrator:
             acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
         """
 
+
     
         self.data = np.copy(input_data)
         # scale input data
         self.data[:,0] *= time_scaling
         self.data[:,1:4] *= gyro_scaling
 
+        # Make sure input data is right handed. Final virtual camera rotation is left-handed
+        # while image rotation is right-handed.
+        self.data[:,2] *= -1
+
         # zero out timestamps
         if zero_out_time:
             self.data[:,0] -= self.data[0,0]
 
         self.num_data_points = self.data.shape[0]
+
+        self.gyro_sample_rate = self.num_data_points / (self.data[-1,0] - self.data[0,0])
 
         # initial orientation quaternion
         if type(initial_orientation) != type(None):
@@ -114,9 +121,10 @@ class GyroIntegrator:
 
 
     def get_smoothed_orientation(self, smooth = 0.94):
+        # https://en.wikipedia.org/wiki/Exponential_smoothing
+        # the smooth value corresponds to the time constant
 
-        smothness = smooth**(1/6)
-
+        alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth)
 
         smoothed_orientation = np.zeros(self.orientation_list.shape)
 
@@ -124,7 +132,7 @@ class GyroIntegrator:
 
 
         for i in range(self.num_data_points):
-            value = quat.slerp(value, self.orientation_list[i,:],[1-smothness])[0]
+            value = quat.slerp(value, self.orientation_list[i,:],[alpha])[0]
             smoothed_orientation[i] = value
 
         # reverse pass
@@ -133,7 +141,7 @@ class GyroIntegrator:
         value2 = smoothed_orientation[-1,:]
 
         for i in range(self.num_data_points-1, -1, -1):
-            value2 = quat.slerp(value2, smoothed_orientation[i,:],[(1-smothness)])[0]
+            value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha])[0]
             smoothed_orientation2[i] = value2
 
         # Test rotation lock (doesn't work)
@@ -189,6 +197,11 @@ class GyroIntegrator:
                 slerped_rotations.append(quat.slerp(smoothed_orientation[i],smoothed_orientation[i+1],[weight]))
                 out_times.append(time)
 
+                time += interval
+
+            elif time < time_list[i]:
+                # continue even if missing gyro data
+                slerped_rotations.append(smoothed_orientation[i])
                 time += interval
 
         return (out_times, slerped_rotations)
@@ -561,3 +574,28 @@ class EulerIntegrator:
 
         else:
             return quat.quaternion(1,0,0,0)
+
+if __name__ == "__main__":
+    from scipy.spatial.transform import Rotation
+
+    fake_gyro_data = np.random.random((1000,4))
+    fake_gyro_data[:,0] = np.arange(1000)/10
+    print(fake_gyro_data)
+
+    integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None)
+    integrator.integrate_all()
+    stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
+    orig = stabtransforms[50]
+ 
+    # Hero 6 as reference
+    fake_gyro_data[:,2] = -fake_gyro_data[:,2]
+    integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None)
+    integrator.integrate_all()
+    stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
+    weird = stabtransforms[50]
+    
+    print(weird)    
+    print(orig)
+
+
+    combined_rotation[0:3,0:3] = Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
