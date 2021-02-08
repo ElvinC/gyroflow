@@ -1,5 +1,5 @@
 ---
-title: "Gyroflow - If you're seeing this then the website is still under construction - Proceed with care!"
+title: "Gyroflow"
 layout: splash
 date: 2016-03-23T11:48:41-04:00
 header:
