@@ -1404,7 +1404,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.gyro_log_format_select)
 
 
-        self.fpv_tilt_text = QtWidgets.QLabel("FPV camera angle:")
+        self.fpv_tilt_text = QtWidgets.QLabel("Camera to gyro angle:")
         self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
         self.fpv_tilt_control.setMinimum(-90)
         self.fpv_tilt_control.setMaximum(90)

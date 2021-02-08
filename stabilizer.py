@@ -970,6 +970,9 @@ class BBLStabilizer(Stabilizer):
         # Get gyro data
         print(bblpath)
 
+        # quick fix
+        cam_angle_degrees = -cam_angle_degrees
+
         if use_csv:
             with open(bblpath) as bblcsv:
                 gyro_index = None

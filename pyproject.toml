@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gyroflow"
-version = "0.2.0"
+version = "0.2.1"
 description = "Gyro-assisted video stabilization"
 authors = ["Elvin Chen <dev@elvinchen.com>"]
 
