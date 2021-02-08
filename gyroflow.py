@@ -69,7 +69,7 @@ class Launcher(QtWidgets.QWidget):
         self.version_button.setMinimumSize(300,50)
         self.version_button.setStyleSheet("font-size: 14px;")
 
-        self.footer = QtWidgets.QLabel('''Developed by Elvin. <a href='https://github.com/ElvinC/gyroflow'>Contribute or support on Github</a>''')
+        self.footer = QtWidgets.QLabel('''Developed by Elvin | <a href='http://gyroflow.xyz/'>gyroflow.xyz</a> | <a href='https://github.com/ElvinC/gyroflow'>Git repo</a> | <a href='http://gyroflow.xyz/donate'>Donate</p>''')
         self.footer.setOpenExternalLinks(True)
         self.footer.setAlignment(QtCore.Qt.AlignCenter)
 

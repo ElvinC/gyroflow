@@ -1,12 +1,16 @@
 # Gyroflow - Video stabilization using gyroscope data targeting drone footage (WIP)
 
+## [In-depth video guide](https://youtu.be/NFsTb_f7y8s)
+
+## [Website with more info](http://gyroflow.xyz/)
+
 A program built around Python, OpenCV, and PySide2 for video stabilization using gyroscope data.
 
 The project consists of three core parts: A utility for the generation of lens undistortion preset, a utility for stabilizing footage using gyro data, and a utility for stretching 4:3 video to 16:9 using non-linear horizontal stretching (similar to GoPro's superview).
 
-This is currently a work in progress project, but the goal is to use the gyro data logged by drone flight controllers for stabilizing the onboard HD camera. Furthermore, the gyro data embedded in newer GoPro and insta360 cameras should also be usable for stabilization purposes.
+The main goal of creating something that can stabilize footage based on blackbox gyro data has mostly been achieved. Moving forwards, more work will be done to improve the quality of the result.
 
-The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). The current release is very outdated and another alpha executable will be available in the near future after a bit more work on blackbox support. Also, check out the wiki where there's some more information about the camera calibration and video stabilization process.
+The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). Also, check out the wiki where there's some more information about the camera calibration and video stabilization process.
 
 ## Other things to check out:
 * [BlackboxToGPMF](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui) by Cleric-K and Attilafustos. Tool for adding GoPro metadata and blackbox data to non-GoPro cameras for use with Reelsteady GO. Initial discussion [here](https://github.com/ElvinC/gyroflow/issues/1).
