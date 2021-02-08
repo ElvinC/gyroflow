@@ -6,7 +6,7 @@ title: Download
 Here are the downloads for the latest stable-ish release (or rather, they should appear here). If you want the latest bleeding edge code that may or may not run, check out the [Github Repository](https://github.com/ElvinC/gyroflow). The same binaries should also be over on the Github [releases page](https://github.com/ElvinC/gyroflow/releases).
 
 ### Windows executable:
-<a href="https://github.com/ElvinC/gyroflow/releases/download/0.2.0-alpha/gyroflow-0.2.0-alpha.exe" class="btn btn--info btn--large">gyroflow-0.2.0-alpha.exe</a>
+<a href="https://github.com/ElvinC/gyroflow/releases/download/0.2.1-alpha/gyroflow-0.2.1-alpha.exe" class="btn btn--info btn--large">gyroflow-0.2.1-alpha.exe</a>
 ### Mac executable:
 <a href="#" class="btn btn--info btn--large">N/A</a>
 ### Ubuntu executable:
