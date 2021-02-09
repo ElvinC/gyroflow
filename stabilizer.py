@@ -572,70 +572,71 @@ class Stabilizer:
         return sum_squared_diff
 
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
-                   split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False, scale=1,
-                   vcodec = "", pix_fmt = "", debug_text = False):
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
+                   bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", pix_fmt = "", debug_text = False,
+                   custom_ffmpeg = ""):
         
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
-        if vcodec:
+        if vcodec == "libx264":
             output_params = {
                 "-input_framerate": self.fps, 
-                "-vcodec": vcodec,
-                "-b:v": "%sM" % bitrate_mbits,
-            }
-            if pix_fmt:
-                output_params["-pix_fmt"] = pix_fmt
-
-            out = WriteGear(output_filename=outpath, logging=True, **output_params)
-
-        elif hw_accel:
-            if platform.system() == "Darwin":  # macOS
-                output_params = {
-                    "-input_framerate": self.fps, 
-                    #"-vf": "scale=%sx%s" % export_out_size,
-                    "-vcodec": "h264_videotoolbox",
-                    "-profile": "main", 
-                    "-b:v": "%sM" % bitrate_mbits,
-                }
-            elif platform.system() == "Windows":
-                output_params = {
-                    "-input_framerate": self.fps, 
-                    #"-vf": "scale=%sx%s" % export_out_size,
-                    "-vcodec": "h264_nvenc",
-                    "-profile:v": "main",
-                    "-rc:v": "cbr", 
-                    "-b:v": "%sM" % bitrate_mbits,
-                    "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
-                }
-            elif platform.system() == "Linux":
-                output_params = {
-                    "-input_framerate": self.fps, 
-                    #"-vf": "scale=%sx%s" % export_out_size,
-                    "-vcodec": "h264_vaapi",
-                    "-profile": "main", 
-                    "-b:v": "%sM" % bitrate_mbits,
-                }
-
-            if pix_fmt:
-                output_params["-pix_fmt"] = pix_fmt
-
-            out = WriteGear(output_filename=outpath, **output_params)
-
-        else:
-            output_params = {
-                "-input_framerate": self.fps, 
-                #"-vf": "scale=%sx%s" % export_out_size,
                 "-c:v": "libx264",
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
+                "-pix_fmt": "yuv420p",  
             }
-            if pix_fmt:
-                output_params["-pix_fmt"] = pix_fmt
-
-            out = WriteGear(output_filename=outpath, **output_params)
+        elif vcodec == "h264_nvenc":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_nvenc",
+                "-profile:v": "high",
+                "-rc:v": "cbr", 
+                "-b:v": "%sM" % bitrate_mbits,
+                "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
+                "-pix_fmt": "yuv420p",
+            }
+        elif vcodec == "h264_vaapi":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_vaapi",
+                "-vaapi_device": "/dev/dri/renderD128",
+                "-profile": "high", 
+                "-b:v": "%sM" % bitrate_mbits,
+                "-pix_fmt": "yuv420p",
+            }
+        elif vcodec == "h264_videotoolbox":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_videotoolbox",
+                "-profile": "high", 
+                "-b:v": "%sM" % bitrate_mbits,
+                "-pix_fmt": "yuv420p",
+                }
+        elif vcodec == "prores_ks_hq":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "prores_ks",
+                "-profile:v": "hq",
+            }
+        elif vcodec == "prores_ks_4444":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "prores_ks",
+                "-profile:v": "4444",
+            }
+        else:
+            output_params = {}
         
+        if pix_fmt:
+            output_params["-pix_fmt"] = pix_fmt  # override pix_fmt if user needs to
+
+        if custom_ffmpeg:
+            output_params = eval(custom_ffmpeg)
+            output_params["-input_framerate"] = self.fps
+
+        out = WriteGear(output_filename=outpath, **output_params)        
 
         crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
 

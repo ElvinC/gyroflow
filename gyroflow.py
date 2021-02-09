@@ -1686,9 +1686,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.export_stoptime)
 
 
-        self.hw_acceleration_select = QtWidgets.QCheckBox("HW Encoding (experimental)")
-        self.hw_acceleration_select.setChecked(False)
-        self.export_controls_layout.addWidget(self.hw_acceleration_select)
+        # TODO: Should consider checking for available codecs and grey out/hide non available encoders
+        self.video_encoder_text = QtWidgets.QLabel('Video encoder')
+        self.export_controls_layout.addWidget(self.video_encoder_text)
+        self.video_encoder_select = QtWidgets.QComboBox()
+        self.video_encoder_select.addItem("libx264")  # default software encoder 
+        self.video_encoder_select.addItem("h264_nvenc")  # HW encoder nvidia
+        self.video_encoder_select.addItem("h264_vaapi")  # HW encoder amd/intel
+        self.video_encoder_select.addItem("h264_videotoolbox")  # HW encoder macOS
+        self.video_encoder_select.addItem("prores_ks_hq")  # pores_ks profile:v hq
+        self.video_encoder_select.addItem("prores_ks_4444")  # prores_ks profile:v 4444
+        self.export_controls_layout.addWidget(self.video_encoder_select)
 
         self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
         self.split_screen_select.setChecked(False)
@@ -1702,6 +1710,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
+        # TODO: Should consider hiding this widget if prores is selected
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
@@ -1715,9 +1724,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.pixfmt_select = QtWidgets.QLineEdit()
         self.export_controls_layout.addWidget(self.pixfmt_select)
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg encoder (untested), overwrites HW setting (<tt>ffmpeg -encoders</tt>):"))
-        self.encoder_select = QtWidgets.QLineEdit()
-        self.export_controls_layout.addWidget(self.encoder_select)
+        example_ffmpeg_pipeline = '{"-vcodec": "prores_ks","-profile:v": "hq"}'
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg custom pipeline, overwrites all settings above. \nExample: %s" % example_ffmpeg_pipeline))
+        self.custom_ffmpeg_pipeline = QtWidgets.QLineEdit()
+        self.export_controls_layout.addWidget(self.custom_ffmpeg_pipeline)
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
@@ -2097,18 +2107,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         split_screen = self.split_screen_select.isChecked()
-        hardware_acceleration = self.hw_acceleration_select.isChecked()
+        #hardware_acceleration = self.hw_acceleration_select.isChecked()
+        vcodec = self.video_encoder_select.currentText()
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
         preview = self.display_preview.isChecked()
         output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
-        vcodec = self.encoder_select.text()
         pix_fmt = self.pixfmt_select.text()
+        custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
-                             split_screen = split_screen, hw_accel = hardware_acceleration,
-                             bitrate_mbits = bitrate, display_preview=preview, scale=output_scale,
-                             vcodec=vcodec, pix_fmt = pix_fmt, debug_text=debug_text)
+                             split_screen = split_screen, bitrate_mbits = bitrate,
+                             display_preview=preview, scale=output_scale, vcodec=vcodec,
+                             pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg)
 
         
 
