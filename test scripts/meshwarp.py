@@ -134,7 +134,7 @@ def mwarp():
     meshx = meshx.astype('float64')
     meshy = meshy.astype('float64')
 
-    src = cv2.imread('pattern.png')
+    src = cv2.imread('test.jpg')
     src = cv2.resize(src,(width,height))
     dst = np.zeros_like(src)
     meshx.shape += (1,)

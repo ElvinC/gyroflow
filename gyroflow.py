@@ -1847,8 +1847,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.preset_path and self.infile_path:
             # Check if the aspect ratios match
             self.preset_info_dict.get("aspect")
-            v_aspect = self.preset_info_dict.get("aspect")
-            p_aspect = self.video_info_dict.get("aspect")
+            v_aspect = self.video_info_dict.get("aspect")
+            p_aspect = self.preset_info_dict.get("aspect")
             if abs(v_aspect - p_aspect) > 0.01:
                 self.aspect_warning_text.setText(f"<h3>Seems like the aspect ratios don't quite match. Video: {v_aspect:.3f}, preset: {p_aspect:.3f}</h3>")
             else:

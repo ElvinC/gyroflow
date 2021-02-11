@@ -58,3 +58,4 @@ The launcher containing all the utilities is available by executing `gyroflow.py
 * Integration with external logger hardware
 * Native support for other cameras with internal gyro (insta360, sony A7 series?)
 * Support for reading and writing professional video formats (video editor plugin?)
+* Audio handling
