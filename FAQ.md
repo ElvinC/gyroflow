@@ -26,7 +26,7 @@ MEMS gyroscopes can be used to determine the rotation of the camera very accurat
 This [companion video](https://youtu.be/I54X4NRuB-Q) to the the paper _Digital Video Stabilization and Rolling Shutter Correction using Gyroscopes_ by Karpenko et al. explains the basic concepts quite well. 
 
 ## I can't get X to work, what do?
-Watch the tutorial if you haven't (note: tutorial is currently being made) and try asking in the Discord or Facebook group.
+Watch the [tutorial](https://youtu.be/NFsTb_f7y8s) if you haven't and try asking in the Discord or Facebook group.
 
 ## There is no lens profile for X. What do I do?
 Create a new lens profile by following the guide (in the works). If it works well, please submit it to be added as a default profile so others can use it.
