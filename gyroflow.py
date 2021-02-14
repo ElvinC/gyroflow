@@ -1724,6 +1724,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 break
 
         self.video_encoder_select.currentIndexChanged.connect(self.update_profile_select)
+        self.video_encoder_select.currentIndexChanged.connect(self.update_bitrate_visibility)
         self.update_profile_select()
         
         self.export_controls_layout.addWidget(self.video_encoder_text)
@@ -1745,13 +1746,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.export_debug_text)
 
         # TODO: Should consider hiding this widget if prores is selected
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
+        self.export_bitrate_text = QtWidgets.QLabel("Export bitrate [Mbit/s]")
+        self.export_controls_layout.addWidget(self.export_bitrate_text)
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
         self.export_bitrate.setMinimum(1)
         self.export_bitrate.setMaximum(200)
         self.export_bitrate.setValue(20)
+        self.export_bitrate.setVisible(True)
         self.export_controls_layout.addWidget(self.export_bitrate)
+        self.update_bitrate_visibility()
 
         #yuv420p
         self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
@@ -2182,6 +2186,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.encoder_profile_select.setRootModelIndex(encoder_index)
         self.encoder_profile_select.setCurrentIndex(0)
 
+    def update_bitrate_visibility(self):
+        encoders_without_bitrate_control = ["prores_ks"]
+        if self.video_encoder_select.currentText() in encoders_without_bitrate_control:
+            enable_bitrate = False
+        else:
+            enable_bitrate = True
+        self.export_bitrate_text.setVisible(enable_bitrate)
+        self.export_bitrate.setVisible(enable_bitrate)
 
 def main():
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
