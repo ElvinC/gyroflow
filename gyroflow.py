@@ -1692,7 +1692,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         supported_encoders = {
             "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"], 
             "h264_nvenc": ["baseline", "main", "high", "high444p"],
-            "h264_vaapi": ["main"],
+            "h264_vaapi": ["baseline", "main", "high"],
             "h264_videotoolbox": ["baseline", "main", "high", "extended"], 
             "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"]
         }
