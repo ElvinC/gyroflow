@@ -573,15 +573,16 @@ class Stabilizer:
 
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
-                   bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", pix_fmt = "", debug_text = False,
-                   custom_ffmpeg = ""):
+                   bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
+                   debug_text = False, custom_ffmpeg = ""):
         
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
         if vcodec == "libx264":
             output_params = {
                 "-input_framerate": self.fps, 
-                "-c:v": "libx264",
+                "-vcodec": "libx264",
+                "-profile:v": vprofile,
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
@@ -591,40 +592,31 @@ class Stabilizer:
             output_params = {
                 "-input_framerate": self.fps, 
                 "-vcodec": "h264_nvenc",
-                "-profile:v": "high",
+                "-profile:v": vprofile,
                 "-rc:v": "cbr", 
                 "-b:v": "%sM" % bitrate_mbits,
                 "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
-                "-pix_fmt": "yuv420p",
             }
         elif vcodec == "h264_vaapi":
             output_params = {
                 "-input_framerate": self.fps, 
                 "-vcodec": "h264_vaapi",
                 "-vaapi_device": "/dev/dri/renderD128",
-                "-profile": "high", 
+                "-profile:v": vprofile, 
                 "-b:v": "%sM" % bitrate_mbits,
-                "-pix_fmt": "yuv420p",
             }
         elif vcodec == "h264_videotoolbox":
             output_params = {
                 "-input_framerate": self.fps, 
                 "-vcodec": "h264_videotoolbox",
-                "-profile": "high", 
+                "-profile:v": vprofile, 
                 "-b:v": "%sM" % bitrate_mbits,
-                "-pix_fmt": "yuv420p",
                 }
-        elif vcodec == "prores_ks_hq":
+        elif vcodec == "prores_ks":
             output_params = {
                 "-input_framerate": self.fps, 
                 "-vcodec": "prores_ks",
-                "-profile:v": "hq",
-            }
-        elif vcodec == "prores_ks_4444":
-            output_params = {
-                "-input_framerate": self.fps, 
-                "-vcodec": "prores_ks",
-                "-profile:v": "4444",
+                "-profile:v": vprofile,
             }
         else:
             output_params = {}

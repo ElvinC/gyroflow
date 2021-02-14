@@ -5,8 +5,9 @@ import random
 import cv2
 import os
 import numpy as np
-from PySide2 import QtCore, QtWidgets, QtGui
+from PySide2 import QtCore, QtWidgets, QtGui, Qt
 from _version import __version__
+from vidgear.gears.helper import get_valid_ffmpeg_path
 import calibrate_video
 import time
 import nonlinear_stretch
@@ -14,7 +15,7 @@ import urllib.request
 import json
 import re
 import calibrate_video
-
+import subprocess
 import bundled_images
 
 
@@ -1685,18 +1686,51 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
+        # Check for available encoders and grey out those who are not available
+        self.available_encoders = self.get_available_encoders()
 
-        # TODO: Should consider checking for available codecs and grey out/hide non available encoders
+        supported_encoders = {
+            "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"], 
+            "h264_nvenc": ["baseline", "main", "high", "high444p"],
+            "h264_vaapi": ["main"],
+            "h264_videotoolbox": ["baseline", "main", "high", "extended"], 
+            "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"]
+        }
+
+        self.encoder_model = QtGui.QStandardItemModel()
+        
         self.video_encoder_text = QtWidgets.QLabel('Video encoder')
-        self.export_controls_layout.addWidget(self.video_encoder_text)
         self.video_encoder_select = QtWidgets.QComboBox()
-        self.video_encoder_select.addItem("libx264")  # default software encoder 
-        self.video_encoder_select.addItem("h264_nvenc")  # HW encoder nvidia
-        self.video_encoder_select.addItem("h264_vaapi")  # HW encoder amd/intel
-        self.video_encoder_select.addItem("h264_videotoolbox")  # HW encoder macOS
-        self.video_encoder_select.addItem("prores_ks_hq")  # pores_ks profile:v hq
-        self.video_encoder_select.addItem("prores_ks_4444")  # prores_ks profile:v 4444
+        self.video_encoder_select.setModel(self.encoder_model)
+
+        self.encoder_profile_text = QtWidgets.QLabel('Encoder profile')
+        self.encoder_profile_select = QtWidgets.QComboBox()
+        self.encoder_profile_select.setModel(self.encoder_model)
+
+        for encoder, profiles in supported_encoders.items():
+            encoder_item = QtGui.QStandardItem(encoder)
+            # Disable encoders not listed by ffmpeg -encoders
+            if encoder not in self.available_encoders:
+                encoder_item.setEnabled(False)
+            self.encoder_model.appendRow(encoder_item)
+            for profile in profiles:
+                profile_item = QtGui.QStandardItem(profile)
+                encoder_item.appendRow(profile_item)
+
+        # Prevent a unsupported/disabled item to be default selection
+        for i in range(0, self.video_encoder_select.count()):
+            if self.encoder_model.item(i).isEnabled():
+                self.video_encoder_select.setCurrentIndex(i) 
+                break
+
+        self.video_encoder_select.currentIndexChanged.connect(self.update_profile_select)
+        self.update_profile_select()
+        
+        self.export_controls_layout.addWidget(self.video_encoder_text)
         self.export_controls_layout.addWidget(self.video_encoder_select)
+        self.export_controls_layout.addWidget(self.encoder_profile_text)
+        self.export_controls_layout.addWidget(self.encoder_profile_select)
+
 
         self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
         self.split_screen_select.setChecked(False)
@@ -2109,6 +2143,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         split_screen = self.split_screen_select.isChecked()
         #hardware_acceleration = self.hw_acceleration_select.isChecked()
         vcodec = self.video_encoder_select.currentText()
+        vprofile = self.encoder_profile_select.currentText()
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
         preview = self.display_preview.isChecked()
         output_scale = int(self.out_scale_control.value())
@@ -2118,7 +2153,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
-                             display_preview=preview, scale=output_scale, vcodec=vcodec,
+                             display_preview=preview, scale=output_scale, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg)
 
         
@@ -2133,7 +2168,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def show_warning(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
 
+    def get_available_encoders(self):
+        if(get_valid_ffmpeg_path()):  # Helper function from VidGear
+            ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+            return ffmpeg_encoders_sp.stdout
+        else:
+            self.show_warning("Could not find FFmpeg installation")
+            return ""
 
+    def update_profile_select(self):
+        index = self.video_encoder_select.currentIndex()
+        encoder_index = self.encoder_model.index(index, 0, self.video_encoder_select.rootModelIndex())
+        self.encoder_profile_select.setRootModelIndex(encoder_index)
+        self.encoder_profile_select.setCurrentIndex(0)
 
 
 def main():
