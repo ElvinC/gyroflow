@@ -1777,7 +1777,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # warning for HW encoding
         render_description = QtWidgets.QLabel(
-        "<b>Note:</b> HW Encoding requires FFMpeg with hardware acceleration support!")
+        "<b>Note:</b> videotoolbox, vaapi and nvenc are HW accelerated encoders and require FFmpeg with hardware acceleration support!")
         render_description.setWordWrap(True)
         self.export_controls_layout.addWidget(render_description)
 
