@@ -13,5 +13,5 @@ Here are the downloads for the latest stable-ish release. If you want the latest
 <a href="#" class="btn btn--info btn--large">N/A</a>
 ### Source code:
 <a href="https://github.com/ElvinC/gyroflow/archive/0.2.1-alpha.zip" class="btn btn--info btn--large">0.2.1-alpha.zip</a>
-### Lens presets:
+### Lens presets are updated every so often ([you can check if your camera/lens combination is added on github](https://github.com/ElvinC/gyroflow/tree/master/camera_presets)):
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.2.1-alpha/gyroflow_presets_06_02_2021.zip" class="btn btn--primary btn--large">gyroflow-presets-06-02-2021.zip</a>
