@@ -979,6 +979,7 @@ class BBLStabilizer(Stabilizer):
                 
                 csv_reader = csv.reader(bblcsv)
                 for i, row in enumerate(csv_reader):
+                    #print(row)
                     if(row[0] == "loopIteration"):
                         gyro_index = row.index('gyroADC[0]')
                         break
