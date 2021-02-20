@@ -5,7 +5,7 @@ import random
 import cv2
 import os
 import numpy as np
-from PySide2 import QtCore, QtWidgets, QtGui, Qt
+from PySide2 import QtCore, QtWidgets, QtGui
 from _version import __version__
 from vidgear.gears.helper import get_valid_ffmpeg_path
 import calibrate_video
@@ -1688,7 +1688,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # Check for available encoders and grey out those who are not available
         self.available_encoders = self.get_available_encoders()
-
+        # TODO: Use subprocess or lib to import these dynamically directly from FFmpeg. They dont really change much but would be more robust in terms 
+        # of different FFmpeg versions etc
         supported_encoders = {
             "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"], 
             "h264_nvenc": ["baseline", "main", "high", "high444p"],
@@ -1725,6 +1726,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.video_encoder_select.currentIndexChanged.connect(self.update_profile_select)
         self.video_encoder_select.currentIndexChanged.connect(self.update_bitrate_visibility)
+        self.video_encoder_select.currentIndexChanged.connect(self.update_container_selection)
+        self.update_container_selection()
         self.update_profile_select()
         
         self.export_controls_layout.addWidget(self.video_encoder_text)
@@ -2137,7 +2140,22 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         # get file
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="mp4 (*.mp4);; Quicktime (*.mov)")
+        export_file_filter = ""
+        if self.enable_mp4_export:
+            export_file_filter+="mp4 (*.mp4)"
+        if self.enable_mov_export:
+            if export_file_filter == "":
+                export_file_filter+="Quicktime (*.mov)"
+            else:
+                export_file_filter+=";; Quicktime (*.mov)"
+        if export_file_filter == "":
+            export_file_filter+="All files (*)" # Should not happen (lost state)
+        else:
+            # Add "All files" option in case only one file format is supported to force the option list
+            # to be present, if not it dissapears. Should probably look more into setMimeTypeFilters at a later stage
+            export_file_filter+=";; All files (*)"
+
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
 
         if len(filename[0]) == 0:
@@ -2194,6 +2212,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             enable_bitrate = True
         self.export_bitrate_text.setVisible(enable_bitrate)
         self.export_bitrate.setVisible(enable_bitrate)
+
+    def update_container_selection(self):
+        encoders_with_only_mp4_support = [""]
+        encoders_with_only_mov_support = ["prores_ks"]
+        if self.video_encoder_select.currentText() in encoders_with_only_mp4_support:
+            self.enable_mp4_export = True
+            self.enable_mov_export = False
+        elif self.video_encoder_select.currentText() in encoders_with_only_mov_support:
+            self.enable_mp4_export = False
+            self.enable_mov_export = True
+        else:
+            self.enable_mp4_export = True
+            self.enable_mov_export = True
 
 def main():
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
