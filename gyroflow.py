@@ -2202,7 +2202,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         index = self.video_encoder_select.currentIndex()
         encoder_index = self.encoder_model.index(index, 0, self.video_encoder_select.rootModelIndex())
         self.encoder_profile_select.setRootModelIndex(encoder_index)
-        self.encoder_profile_select.setCurrentIndex(0)
+        h264_encoders = ["libx264", "h264_videotoolbox", "h264_vaapi", "h264_nvenc"]
+        if self.video_encoder_select.currentText() in h264_encoders and self.encoder_profile_select.count() > 2:
+            self.encoder_profile_select.setCurrentIndex(2)  # Make "high" default profile for standard h264 encoders
+        else:
+            self.encoder_profile_select.setCurrentIndex(0)
 
     def update_bitrate_visibility(self):
         encoders_without_bitrate_control = ["prores_ks"]
