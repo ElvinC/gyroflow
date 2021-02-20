@@ -7,6 +7,7 @@ import os
 import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
 from _version import __version__
+from vidgear.gears.helper import get_valid_ffmpeg_path
 import calibrate_video
 import time
 import nonlinear_stretch
@@ -14,7 +15,7 @@ import urllib.request
 import json
 import re
 import calibrate_video
-
+import subprocess
 import bundled_images
 
 
@@ -1685,10 +1686,55 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
+        # Check for available encoders and grey out those who are not available
+        self.available_encoders = self.get_available_encoders()
+        # TODO: Use subprocess or lib to import these dynamically directly from FFmpeg. They dont really change much but would be more robust in terms 
+        # of different FFmpeg versions etc
+        supported_encoders = {
+            "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"], 
+            "h264_nvenc": ["baseline", "main", "high", "high444p"],
+            "h264_vaapi": ["baseline", "main", "high"],
+            "h264_videotoolbox": ["baseline", "main", "high", "extended"], 
+            "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"]
+        }
 
-        self.hw_acceleration_select = QtWidgets.QCheckBox("HW Encoding (experimental)")
-        self.hw_acceleration_select.setChecked(False)
-        self.export_controls_layout.addWidget(self.hw_acceleration_select)
+        self.encoder_model = QtGui.QStandardItemModel()
+        
+        self.video_encoder_text = QtWidgets.QLabel('Video encoder')
+        self.video_encoder_select = QtWidgets.QComboBox()
+        self.video_encoder_select.setModel(self.encoder_model)
+
+        self.encoder_profile_text = QtWidgets.QLabel('Encoder profile')
+        self.encoder_profile_select = QtWidgets.QComboBox()
+        self.encoder_profile_select.setModel(self.encoder_model)
+
+        for encoder, profiles in supported_encoders.items():
+            encoder_item = QtGui.QStandardItem(encoder)
+            # Disable encoders not listed by ffmpeg -encoders
+            if encoder not in self.available_encoders:
+                encoder_item.setEnabled(False)
+            self.encoder_model.appendRow(encoder_item)
+            for profile in profiles:
+                profile_item = QtGui.QStandardItem(profile)
+                encoder_item.appendRow(profile_item)
+
+        # Prevent a unsupported/disabled item to be default selection
+        for i in range(0, self.video_encoder_select.count()):
+            if self.encoder_model.item(i).isEnabled():
+                self.video_encoder_select.setCurrentIndex(i) 
+                break
+
+        self.video_encoder_select.currentIndexChanged.connect(self.update_profile_select)
+        self.video_encoder_select.currentIndexChanged.connect(self.update_bitrate_visibility)
+        self.video_encoder_select.currentIndexChanged.connect(self.update_container_selection)
+        self.update_container_selection()
+        self.update_profile_select()
+        
+        self.export_controls_layout.addWidget(self.video_encoder_text)
+        self.export_controls_layout.addWidget(self.video_encoder_select)
+        self.export_controls_layout.addWidget(self.encoder_profile_text)
+        self.export_controls_layout.addWidget(self.encoder_profile_select)
+
 
         self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
         self.split_screen_select.setChecked(False)
@@ -1702,22 +1748,27 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("Export bitrate [Mbit/s]"))
+        # TODO: Should consider hiding this widget if prores is selected
+        self.export_bitrate_text = QtWidgets.QLabel("Export bitrate [Mbit/s]")
+        self.export_controls_layout.addWidget(self.export_bitrate_text)
         self.export_bitrate = QtWidgets.QDoubleSpinBox(self)
         self.export_bitrate.setDecimals(0)
         self.export_bitrate.setMinimum(1)
         self.export_bitrate.setMaximum(200)
         self.export_bitrate.setValue(20)
+        self.export_bitrate.setVisible(True)
         self.export_controls_layout.addWidget(self.export_bitrate)
+        self.update_bitrate_visibility()
 
         #yuv420p
         self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
         self.pixfmt_select = QtWidgets.QLineEdit()
         self.export_controls_layout.addWidget(self.pixfmt_select)
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg encoder (untested), overwrites HW setting (<tt>ffmpeg -encoders</tt>):"))
-        self.encoder_select = QtWidgets.QLineEdit()
-        self.export_controls_layout.addWidget(self.encoder_select)
+        example_ffmpeg_pipeline = '{"-vcodec": "prores_ks","-profile:v": "hq"}'
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg custom pipeline, overwrites all settings above. \nExample: %s" % example_ffmpeg_pipeline))
+        self.custom_ffmpeg_pipeline = QtWidgets.QLineEdit()
+        self.export_controls_layout.addWidget(self.custom_ffmpeg_pipeline)
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
@@ -1729,7 +1780,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # warning for HW encoding
         render_description = QtWidgets.QLabel(
-        "<b>Note:</b> HW Encoding requires FFMpeg with hardware acceleration support!")
+        "<b>Note:</b> videotoolbox, vaapi and nvenc are HW accelerated encoders and require FFmpeg with hardware acceleration support!")
         render_description.setWordWrap(True)
         self.export_controls_layout.addWidget(render_description)
 
@@ -2089,7 +2140,22 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         # get file
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="mp4 (*.mp4);; Quicktime (*.mov)")
+        export_file_filter = ""
+        if self.enable_mp4_export:
+            export_file_filter+="mp4 (*.mp4)"
+        if self.enable_mov_export:
+            if export_file_filter == "":
+                export_file_filter+="Quicktime (*.mov)"
+            else:
+                export_file_filter+=";; Quicktime (*.mov)"
+        if export_file_filter == "":
+            export_file_filter+="All files (*)" # Should not happen (lost state)
+        else:
+            # Add "All files" option in case only one file format is supported to force the option list
+            # to be present, if not it dissapears. Should probably look more into setMimeTypeFilters at a later stage
+            export_file_filter+=";; All files (*)"
+
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
 
         if len(filename[0]) == 0:
@@ -2097,18 +2163,20 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         split_screen = self.split_screen_select.isChecked()
-        hardware_acceleration = self.hw_acceleration_select.isChecked()
+        #hardware_acceleration = self.hw_acceleration_select.isChecked()
+        vcodec = self.video_encoder_select.currentText()
+        vprofile = self.encoder_profile_select.currentText()
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
         preview = self.display_preview.isChecked()
         output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
-        vcodec = self.encoder_select.text()
         pix_fmt = self.pixfmt_select.text()
+        custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
-                             split_screen = split_screen, hw_accel = hardware_acceleration,
-                             bitrate_mbits = bitrate, display_preview=preview, scale=output_scale,
-                             vcodec=vcodec, pix_fmt = pix_fmt, debug_text=debug_text)
+                             split_screen = split_screen, bitrate_mbits = bitrate,
+                             display_preview=preview, scale=output_scale, vcodec=vcodec, vprofile=vprofile,
+                             pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg)
 
         
 
@@ -2122,8 +2190,45 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def show_warning(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
 
+    def get_available_encoders(self):
+        if(get_valid_ffmpeg_path()):  # Helper function from VidGear
+            ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
+            return ffmpeg_encoders_sp.stdout
+        else:
+            self.show_warning("Could not find FFmpeg installation")
+            return ""
 
+    def update_profile_select(self):
+        index = self.video_encoder_select.currentIndex()
+        encoder_index = self.encoder_model.index(index, 0, self.video_encoder_select.rootModelIndex())
+        self.encoder_profile_select.setRootModelIndex(encoder_index)
+        h264_encoders = ["libx264", "h264_videotoolbox", "h264_vaapi", "h264_nvenc"]
+        if self.video_encoder_select.currentText() in h264_encoders and self.encoder_profile_select.count() > 2:
+            self.encoder_profile_select.setCurrentIndex(2)  # Make "high" default profile for standard h264 encoders
+        else:
+            self.encoder_profile_select.setCurrentIndex(0)
 
+    def update_bitrate_visibility(self):
+        encoders_without_bitrate_control = ["prores_ks"]
+        if self.video_encoder_select.currentText() in encoders_without_bitrate_control:
+            enable_bitrate = False
+        else:
+            enable_bitrate = True
+        self.export_bitrate_text.setVisible(enable_bitrate)
+        self.export_bitrate.setVisible(enable_bitrate)
+
+    def update_container_selection(self):
+        encoders_with_only_mp4_support = [""]
+        encoders_with_only_mov_support = ["prores_ks"]
+        if self.video_encoder_select.currentText() in encoders_with_only_mp4_support:
+            self.enable_mp4_export = True
+            self.enable_mov_export = False
+        elif self.video_encoder_select.currentText() in encoders_with_only_mov_support:
+            self.enable_mp4_export = False
+            self.enable_mov_export = True
+        else:
+            self.enable_mp4_export = True
+            self.enable_mov_export = True
 
 def main():
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
