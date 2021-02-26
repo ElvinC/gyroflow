@@ -1,0 +1,45 @@
+{
+    "name": "Insta360_smo4k_test_test",
+    "note": "test thing",
+    "calibrated_by": "Anonymous",
+    "camera_brand": "Insta360",
+    "camera_model": "smo4k",
+    "lens_model": "test",
+    "camera_setting": "test",
+    "calibrator_version": "0.2.1-alpha",
+    "date": "2021-02-16",
+    "calib_dimension": {
+        "w": 5312,
+        "h": 2988
+    },
+    "num_images": 23,
+    "use_opencv_fisheye": true,
+    "fisheye_params": {
+        "RMS_error": 3.3127699609558086,
+        "camera_matrix": [
+            [
+                2205.5164381127706,
+                0.0,
+                2656.0
+            ],
+            [
+                0.0,
+                2206.1896226752638,
+                1494.0
+            ],
+            [
+                0.0,
+                0.0,
+                1.0
+            ]
+        ],
+        "distortion_coeffs": [
+            0.06460217402642514,
+            -0.02527620463431111,
+            0.03701382834490437,
+            -0.01629030250908159
+        ]
+    },
+    "use_opencv_standard": false,
+    "calib_params": {}
+}
