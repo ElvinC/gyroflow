@@ -1,11 +1,11 @@
 {
-    "name": "GoPro_Session5__4by3 wide",
+    "name": "GoPro_Session5__16by9 wide",
     "note": "",
     "calibrated_by": "Anonymous",
     "camera_brand": "GoPro",
     "camera_model": "Session5",
     "lens_model": "",
-    "camera_setting": "4by3 wide",
+    "camera_setting": "16by9 wide",
     "calibrator_version": "0.2.0-alpha",
     "date": "2021-02-06",
     "calib_dimension": {
