@@ -64,7 +64,7 @@ class GyroIntegrator:
         gyro_data = self.get_raw_data("xyz")
         interarrival = np.diff(timestamps, n=1)
         w = int(self.gyro_sample_rate/100.0) # aggregate over 1%, e.g., 9 gyro samples for 900Hz/900 samples per second
-        interarrival = np.convolve(interarrival, np.ones(w), 'valid') / w
+        interarrival = np.convolve(interarrival, np.ones(w), 'valid') / w   # moving average
         freqs = 1.0/interarrival
         
         median = np.median(freqs)
@@ -80,13 +80,14 @@ class GyroIntegrator:
         print('MAD (normal) of freqs is {}'.format(mad_normal))
         
         thresh = mad_normal if mad_normal > std else std
-        thresh = 5*thresh #corresponds to 100% of observations when following normal distribution
-        outlierMask = np.abs(freqs - median) > thresh
+        thresh = 6*thresh #corresponds to 100% of observations when following normal distribution
+        outlierMask = median - freqs > thresh
         plt.plot(timestamps, gyro_data)
         plt.plot(timestamps[:-1-(w-1)], outlierMask*2)
         plt.show()
         
         plt.hist(freqs, bins=300)
+        plt.yscale("log")
         plt.axvline(x=median+thresh)
         plt.axvline(x=median-thresh)
         plt.axvline(x=median, color='green')
