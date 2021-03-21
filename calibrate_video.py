@@ -252,7 +252,7 @@ class FisheyeCalibrator:
 
         return undistorted_image
 
-    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True):
+    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None):
         """Get undistortion maps
 
         Args:
@@ -271,10 +271,16 @@ class FisheyeCalibrator:
         new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
                 img_dim, np.eye(3), fov_scale=fov_scale)
 
+        R = np.eye(3)
+        
+
+        if type(quat) != type(None):
+            quat = quat.flatten()
+            R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
+
         if update_new_K:
             self.new_K = new_K
-
-        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
+        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, img_dim, cv2.CV_16SC2)
 
         return map1, map2
 

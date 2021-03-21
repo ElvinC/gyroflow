@@ -157,5 +157,65 @@ def mwarp():
     cv2.imshow("img", dst)
     k = cv2.waitKey()
 
+def sonywarp():
+    # size of mesh points
+    meshw = 9
+    meshh = 9
+
+    width = 1920
+    height = 1080
+    print(np.linspace(0, width, meshw)[..., None])
+    start = timeit.default_timer()
+    meshx = np.broadcast_to(np.linspace(0, width, meshw)[..., None], (meshw, meshh)).T.copy()
+    meshy = np.broadcast_to(np.linspace(0, height, meshh)[..., None], (meshh, meshw)).copy()
+
+    dx = []
+    dy = []
+    with open("sony_lens.csv", "r") as f:
+        lines = f.readlines()
+        for l in lines[1:]:
+            s = l.split("\t")
+            dx.append(float(s[0]))
+            dy.append(float(s[1]))
+    dx = np.reshape(dx, (9,9))
+    dy= np.reshape(dy, (9,9))
+
+    meshx += dx * width / 2
+    meshy += dy * height / 2
+    #print(meshx)
+    #print(meshy)
+    #meshx[1,1] = meshx[1,1]
+    #meshy[1,1] = meshy[1,1]
+    #meshx += np.random.random((meshh,meshw)) * 100
+    #meshy += np.random.random((meshh,meshw)) * 100
+    
+    meshx = meshx.astype('float64')
+    meshy = meshy.astype('float64')
+
+    src = cv2.imread('sony_chess.png')
+    src = cv2.resize(src,(width,height))
+    dst = np.zeros_like(src)
+    meshx.shape += (1,)
+    meshy.shape+= (1,)
+    combined = np.concatenate((meshx, meshy), axis=2)
+    map1 = cv2.resize(combined , (width, height), interpolation=cv2.INTER_LINEAR)
+    map2 = map1 # cv2.resize(meshy, (width, height), interpolation=cv2.INTER_CUBIC)
+    map1 = map1.astype('float32')
+    map2 = map2.astype('float32')
+    stop = timeit.default_timer()
+    dst = cv2.remap(src, map1, np.array([]), interpolation=cv2.INTER_LINEAR)
+    print(f"time {start-stop}")
+
+    # draw points
+    for i in range(meshw):
+        for j in range(meshh):
+            pass
+            cv2.circle(dst,(int(meshx[j,i]),int(meshy[j,i])), 3, (255,100,20), thickness=5)
+
+    cv2.imshow("img", dst)
+    k = cv2.waitKey()
+
+
 if __name__ == '__main__':
-    mwarp()
+    #mwarp()
+    sonywarp()

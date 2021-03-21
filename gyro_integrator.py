@@ -29,7 +29,7 @@ class GyroIntegrator:
         self.data[:,1:4] *= gyro_scaling
 
         # Make sure input data is right handed. Final virtual camera rotation is left-handed
-        # while image rotation is right-handed.
+        # while image rotation is right-handed. Improve this later
         self.data[:,2] *= -1
 
         # zero out timestamps
@@ -124,7 +124,9 @@ class GyroIntegrator:
         # https://en.wikipedia.org/wiki/Exponential_smoothing
         # the smooth value corresponds to the time constant
 
-        alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth)
+        alpha = 1
+        if smooth > 0:
+            alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth)
 
         smoothed_orientation = np.zeros(self.orientation_list.shape)
 
