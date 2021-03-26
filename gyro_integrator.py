@@ -88,8 +88,8 @@ class GyroIntegrator:
         
         plt.hist(freqs, bins=300)
         plt.yscale("log")
-        plt.axvline(x=median+thresh)
-        plt.axvline(x=median-thresh)
+        plt.axvline(x=median+thresh, color="red")
+        plt.axvline(x=median-thresh, color="red")
         plt.axvline(x=median, color='green')
         plt.axvline(x=np.mean(freqs), color='orange')
         plt.show()

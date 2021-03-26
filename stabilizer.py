@@ -1180,6 +1180,7 @@ class BBLStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
+        self.integrator.sampleFrequencyAnalysis()
         self.integrator.integrate_all()
         self.times = None
         self.stab_transform = None
