@@ -703,19 +703,22 @@ class Stabilizer:
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
-                fcorr, points, contour = self.undistort.computeOptimalFov(quat = self.stab_transform[frame_num],
+                focalCenter, center, fcorr, points, contour = self.undistort.computeOptimalFov(quat = self.stab_transform[frame_num],
                                                         fov_scale=self.undistort_fov_scale,
                                                         output_dim=out_size)
 
                 #print(fcorr)
 
-                tmap1, tmap2 = self.undistort.get_maps(fcorr,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
+                tmap1, tmap2 = self.undistort.get_maps(fcorr,
+                                                        new_img_dim=(int(self.width * scale),int(self.height*scale)),
+                                                        update_new_K = False, quat = self.stab_transform[frame_num],
+                                                        focalCenter = focalCenter)
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
 
-                #frame_out = cv2.circle(frame_out, (int(cg[0]),int(cg[1])), radius=15, color=(0, 0, 255), thickness=-1)
+                frame_out = cv2.circle(frame_out, (int(center[0]),int(center[1])), radius=15, color=(0, 0, 255), thickness=-1)
                 #print(points)
                 #plt.scatter(points[:,0], points[:,1])
                 frame_out = cv2.rectangle(frame_out, (int(points[0][0]),int(points[0][1])),
