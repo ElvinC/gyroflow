@@ -259,13 +259,14 @@ class FisheyeCalibrator:
 
         (output_width, output_height) = output_dim
         (window_width, window_height) = output_dim
+        (original_width, original_height) = self.calib_dimension
 
         R = np.eye(3)
         if type(quat) != type(None):
             quat = quat.flatten()
             R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
 
-        (original_width, original_height) = self.calib_dimension
+
 
         distorted_points = []
         for i in range(numPoints):
@@ -280,12 +281,9 @@ class FisheyeCalibrator:
         distorted_points = np.array(distorted_points, np.float64)
         distorted_points = np.expand_dims(distorted_points, axis=0) #add extra dimension so opencv accepts points
 
-        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(self.K, self.D,
-                self.calib_dimension, None, fov_scale=fov_scale)
         undistorted_points = cv2.fisheye.undistortPoints(distorted_points, self.K, self.D, R=R, P=self.K)
         undistorted_points = undistorted_points[0,:,:] #remove extra dimension
 
-        #cg = np.mean(undistorted_points, axis=0)
         mtop = np.max(undistorted_points[:(numPoints-1),1])
         mbottom = np.min(undistorted_points[numPoints:(2*numPoints-1),1])
         mleft = np.max(undistorted_points[(2*numPoints):(3*numPoints-1),0])
@@ -320,18 +318,19 @@ class FisheyeCalibrator:
             left = (mleft+mright)/2 - window_width/2
             right = (mleft+mright)/2 + window_width/2
 
-
-        fcorr = fcorr + 0.39
-
-        reprojContour = np.array([output_width/2,output_height/2]) + (undistorted_points - np.array([original_width/2, original_height/2]))/fcorr
+        fcorr = fcorr + 0.22
 
         boundary = np.array(((left,top), (right,bottom), (left, bottom), (right, top)))
-        boundary = np.array([output_width/2,output_height/2]) + (boundary - np.array([original_width/2, original_height/2]))/fcorr
+        newFocalCenter = np.mean(boundary, axis=0)
 
-        #reprojContour += np.array([400, 500])
-        return fcorr, boundary, reprojContour
+        #reproject
+        boundary = np.array([output_width/2,output_height/2]) + (boundary - newFocalCenter)/fcorr
+        center = np.mean(boundary, axis=0)
+        reprojContour = np.array([output_width/2,output_height/2]) + (undistorted_points - newFocalCenter)/fcorr
 
-    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None):
+        return newFocalCenter, center, fcorr, boundary, reprojContour
+
+    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
         """Get undistortion maps
 
         Args:
@@ -341,6 +340,8 @@ class FisheyeCalibrator:
         Returns:
             (np.ndarray,np.ndarray): Undistortion maps
         """
+
+        focalCenter = focalCenter if focalCenter is not None else np.array([0,0])
 
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
 
@@ -360,7 +361,11 @@ class FisheyeCalibrator:
         new_K = np.copy(self.K)
         new_K[0][0] = new_K[0][0] * 1.0/fov_scale
         new_K[1][1] = new_K[1][1] * 1.0/fov_scale
+        new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* 1.0/fov_scale + new_img_dim[0]/2
+        new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* 1.0/fov_scale + new_img_dim[1]/2
 
+        #print(self.K)
+        #print(new_K)
 
         if update_new_K:
             self.new_K = new_K
