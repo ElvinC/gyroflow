@@ -7,6 +7,10 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
 from scipy.spatial.transform import Rotation
+from scipy import signal, interpolate
+import math
+
+from matplotlib import pyplot as plt
 
 import sys
 
@@ -253,20 +257,109 @@ class FisheyeCalibrator:
         return undistorted_image
 
 
-    def computeOptimalFov(self, quat = None, fov_scale=1.5, numPoints = 9, output_dim = None):
+    def min_rolling(self, a, window,axis =1):
+        shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+        strides = a.strides + (a.strides[-1],)
+        rolling = np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+        return np.min(rolling,axis=axis)
 
-        output_dim = output_dim if output_dim else self.calib_dimension
+    def findFov(self, center, box, output_dim):
+        (original_width, original_height) = self.calib_dimension
+        (mleft,mright,mtop,mbottom) = box
+        (output_width, output_height) = output_dim
+        output_ratio = float(output_width)/float(output_height)
+        xcoord = center[0]
+        ycoord = center[1]
+        xminDist = 2*np.min(np.abs([mleft-xcoord, mright-xcoord]))
+        yminDist = 2*np.min(np.abs([mbottom-ycoord, mtop-ycoord]))
+        ratio = xminDist/yminDist
+        fovCorr =  0
+        if output_ratio > ratio:
+            print("fdsafoid;snfaio;dsja")
+            fovCorr = xminDist/original_width
+        else:
+            fovCorr = yminDist/original_height
+        return fovCorr
 
+    def adaptiveZoom(self, quaternions, output_dim, fps):
+        smoothingWindow = 3.0 #seconds
+        smoothingNumFrames = int(smoothingWindow * fps)
+        if smoothingNumFrames % 2 == 0:
+            smoothingNumFrames = smoothingNumFrames+1
+
+        boundaryBoxes = [self.boundingBox(quat=q, output_dim=output_dim) for q in quaternions]
+        focusWindows = [self.findFocalCenter(box, output_dim=output_dim) for box in boundaryBoxes]
+
+        focusWindows = np.array(focusWindows)
+        focusWindowsPad = np.pad(focusWindows, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)), (0,0) ), mode='edge')
+        filterCoeff = signal.gaussian(smoothingNumFrames,smoothingNumFrames/3)
+        filterCoeff = filterCoeff / np.sum(filterCoeff)
+        smoothXpos = np.convolve(focusWindowsPad[:,0], filterCoeff, 'valid')
+        smoothYpos = np.convolve(focusWindowsPad[:,1], filterCoeff, 'valid')
+        smoothCenter = np.stack((smoothXpos, smoothYpos), axis=-1)
+
+        fovValues = [self.findFov(center,box,output_dim) for center, box in zip(smoothCenter,boundaryBoxes)]
+        fovValues = np.array(fovValues)
+        fovValuesPad = np.pad(fovValues, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)) ), mode='edge')
+        fovMin = self.min_rolling(fovValuesPad, window=smoothingNumFrames)
+        fovSmooth = np.convolve(np.pad(fovMin, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)) ), mode='edge'), filterCoeff, 'valid')
+
+        plt.plot(focusWindows)
+        plt.plot(smoothXpos)
+        plt.plot(smoothYpos)
+        plt.show()
+        plt.plot(fovValues)
+        plt.plot(fovMin)
+        plt.plot(fovSmooth)
+        plt.show()
+
+        #fovValues = [1.22 for center, box in zip(smoothCenter,boundaryBoxes)]
+
+        return fovValues, smoothCenter
+
+
+    def findFocalCenter(self, box, output_dim):
+        (mleft,mright,mtop,mbottom) = box
         (output_width, output_height) = output_dim
         (window_width, window_height) = output_dim
+
+        maxX = mright-mleft
+        maxY = mbottom-mtop
+
+        ratio = maxX/maxY
+        output_ratio = float(output_width)/float(output_height)
+
+        fX = 0
+        fY = 0
+        if output_ratio > ratio:
+            print("fdsafdsaf")
+            window_width = maxX
+            window_height = maxX/output_ratio
+            fX = mleft + window_width/2
+            fY = output_height/2
+            if fY+window_height/2 > mbottom:
+                fY = mbottom - window_height/2
+            elif fY-window_height/2 < mtop:
+                fY = mtop + window_height/2
+        else:
+            window_height = maxY
+            window_width = maxY*output_ratio
+            fY = mtop + window_height/2
+            fX = output_width/2
+            if fX+window_width/2 > mright:
+                fX = mright - window_width/2
+            elif fX-window_width/2 < mleft:
+                fX = mleft + window_width/2
+        return (fX,fY) #, window_width, window_height)
+
+
+    def boundingBox(self, quat, output_dim, numPoints = 9):
         (original_width, original_height) = self.calib_dimension
 
         R = np.eye(3)
         if type(quat) != type(None):
             quat = quat.flatten()
             R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
-
-
 
         distorted_points = []
         for i in range(numPoints):
@@ -289,46 +382,7 @@ class FisheyeCalibrator:
         mleft = np.max(undistorted_points[(2*numPoints):(3*numPoints-1),0])
         mright = np.min(undistorted_points[(3*numPoints):,0])
 
-        maxX = mright-mleft
-        maxY = mbottom-mtop
-
-        ratio = maxX/maxY
-        output_ratio = float(output_width)/float(output_height)
-
-        fcorr = 1.0
-        top = 0
-        bottom = 0
-        left = 0
-        right = 0
-
-        if output_ratio > ratio:
-            fcorr = output_width/maxX
-            window_width = maxX
-            window_height = maxX/output_ratio
-            left = mleft
-            right = mright
-            top = (mtop+mbottom)/2 - window_height/2
-            bottom = (mtop+mbottom)/2 + window_height/2
-        else:
-            fcorr = output_height/maxY
-            window_height = maxY
-            window_width = maxY*output_ratio
-            top = mtop
-            bottom = mbottom
-            left = (mleft+mright)/2 - window_width/2
-            right = (mleft+mright)/2 + window_width/2
-
-        fcorr = fcorr + 0.22
-
-        boundary = np.array(((left,top), (right,bottom), (left, bottom), (right, top)))
-        newFocalCenter = np.mean(boundary, axis=0)
-
-        #reproject
-        boundary = np.array([output_width/2,output_height/2]) + (boundary - newFocalCenter)/fcorr
-        center = np.mean(boundary, axis=0)
-        reprojContour = np.array([output_width/2,output_height/2]) + (undistorted_points - newFocalCenter)/fcorr
-
-        return newFocalCenter, center, fcorr, boundary, reprojContour
+        return (mleft,mright,mtop,mbottom)
 
     def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
         """Get undistortion maps
@@ -363,6 +417,9 @@ class FisheyeCalibrator:
         new_K[1][1] = new_K[1][1] * 1.0/fov_scale
         new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* 1.0/fov_scale + new_img_dim[0]/2
         new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* 1.0/fov_scale + new_img_dim[1]/2
+
+        #new_K[0][0] = new_K[1][1] * 0.98
+        #new_K[1][1] = new_K[1][1] * 0.98
 
         #print(self.K)
         #print(new_K)
