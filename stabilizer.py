@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import csv
 import platform
+import math
 
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
 from scipy.spatial.transform import Rotation
@@ -598,7 +599,6 @@ class Stabilizer:
 
         return sum_squared_diff
 
-
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
                    debug_text = False, custom_ffmpeg = ""):
@@ -673,6 +673,10 @@ class Stabilizer:
 
         #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
+        print("Starting to compute optimal Fov and center")
+        fcorr, focalCenter = self.undistort.adaptiveZoom(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps)
+        print("Done computing optimal Fov and center")
+
         i = 0
         while(True):
             # Read next frame
@@ -702,28 +706,26 @@ class Stabilizer:
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
-                focalCenter, center, fcorr, points, contour = self.undistort.computeOptimalFov(quat = self.stab_transform[frame_num],
-                                                        fov_scale=self.undistort_fov_scale,
-                                                        output_dim=out_size)
-
-                #print(fcorr)
-
-                tmap1, tmap2 = self.undistort.get_maps(fcorr,
+                fac = 0.9
+                
+                tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
                                                         new_img_dim=(int(self.width * scale),int(self.height*scale)),
                                                         update_new_K = False, quat = self.stab_transform[frame_num],
-                                                        focalCenter = focalCenter)
+                                                        focalCenter = focalCenter[frame_num])
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
 
-                frame_out = cv2.circle(frame_out, (int(center[0]),int(center[1])), radius=15, color=(0, 0, 255), thickness=-1)
+                #frame_out = cv2.circle(frame_out, (int(self.width/2),int(self.height/2)), radius=15, color=(0, 0, 255), thickness=-1)
                 #print(points)
                 #plt.scatter(points[:,0], points[:,1])
-                frame_out = cv2.rectangle(frame_out, (int(points[0][0]),int(points[0][1])),
-                                                    (int(points[1][0]),int(points[1][1])), (255,0,0), 3)
-                for p in contour:
-                    frame_out = cv2.circle(frame_out, (int(p[0]),int(p[1])), radius=15, color=(255, 255, 0), thickness=-1)
+                topleft = ( int(self.width/2*(1-fac)), int(self.height/2*(1-fac)) )
+                bottomright = ( int(self.width/2*(1+fac)), int(self.height/2*(1+fac)) )
+                frame_out = cv2.rectangle(frame_out, topleft,
+                                                     bottomright, (255,0,0), 3)
+                #for p in contour:
+                #    frame_out = cv2.circle(frame_out, (int(p[0]),int(p[1])), radius=5, color=(0, 255, 255), thickness=-1)
 
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
                 #cv2.imshow("Before and After", frame_undistort)
@@ -1522,7 +1524,7 @@ if __name__ == "__main__":
     #stab.auto_sync_stab(0.24, 870, 2100, 120, debug_plots=True)
     #stab.manual_sync_correction(5.4744, 5.6012, smooth=0.24)
     stab.manual_sync_correctionCLI(5.4744, 5.6012, 870, 2100, 120, 0.24)
-    stab.renderfile(25.0, 45, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (3840,2160), split_screen = False,
+    stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (3840,2160), split_screen = False,
                    bitrate_mbits = 20, display_preview = True, scale=1, vcodec = "libx264", vprofile="high", pix_fmt = "",
                    debug_text = False, custom_ffmpeg = "")
     exit()
