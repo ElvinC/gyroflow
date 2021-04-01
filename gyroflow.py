@@ -1637,7 +1637,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(text)
 
         # output size choice
-        self.out_size_text = QtWidgets.QLabel("Output crop: ")
+        self.out_size_text = QtWidgets.QLabel("Output dimensions: ")
         self.export_controls_layout.addWidget(self.out_size_text)
 
         self.out_width_control = QtWidgets.QSpinBox(self)
@@ -1657,20 +1657,20 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.out_width_control)
         self.export_controls_layout.addWidget(self.out_height_control)
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("Output upscale"))
+        #self.export_controls_layout.addWidget(QtWidgets.QLabel("Output upscale"))
 
-        self.out_scale_control = QtWidgets.QSpinBox(self)
-        self.out_scale_control.setMinimum(1)
-        self.out_scale_control.setMaximum(4)
-        self.out_scale_control.setValue(1)
-        self.export_controls_layout.addWidget(self.out_scale_control)
+        #self.out_scale_control = QtWidgets.QSpinBox(self)
+        #self.out_scale_control.setMinimum(1)
+        #self.out_scale_control.setMaximum(4)
+        #self.out_scale_control.setValue(1)
+        #self.export_controls_layout.addWidget(self.out_scale_control)
 
 
-        explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
-        "and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
-        explaintext.setWordWrap(True)
-        explaintext.setMinimumHeight(60)
-        self.export_controls_layout.addWidget(explaintext)
+        #explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
+        #"and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
+        #explaintext.setWordWrap(True)
+        #explaintext.setMinimumHeight(60)
+        #self.export_controls_layout.addWidget(explaintext)
 
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
         self.export_starttime = QtWidgets.QDoubleSpinBox(self)
@@ -1686,27 +1686,38 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
-        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 2.0")
+        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 1.0")
         self.export_controls_layout.addWidget(self.fov_smoothing_text)
         self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.fov_smoothing.setMinimum(5)
-        self.fov_smoothing.setValue(20)
-        self.fov_smoothing.setMaximum(100)
+        self.fov_smoothing.setMinimum(0)
+        self.fov_smoothing.setValue(10)
+        self.fov_smoothing.setMaximum(40)
         self.fov_smoothing.setSingleStep(1)
         self.fov_smoothing.setTickInterval(1)
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
         self.export_controls_layout.addWidget(self.fov_smoothing)
 
-        self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 2.0")
+        self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 1.0")
         self.export_controls_layout.addWidget(self.center_smoothing_text)
         self.center_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.center_smoothing.setMinimum(5)
-        self.center_smoothing.setValue(20)
-        self.center_smoothing.setMaximum(100)
+        self.center_smoothing.setMinimum(0)
+        self.center_smoothing.setValue(10)
+        self.center_smoothing.setMaximum(40)
         self.center_smoothing.setSingleStep(1)
         self.center_smoothing.setTickInterval(1)
         self.center_smoothing.valueChanged.connect(self.center_smoothing_changed)
         self.export_controls_layout.addWidget(self.center_smoothing)
+
+        self.zoom_text = QtWidgets.QLabel("Zoom Factor: 1.0")
+        self.export_controls_layout.addWidget(self.zoom_text)
+        self.zoom = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.zoom.setMinimum(5)
+        self.zoom.setValue(10)
+        self.zoom.setMaximum(20)
+        self.zoom.setSingleStep(1)
+        self.zoom.setTickInterval(1)
+        self.zoom.valueChanged.connect(self.zoom_changed)
+        self.export_controls_layout.addWidget(self.zoom)
 
         # Check for available encoders and grey out those who are not available
         self.available_encoders = self.get_available_encoders()
@@ -2023,6 +2034,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         val = self.center_smoothing.value() / 10
         self.center_smoothing_text.setText("Smoothing Window Center (sec): {}".format(val))
 
+    def zoom_changed(self):
+        val = self.zoom.value() / 10
+        self.zoom_text.setText("Zoom Factor: {}".format(val))
+
     def update_out_size(self):
         """Update export image size
         """
@@ -2198,18 +2213,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         vprofile = self.encoder_profile_select.currentText()
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s
         preview = self.display_preview.isChecked()
-        output_scale = int(self.out_scale_control.value())
+        #output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
         smoothingFocus=self.fov_smoothing.value()/10
         smoothingCenter=self.center_smoothing.value()/10
+        zoomVal = self.zoom.value() /10
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
-                             display_preview=preview, scale=output_scale, vcodec=vcodec, vprofile=vprofile,
+                             display_preview=preview, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
-                             smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter)
+                             smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter, zoom=zoomVal)
 
 
 
