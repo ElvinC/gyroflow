@@ -275,35 +275,41 @@ class FisheyeCalibrator:
         ratio = xminDist/yminDist
         fovCorr =  0
         if output_ratio > ratio:
-            print("fdsafoid;snfaio;dsja")
             fovCorr = xminDist/original_width
         else:
             fovCorr = yminDist/original_height
         return fovCorr
 
-    def adaptiveZoom(self, quaternions, output_dim, fps):
-        smoothingWindow = 3.0 #seconds
-        smoothingNumFrames = int(smoothingWindow * fps)
+    def adaptiveZoom(self, quaternions, output_dim, fps, smoothingFocus=2.0, smoothingCenter=2.0):
+        print(locals())
+        smoothingNumFrames = int(smoothingCenter * fps)
         if smoothingNumFrames % 2 == 0:
             smoothingNumFrames = smoothingNumFrames+1
+
+        smoothingFocusFrames = int(smoothingFocus * fps)
+        if smoothingFocusFrames % 2 == 0:
+            smoothingFocusFrames = smoothingFocusFrames+1
 
         boundaryBoxes = [self.boundingBox(quat=q, output_dim=output_dim) for q in quaternions]
         focusWindows = [self.findFocalCenter(box, output_dim=output_dim) for box in boundaryBoxes]
 
         focusWindows = np.array(focusWindows)
         focusWindowsPad = np.pad(focusWindows, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)), (0,0) ), mode='edge')
-        filterCoeff = signal.gaussian(smoothingNumFrames,smoothingNumFrames/3)
+        filterCoeff = signal.gaussian(smoothingNumFrames,smoothingNumFrames/6)
         filterCoeff = filterCoeff / np.sum(filterCoeff)
         smoothXpos = np.convolve(focusWindowsPad[:,0], filterCoeff, 'valid')
         smoothYpos = np.convolve(focusWindowsPad[:,1], filterCoeff, 'valid')
         smoothCenter = np.stack((smoothXpos, smoothYpos), axis=-1)
+        #smoothCenter = [(output_dim[0]/2,output_dim[1]/2) for s in smoothCenter]
 
         fovValues = [self.findFov(center,box,output_dim) for center, box in zip(smoothCenter,boundaryBoxes)]
         fovValues = np.array(fovValues)
-        fovValuesPad = np.pad(fovValues, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)) ), mode='edge')
-        fovMin = self.min_rolling(fovValuesPad, window=smoothingNumFrames)
-        fovSmooth = np.convolve(np.pad(fovMin, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)) ), mode='edge'), filterCoeff, 'valid')
-
+        filterCoeffFocus = signal.gaussian(smoothingFocusFrames,smoothingFocusFrames/6)
+        filterCoeffFocus = filterCoeffFocus / np.sum(filterCoeffFocus)
+        fovValuesPad = np.pad(fovValues, ( (int(smoothingFocusFrames/2), int(smoothingFocusFrames/2)) ), mode='edge')
+        fovMin = self.min_rolling(fovValuesPad, window=smoothingFocusFrames)
+        fovSmooth = np.convolve(np.pad(fovMin, ( (int(smoothingFocusFrames/2), int(smoothingFocusFrames/2)) ), mode='edge'),
+                                        filterCoeffFocus, 'valid')
         plt.plot(focusWindows)
         plt.plot(smoothXpos)
         plt.plot(smoothYpos)
@@ -313,9 +319,7 @@ class FisheyeCalibrator:
         plt.plot(fovSmooth)
         plt.show()
 
-        #fovValues = [1.22 for center, box in zip(smoothCenter,boundaryBoxes)]
-
-        return fovValues, smoothCenter
+        return fovSmooth, smoothCenter
 
 
     def findFocalCenter(self, box, output_dim):

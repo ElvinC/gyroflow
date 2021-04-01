@@ -38,7 +38,7 @@ class Launcher(QtWidgets.QWidget):
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.setFixedWidth(450)
-        
+
         # image
         pixmap = QtGui.QPixmap(':/media/logo_rev0_w400.png')
         self.top_logo = QtWidgets.QLabel()
@@ -109,7 +109,7 @@ class Launcher(QtWidgets.QWidget):
         if self.calibrator_utility:
             if self.calibrator_utility.isVisible():
                 return
-        
+
         self.calibrator_utility = CalibratorUtility()
         self.calibrator_utility.resize(500, 500)
         self.calibrator_utility.show()
@@ -121,7 +121,7 @@ class Launcher(QtWidgets.QWidget):
         if self.stabilizer_utility:
             if self.stabilizer_utility.isVisible():
                 return
-        
+
         self.stab_utility = StabUtility()
         self.stab_utility.resize(500, 500)
         self.stab_utility.show()
@@ -142,7 +142,7 @@ class Launcher(QtWidgets.QWidget):
         if self.stretch_utility:
             if self.calibrator_utility.isVisible():
                 return
-        
+
         self.stretch_utility = StretchUtility()
         self.stretch_utility.resize(500, 500)
         self.stretch_utility.show()
@@ -157,7 +157,7 @@ class Launcher(QtWidgets.QWidget):
             extra = ""
 
             diff = [int(A) - int(B) for A,B in zip(new,current)]
-            val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
+            val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0
             print(val)
             if newest_version.strip() == __version__.strip():
                 extra = "Not much to see here:"
@@ -168,7 +168,7 @@ class Launcher(QtWidgets.QWidget):
             else:
                 extra = "Spot the difference:"
 
-           
+
             msg_window = QtWidgets.QMessageBox(self)
             msg_window.setIcon(QtWidgets.QMessageBox.Information)
             msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
@@ -242,7 +242,7 @@ class VideoThread(QtCore.QThread):
         for i in range(len(self.map1s)):
             # apply the maps using linear interpolation for now
             rgbImage = cv2.remap(rgbImage, self.map1s[i], self.map2s[i], cv2.INTER_LINEAR)
-            
+
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
 
@@ -269,7 +269,7 @@ class VideoPlayer(QtWidgets.QLabel):
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
         self.pixmap = QtGui.QPixmap(img)
         #self.setPixmap(self.pixmap)
-        
+
         self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
 
 
@@ -331,13 +331,13 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.frame_width = 1920 # placeholder
         self.frame_height = 1080
         self.num_frames = 0
-        
+
 
         # initialize thread for video player with frame update function
         self.thread = VideoThread(self, self.set_seek_frame)
         self.thread.changePixmap.connect(self.setImage)
         self.thread.start()
-        
+
     @QtCore.Slot(QtGui.QImage)
     def setImage(self, image):
         pixmap = QtGui.QPixmap.fromImage(image)
@@ -385,7 +385,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
     def update_frame(self):
         self.thread.update_once = True
-    
+
     def next_frame(self):
         self.thread.next_frame = True
 
@@ -393,7 +393,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.is_seeking = True
         self.was_playing_before = self.thread.playing
         self.stop()
-    
+
     def stop_seek(self):
         self.is_seeking = False
 
@@ -421,14 +421,14 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         selected_frame = int(self.num_frames * self.time_slider.value() / self.seek_ticks)
         print(selected_frame)
         self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, selected_frame)
-        
+
         # restart if it was playing
         if (was_playing or self.was_playing_before) and not self.is_seeking:
             self.play()
         else:
             self.next_frame()
 
-        
+
     def set_seek_frame(self, frame_pos):
         """Set the seek bar position to match frame
 
@@ -467,13 +467,13 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         """Qt window containing camera calibration utility
         """
 
-        
+
 
         super().__init__()
 
         calib_input = QtWidgets.QInputDialog.getText(self, "Calibration setting","Calibration chessboard size. w, h",
                                                      QtWidgets.QLineEdit.Normal, "9,6")[0].split(",")
-        
+
         try:
             w, h = [min(max(int(x), 1),30) for x in calib_input]
             self.chessboard_size = (w,h)
@@ -526,14 +526,14 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.add_frame_button = QtWidgets.QPushButton("Add current frame")
         self.add_frame_button.setMinimumHeight(self.button_height)
         self.add_frame_button.clicked.connect(self.add_current_frame)
-        
+
         self.calib_controls_layout.addWidget(self.add_frame_button)
 
         # button for recomputing image stretching maps
         self.del_frame_button = QtWidgets.QPushButton("Remove last frame")
         self.del_frame_button.setMinimumHeight(self.button_height)
         self.del_frame_button.clicked.connect(self.remove_frame)
-        
+
         self.calib_controls_layout.addWidget(self.del_frame_button)
 
         # button for recomputing image stretching maps
@@ -548,7 +548,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.calib_controls_layout.addWidget(self.info_text)
 
         self.fov_scale = 1.4
-        
+
         # slider for adjusting FOV
         self.fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.fov_scale))
         self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
@@ -587,12 +587,12 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         completer = QtWidgets.QCompleter(cam_company_list)
         completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
         # create line edit and add auto complete
-                            
+
         self.cam_company_input = QtWidgets.QLineEdit()
         self.cam_company_input.setCompleter(completer)
         self.cam_company_input.setPlaceholderText(random.choice(cam_company_list + ["Potatocam"]))
         self.right_layout.addWidget(self.cam_company_input)
-        
+
         self.right_layout.addWidget(QtWidgets.QLabel("Camera make (*)"))
         self.cam_model_input = QtWidgets.QLineEdit()
         self.cam_model_input.setPlaceholderText(random.choice(["Hero5", "D5100", "Hero8", "Komodo", "Pocket Cinema", "2000D", "Alexa", "Potato"])) # Don't ask...
@@ -625,7 +625,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.export_button.setMinimumHeight(self.button_height)
         self.export_button.clicked.connect(self.save_preset_file)
         self.export_button.setEnabled(False)
-        
+
         self.right_layout.addWidget(self.export_button, alignment=QtCore.Qt.AlignBottom)
         self.right_layout.addWidget(QtWidgets.QLabel("Want to help? Send new presets here:<br><a href='http://gyroflow.xyz/lens'>http://gyroflow.xyz/lens</a>"))
 
@@ -710,7 +710,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.chess_window.setLayout(self.chess_layout)
 
         # VideoPlayer class doubles as a auto resizing image viewer
-        
+
 
         # generate chessboard pattern so no external images are needed
 
@@ -734,7 +734,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         # convert to Qt image
         h, w = chess_pic.shape
         convertToQtFormat = QtGui.QImage(chess_pic.data, w, h, w, QtGui.QImage.Format_Grayscale8)
-        
+
         # VideoPlayer doubles as a autoresiznig image viewer
         chess_viewer = VideoPlayer(convertToQtFormat.copy())
 
@@ -742,7 +742,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.chess_window.resize(500, 500)
         self.chess_window.show()
-        
+
 
     def closeEvent(self, event):
         print("Closing now")
@@ -795,14 +795,14 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             self.show_warning("No output file given")
             return
 
-        self.calibrator.save_calibration_json(filename[0], calib_name=calib_name, camera_brand=cam_brand, camera_model=cam_model, 
+        self.calibrator.save_calibration_json(filename[0], calib_name=calib_name, camera_brand=cam_brand, camera_model=cam_model,
                                               lens_model=cam_lens, camera_setting=cam_setting, note=cam_note, calibrated_by=calibrated_by)
 
     def show_error(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awfully wrong", msg)
 
         return
-        
+
         #self.err_window = QtWidgets.QMessageBox(self)
         #self.err_window.setIcon(QtWidgets.QMessageBox.Warning)
         #self.err_window.setText(msg)
@@ -834,7 +834,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.update_calib_info()
 
-        
+
 
     def update_calib_info(self):
         """ Update the status text in the utility
@@ -844,7 +844,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
                                                                                 self.calibrator.num_images_used,
                                                                                 self.calibrator.RMS_error,
                                                                                 self.calib_msg)
-    
+
         self.info_text.setText(txt)
 
         # enable/disable buttons
@@ -852,7 +852,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             self.process_frames_btn.setEnabled(True)
         else:
             self.process_frames_btn.setEnabled(False)
- 
+
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
             self.export_button.setEnabled(True)
@@ -935,7 +935,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
 
         self.stretch_controls_layout.addWidget(self.expo_text)
-        self.stretch_controls_layout.addWidget(self.expo_slider)        
+        self.stretch_controls_layout.addWidget(self.expo_slider)
 
         # checkmark for showing untouched area
         self.show_safe_check = QtWidgets.QCheckBox("Show safe area: ")
@@ -954,7 +954,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.out_width_control.setValue(1920)
         self.out_width_control.valueChanged.connect(self.update_out_size)
 
-        self.stretch_controls_layout.addWidget(self.out_width_control)       
+        self.stretch_controls_layout.addWidget(self.out_width_control)
 
         # output size choice
         self.out_height_control = QtWidgets.QSpinBox(self)
@@ -963,18 +963,18 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.out_height_control.setValue(1080)
         self.out_height_control.valueChanged.connect(self.update_out_size)
 
-        self.stretch_controls_layout.addWidget(self.out_height_control)   
+        self.stretch_controls_layout.addWidget(self.out_height_control)
 
         # button for recomputing image stretching maps
         self.recompute_stretch_button = QtWidgets.QPushButton("Apply settings")
         self.recompute_stretch_button.clicked.connect(self.recompute_stretch)
-        
+
         self.stretch_controls_layout.addWidget(self.recompute_stretch_button)
 
         # button for recomputing image stretching maps
         self.export_button = QtWidgets.QPushButton("Export video")
         self.export_button.clicked.connect(self.export_video)
-        
+
         self.stretch_controls_layout.addWidget(self.export_button)
 
         # add control bar to main layout
@@ -997,7 +997,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         self.infile_path = ""
 
-        
+
 
         self.show()
 
@@ -1007,7 +1007,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.nonlin = nonlinear_stretch.NonlinearStretch((1280,720), (1920,1080))
 
     def open_file_func(self):
-        """Open file using Qt filedialog 
+        """Open file using Qt filedialog
         """
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
         self.infile_path = path[0]
@@ -1019,7 +1019,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         self.video_viewer.next_frame()
 
-        
+
 
     def closeEvent(self, event):
         print("Closing now")
@@ -1071,7 +1071,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
             self.video_viewer.add_vert_lines(line1)
             self.video_viewer.add_vert_lines(line2)
-        
+
         self.video_viewer.update_frame()
 
     def export_video(self):
@@ -1093,7 +1093,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         if len(filename[0]) == 0:
             self.show_error("No output file given")
             return
-        
+
         self.nonlin.stretch_save_video(self.infile_path, filename[0])
 
     def show_error(self, msg):
@@ -1164,7 +1164,7 @@ class StabUtility(QtWidgets.QMainWindow):
 
 
         self.main_controls_layout.addWidget(self.crop_text)
-        self.main_controls_layout.addWidget(self.crop_slider)        
+        self.main_controls_layout.addWidget(self.crop_slider)
 
         # output size choice
         self.out_size_text = QtWidgets.QLabel("Output size: ")
@@ -1176,7 +1176,7 @@ class StabUtility(QtWidgets.QMainWindow):
         self.out_width_control.setValue(1920)
         self.out_width_control.valueChanged.connect(self.update_out_size)
 
-        self.main_controls_layout.addWidget(self.out_width_control)       
+        self.main_controls_layout.addWidget(self.out_width_control)
 
         # output size choice
         self.out_height_control = QtWidgets.QSpinBox(self)
@@ -1185,18 +1185,18 @@ class StabUtility(QtWidgets.QMainWindow):
         self.out_height_control.setValue(1080)
         self.out_height_control.valueChanged.connect(self.update_out_size)
 
-        self.main_controls_layout.addWidget(self.out_height_control)   
+        self.main_controls_layout.addWidget(self.out_height_control)
 
         # button for recomputing image stretching maps
         self.recompute_stab_button = QtWidgets.QPushButton("Apply settings and recompute")
         self.recompute_stab_button.clicked.connect(self.recompute_stab)
-        
+
         self.main_controls_layout.addWidget(self.recompute_stab_button)
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export video")
         self.export_button.clicked.connect(self.export_video)
-        
+
         self.main_controls_layout.addWidget(self.export_button)
 
         # add control bar to main layout
@@ -1223,17 +1223,17 @@ class StabUtility(QtWidgets.QMainWindow):
 
         self.infile_path = ""
 
-        
+
 
         self.show()
 
         self.main_widget.show()
 
         # non linear setup
-        
+
 
     def open_file_func(self):
-        """Open file using Qt filedialog 
+        """Open file using Qt filedialog
         """
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
         self.infile_path = path[0]
@@ -1245,7 +1245,7 @@ class StabUtility(QtWidgets.QMainWindow):
 
     def open_preset_func(self):
         pass
-        
+
 
     def closeEvent(self, event):
         print("Closing now")
@@ -1300,7 +1300,7 @@ class StabUtility(QtWidgets.QMainWindow):
         if len(filename[0]) == 0:
             self.show_error("No output file given")
             return
-        
+
         pass
 
     def show_error(self, msg):
@@ -1360,7 +1360,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_vid_button = QtWidgets.QPushButton("Open video file")
         self.open_vid_button.setMinimumHeight(30)
         self.open_vid_button.clicked.connect(self.open_video_func)
-        
+
         self.input_controls_layout.addWidget(self.open_vid_button)
 
         # lens preset
@@ -1426,7 +1426,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.fpv_tilt_control)
 
 
-        
+
         self.camera_type_text = QtWidgets.QLabel('Camera type (integrated gyro)')
         self.input_controls_layout.addWidget(self.camera_type_text)
 
@@ -1557,7 +1557,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stabilization_algo_select.addItem("SLERP-based IIR (standard)")
         self.stabilization_algo_select.addItem("(More methods under development)")
         self.sync_controls_layout.addWidget(self.stabilization_algo_select)
-        
+
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
         self.smooth_max_period = 30 # seconds
@@ -1593,8 +1593,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.sync_controls_layout.addWidget(self.fov_text)
-        self.sync_controls_layout.addWidget(self.fov_slider)   
-        
+        self.sync_controls_layout.addWidget(self.fov_slider)
+
         self.sync_debug_select = QtWidgets.QCheckBox("Display sync plots")
         self.sync_debug_select.setChecked(True)
         self.sync_controls_layout.addWidget(self.sync_debug_select)
@@ -1661,7 +1661,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.out_height_control.valueChanged.connect(self.update_out_size)
 
         self.export_controls_layout.addWidget(self.out_width_control)
-        self.export_controls_layout.addWidget(self.out_height_control)   
+        self.export_controls_layout.addWidget(self.out_height_control)
 
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Output upscale"))
 
@@ -1692,20 +1692,42 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
+        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 2.0")
+        self.export_controls_layout.addWidget(self.fov_smoothing_text)
+        self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_smoothing.setMinimum(5)
+        self.fov_smoothing.setValue(20)
+        self.fov_smoothing.setMaximum(100)
+        self.fov_smoothing.setSingleStep(1)
+        self.fov_smoothing.setTickInterval(1)
+        self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
+        self.export_controls_layout.addWidget(self.fov_smoothing)
+
+        self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 2.0")
+        self.export_controls_layout.addWidget(self.center_smoothing_text)
+        self.center_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.center_smoothing.setMinimum(5)
+        self.center_smoothing.setValue(20)
+        self.center_smoothing.setMaximum(100)
+        self.center_smoothing.setSingleStep(1)
+        self.center_smoothing.setTickInterval(1)
+        self.center_smoothing.valueChanged.connect(self.center_smoothing_changed)
+        self.export_controls_layout.addWidget(self.center_smoothing)
+
         # Check for available encoders and grey out those who are not available
         self.available_encoders = self.get_available_encoders()
-        # TODO: Use subprocess or lib to import these dynamically directly from FFmpeg. They dont really change much but would be more robust in terms 
+        # TODO: Use subprocess or lib to import these dynamically directly from FFmpeg. They dont really change much but would be more robust in terms
         # of different FFmpeg versions etc
         supported_encoders = {
-            "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"], 
+            "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"],
             "h264_nvenc": ["baseline", "main", "high", "high444p"],
             "h264_vaapi": ["baseline", "main", "high"],
-            "h264_videotoolbox": ["baseline", "main", "high", "extended"], 
+            "h264_videotoolbox": ["baseline", "main", "high", "extended"],
             "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"]
         }
 
         self.encoder_model = QtGui.QStandardItemModel()
-        
+
         self.video_encoder_text = QtWidgets.QLabel('Video encoder')
         self.video_encoder_select = QtWidgets.QComboBox()
         self.video_encoder_select.setModel(self.encoder_model)
@@ -1727,7 +1749,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # Prevent a unsupported/disabled item to be default selection
         for i in range(0, self.video_encoder_select.count()):
             if self.encoder_model.item(i).isEnabled():
-                self.video_encoder_select.setCurrentIndex(i) 
+                self.video_encoder_select.setCurrentIndex(i)
                 break
 
         self.video_encoder_select.currentIndexChanged.connect(self.update_profile_select)
@@ -1735,7 +1757,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_encoder_select.currentIndexChanged.connect(self.update_container_selection)
         self.update_container_selection()
         self.update_profile_select()
-        
+
         self.export_controls_layout.addWidget(self.video_encoder_text)
         self.export_controls_layout.addWidget(self.video_encoder_select)
         self.export_controls_layout.addWidget(self.encoder_profile_text)
@@ -1781,7 +1803,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_button.setMinimumHeight(30)
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export_video)
-        
+
         self.export_controls_layout.addWidget(self.export_button)
 
         # warning for HW encoding
@@ -1797,14 +1819,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_widget.addTab(self.input_controls, "Input")
         self.main_widget.addTab(self.sync_controls, "Sync/stabilization")
         self.main_widget.addTab(self.export_controls, "Export")
-                
+
 
         self.infile_path = ""
         self.preset_path = ""
         self.gyro_log_path = ""
         self.stab = None
         self.analyzed = False
-        
+
         self.update_gyro_input_settings()
 
 
@@ -1813,10 +1835,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.main_widget.show()
 
         # non linear setup
-        
+
 
     def open_video_func(self):
-        """Open file using Qt filedialog 
+        """Open file using Qt filedialog
         """
         #path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file")
         dialog = QtWidgets.QFileDialog()
@@ -1826,7 +1848,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if (len(path) == 0 or len(path[0]) == 0):
             print("No file selected")
             return
-        
+
         self.infile_path = path[0]
         self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
         self.open_vid_button.setStyleSheet("font-weight:bold;")
@@ -1837,7 +1859,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_info_dict["width"] = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.video_info_dict["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.video_info_dict["fps"] = cap.get(cv2.CAP_PROP_FPS)
-        self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"]) 
+        self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
 
         self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
 
@@ -1987,7 +2009,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
     def open_gyro_func(self):
         # Remove file if already added
-        
+
 
         if self.gyro_log_path:
             self.gyro_log_path = ""
@@ -2030,12 +2052,20 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         fov_val = self.fov_slider.value() / 10
         self.fov_text.setText("FOV scale ({}):".format(fov_val))
 
+    def fov_smoothing_changed(self):
+        val = self.fov_smoothing.value() / 10
+        self.fov_smoothing_text.setText("Smoothing Window Fov (sec): {}".format(val))
+
+    def center_smoothing_changed(self):
+        val = self.center_smoothing.value() / 10
+        self.center_smoothing_text.setText("Smoothing Window Center (sec): {}".format(val))
+
     def update_out_size(self):
         """Update export image size
         """
         #print(self.out_width_control.value())
         pass
-        
+
 
     def recompute_stab(self):
         """Update sync and stabilization
@@ -2118,7 +2148,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             else:
                 print("Unknown log type selected")
                 return
-            
+
             self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
                                                  use_csv=use_csv, gyro_lpf_cutoff = gyro_lpf, logtype=logtype)
 
@@ -2128,15 +2158,15 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
                 smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
-        
-        
+
+
 
         self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame,
                                  OF_slice_length, debug_plots=self.sync_debug_select.isChecked())
 
         self.recompute_stab_button.setText("Recompute sync")
         self.export_button.setEnabled(True)
-        
+
         # Show estimated delays in UI
         self.sync_correction_button.setEnabled(True)
         self.d1_control.setValue(self.stab.d1)
@@ -2161,7 +2191,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """
 
 
-        
+
         out_size = (self.out_width_control.value(), self.out_height_control.value())
 
         if out_size[0] > self.stab.width:
@@ -2173,7 +2203,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         start_time = self.export_starttime.value()
         stop_time = self.export_stoptime.value()
-        
+
         if (stop_time < start_time):
             self.show_error("Start time is later than stop time.")
             return
@@ -2211,19 +2241,22 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #hardware_acceleration = self.hw_acceleration_select.isChecked()
         vcodec = self.video_encoder_select.currentText()
         vprofile = self.encoder_profile_select.currentText()
-        bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
+        bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s
         preview = self.display_preview.isChecked()
         output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
+        smoothingFocus=self.fov_smoothing.value()/10
+        smoothingCenter=self.center_smoothing.value()/10
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
                              display_preview=preview, scale=output_scale, vcodec=vcodec, vprofile=vprofile,
-                             pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg)
+                             pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
+                             smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter)
 
-        
+
 
     def show_error(self, msg):
         err_window = QtWidgets.QMessageBox(self)
