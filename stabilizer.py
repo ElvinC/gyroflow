@@ -602,9 +602,11 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingCenter=2.0, smoothingFocus=2.0):
+                   debug_text = False, custom_ffmpeg = "", smoothingCenter=2.0, smoothingFocus=2.0, zoom=1.0):
 
         print(locals())
+
+        (out_width, out_height) = out_size
 
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
@@ -660,7 +662,7 @@ class Stabilizer:
 
         out = WriteGear(output_filename=outpath, **output_params)
         output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
-        crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
+        #crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
 
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
@@ -702,16 +704,15 @@ class Stabilizer:
 
             if success and i > 0:
 
-                if scale != 1:
-                    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+                #if scale != 1:
+                #    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
 
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
-                fac = 0.75
-
+                fac = zoom
                 tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
-                                                        new_img_dim=(int(self.width * scale),int(self.height*scale)),
+                                                        new_img_dim=out_size,
                                                         update_new_K = False, quat = self.stab_transform[frame_num],
                                                         focalCenter = focalCenter[frame_num])
 
@@ -722,10 +723,11 @@ class Stabilizer:
                 #frame_out = cv2.circle(frame_out, (int(self.width/2),int(self.height/2)), radius=15, color=(0, 0, 255), thickness=-1)
                 #print(points)
                 #plt.scatter(points[:,0], points[:,1])
-                topleft = ( int(self.width/2*(1-fac)), int(self.height/2*(1-fac)) )
-                bottomright = ( int(self.width/2*(1+fac)), int(self.height/2*(1+fac)) )
-                frame_out = cv2.rectangle(frame_out, topleft,
-                                                     bottomright, (255,0,0), 3)
+                if debug_text:
+                    topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
+                    bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
+                    frame_out = cv2.rectangle(frame_out, topleft,
+                                                         bottomright, (255,0,0), 3)
                 #for p in contour:
                 #    frame_out = cv2.circle(frame_out, (int(p[0]),int(p[1])), radius=5, color=(0, 255, 255), thickness=-1)
 
@@ -747,7 +749,7 @@ class Stabilizer:
 
                 # Fix border artifacts
 
-                frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
+                #frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
 
                 # temp debug text
                 if debug_text:
@@ -1515,9 +1517,10 @@ if __name__ == "__main__":
     #stab.auto_sync_stab(0.24, 870, 2100, 120, debug_plots=True)
     #stab.manual_sync_correction(5.4744, 5.6012, smooth=0.24)
     stab.manual_sync_correctionCLI(5.4744, 5.6012, 870, 2100, 120, 0.24)
-    stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (3840,2160), split_screen = False,
+    stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (1200,1000), split_screen = False,
                    bitrate_mbits = 20, display_preview = True, scale=1, vcodec = "libx264", vprofile="high", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "")
+                   debug_text = True, custom_ffmpeg = "", zoom=0.9,
+                   smoothingFocus=1.0, smoothingCenter=1.0)
     exit()
 
     # insta360 test
