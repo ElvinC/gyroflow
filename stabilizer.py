@@ -601,7 +601,7 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = ""):
+                   debug_text = False, custom_ffmpeg = "", smoothingCenter=2.0, smoothingFocus=2.0):
 
         print(locals())
 
@@ -674,7 +674,8 @@ class Stabilizer:
         #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
         print("Starting to compute optimal Fov and center")
-        fcorr, focalCenter = self.undistort.adaptiveZoom(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps)
+        fcorr, focalCenter = self.undistort.adaptiveZoom(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
+                                                        smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter)
         print("Done computing optimal Fov and center")
 
         i = 0
@@ -706,8 +707,8 @@ class Stabilizer:
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
-                fac = 0.9
-                
+                fac = 0.75
+
                 tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
                                                         new_img_dim=(int(self.width * scale),int(self.height*scale)),
                                                         update_new_K = False, quat = self.stab_transform[frame_num],
