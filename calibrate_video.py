@@ -289,6 +289,10 @@ class FisheyeCalibrator:
 
         focusWindows = np.array(focusWindows)
 
+        if smoothingCenter < 0: #disabled
+            print("Smoothing position of crop disabled")
+            focusWindows = np.array([(self.calib_dimension[0]/2,self.calib_dimension[1]/2) for q in quaternions])
+
         if smoothingCenter > 0:
             focusWindowsPad = np.pad(focusWindows, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)), (0,0) ), mode='edge')
             filterCoeff = signal.gaussian(smoothingNumFrames,smoothingNumFrames/6)
@@ -333,7 +337,6 @@ class FisheyeCalibrator:
         fX = 0
         fY = 0
         if maxX/output_ratio < maxY:
-            print("fdsafdsaf")
             window_width = maxX
             window_height = maxX/output_ratio
             fX = mleft + window_width/2
