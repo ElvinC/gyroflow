@@ -1697,21 +1697,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
         self.export_controls_layout.addWidget(self.fov_smoothing)
 
-        self.enableSmoothingCenter = QtWidgets.QCheckBox("Smooth position of crop")
-        self.enableSmoothingCenter.setChecked(True)
-        self.enableSmoothingCenter.clicked.connect(self.enableSmoothingCenterClicked)
-        self.export_controls_layout.addWidget(self.enableSmoothingCenter)
+        #self.enableSmoothingCenter = QtWidgets.QCheckBox("Smooth position of crop")
+        #self.enableSmoothingCenter.setChecked(True)
+        #self.enableSmoothingCenter.clicked.connect(self.enableSmoothingCenterClicked)
+        #self.export_controls_layout.addWidget(self.enableSmoothingCenter)
 
-        self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 1.0")
-        self.export_controls_layout.addWidget(self.center_smoothing_text)
-        self.center_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.center_smoothing.setMinimum(0)
-        self.center_smoothing.setValue(10)
-        self.center_smoothing.setMaximum(40)
-        self.center_smoothing.setSingleStep(1)
-        self.center_smoothing.setTickInterval(1)
-        self.center_smoothing.valueChanged.connect(self.center_smoothing_changed)
-        self.export_controls_layout.addWidget(self.center_smoothing)
+        #self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 1.0")
+        #self.export_controls_layout.addWidget(self.center_smoothing_text)
+        #self.center_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        #self.center_smoothing.setMinimum(0)
+        #self.center_smoothing.setValue(10)
+        #self.center_smoothing.setMaximum(40)
+        #self.center_smoothing.setSingleStep(1)
+        #self.center_smoothing.setTickInterval(1)
+        #self.center_smoothing.valueChanged.connect(self.center_smoothing_changed)
+        #self.export_controls_layout.addWidget(self.center_smoothing)
 
         self.zoom_text = QtWidgets.QLabel("Zoom Factor: 1.0")
         self.export_controls_layout.addWidget(self.zoom_text)
@@ -2175,12 +2175,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         out_size = (self.out_width_control.value(), self.out_height_control.value())
 
-        if out_size[0] > self.stab.width:
-            self.show_error("The given output cropped width ({}) is greater than the video width ({})".format(out_size[0], self.stab.width))
-            return
-        if out_size[1] > self.stab.height:
-            self.show_error("The given output cropped height ({}) is greater than the video height ({})".format(out_size[1], self.stab.height))
-            return
+        #if out_size[0] > self.stab.width:
+        #    self.show_error("The given output cropped width ({}) is greater than the video width ({})".format(out_size[0], self.stab.width))
+        #    return
+        #if out_size[1] > self.stab.height:
+        #    self.show_error("The given output cropped height ({}) is greater than the video height ({})".format(out_size[1], self.stab.height))
+        #    return
 
         start_time = self.export_starttime.value()
         stop_time = self.export_stoptime.value()
@@ -2229,10 +2229,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
         smoothingFocus=self.fov_smoothing.value()/10
-        smoothingCenter=self.center_smoothing.value()/10
+        smoothingCenter=-1 #self.center_smoothing.value()/10
         zoomVal = self.zoom.value() /10
-        if not self.enableSmoothingCenter.isChecked():
-            smoothingCenter=-1
+        #if not self.enableSmoothingCenter.isChecked():
+        #    smoothingCenter=-1
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
