@@ -1,6 +1,7 @@
 import json
 from datetime import date
 import numpy as np
+import numpy.linalg
 import cv2
 from _version import __version__
 from tkinter import Tk
@@ -11,6 +12,7 @@ from scipy import signal, interpolate
 import math
 
 from matplotlib import pyplot as plt
+import matplotlib
 
 import sys
 
@@ -263,48 +265,74 @@ class FisheyeCalibrator:
         rolling = np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
         return np.min(rolling,axis=axis)
 
-    def findFov(self, center, box, output_dim):
-        (mleft,mright,mtop,mbottom) = box
+    def findFov(self, center, polygon, output_dim):
         (original_width, original_height) = self.calib_dimension
         (output_width, output_height) = output_dim
-        output_ratio = float(output_width)/float(output_height)
-        xcoord = center[0]
-        ycoord = center[1]
-        xminDist = 2*np.min(np.abs([mleft-xcoord, mright-xcoord]))
-        yminDist = 2*np.min(np.abs([mbottom-ycoord, mtop-ycoord]))
-        return np.min([xminDist/output_width, yminDist/output_height])
+        angle_output = np.arctan2( output_height/2, output_width/2 )
+
+        #fig, ax = plt.subplots()
+
+        polygon = polygon - center
+        #ax.scatter(polygon[:,0], polygon[:,1])
+
+        distP = numpy.linalg.norm(polygon, axis=1)
+        angles = np.abs( np.arctan2(polygon[:,1], polygon[:,0]) )
+
+        #angles = angles[0:2]
+        #distP = distP[0:2]
+        mask = (angle_output <= np.abs(angles)) & (np.abs(angles) < (np.pi - angle_output))
+
+        #ax.plot(distP*np.cos(angles), distP*np.sin(angles), 'ro')
+        #ax.plot(distP[mask]*np.cos(angles[mask]), distP[mask]*np.sin(angles[mask]), 'yo')
+        #ax.add_patch(matplotlib.patches.Rectangle((-output_width/2,-output_height/2), output_width, output_height,color="yellow"))
+        dWidth = np.abs( (output_width/2)/np.cos(angles) )
+        dHeight = np.abs( (output_height/2)/np.sin(angles) )
+
+
+        ffactor = dWidth/distP
+        ffactor[mask] = dHeight[mask]/distP[mask]
+
+        fcorr = np.max( ffactor )
+        #ax.plot([0,6000*np.cos(angle_output)],[0,6000*np.sin(angle_output)])
+        #ax.plot(fcorr*distP*np.cos(angles), fcorr*distP*np.sin(angles), 'bo')
+        #plt.show()
+
+        #xminDist = 2*np.min(np.abs([mleft-xcoord, mright-xcoord]))
+        #yminDist = 2*np.min(np.abs([mbottom-ycoord, mtop-ycoord]))
+        return 1/fcorr #np.min([xminDist/output_width, yminDist/output_height])
 
     def adaptiveZoom(self, quaternions, output_dim, fps, smoothingFocus=2.0, smoothingCenter=2.0):
         #print(locals())
-        smoothingNumFrames = int(smoothingCenter * fps)
-        if smoothingNumFrames % 2 == 0:
-            smoothingNumFrames = smoothingNumFrames+1
+        #smoothingNumFrames = int(smoothingCenter * fps)
+        #if smoothingNumFrames % 2 == 0:
+        #    smoothingNumFrames = smoothingNumFrames+1
 
         smoothingFocusFrames = int(smoothingFocus * fps)
         if smoothingFocusFrames % 2 == 0:
             smoothingFocusFrames = smoothingFocusFrames+1
 
-        boundaryBoxes = [self.boundingBox(quat=q, output_dim=output_dim) for q in quaternions]
-        focusWindows = [self.findFocalCenter(box, output_dim=output_dim) for box in boundaryBoxes]
+        boundaryPolygons = [self.boundingPolygon(quat=q) for q in quaternions]
+        #focusWindows = [self.findFocalCenter(box, output_dim=output_dim) for box in boundaryBoxes]
 
-        focusWindows = np.array(focusWindows)
+        #focusWindows = np.array(focusWindows)
 
-        if smoothingCenter < 0: #disabled
-            print("Smoothing position of crop disabled")
-            focusWindows = np.array([(self.calib_dimension[0]/2,self.calib_dimension[1]/2) for q in quaternions])
+        # TODO: implement smoothing of position of crop, s.t. cropping area can "move" anywhere within bounding polygon
+        #if smoothingCenter < 0: #disabled
+        #print("Smoothing position of crop disabled")
+        cropCenterPositions = np.array([(self.calib_dimension[0]/2,self.calib_dimension[1]/2) for q in quaternions])
 
-        if smoothingCenter > 0:
-            focusWindowsPad = np.pad(focusWindows, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)), (0,0) ), mode='edge')
-            filterCoeff = signal.gaussian(smoothingNumFrames,smoothingNumFrames/6)
-            filterCoeff = filterCoeff / np.sum(filterCoeff)
-            smoothXpos = np.convolve(focusWindowsPad[:,0], filterCoeff, 'valid')
-            smoothYpos = np.convolve(focusWindowsPad[:,1], filterCoeff, 'valid')
-            plt.plot(focusWindows)
-            plt.plot(smoothXpos)
-            plt.plot(smoothYpos)
-            plt.show()
-            focusWindows = np.stack((smoothXpos, smoothYpos), axis=-1)
-        fovValues = [self.findFov(center,box,output_dim) for center, box in zip(focusWindows,boundaryBoxes)]
+        #if smoothingCenter > 0:
+        #    focusWindowsPad = np.pad(focusWindows, ( (int(smoothingNumFrames/2), int(smoothingNumFrames/2)), (0,0) ), mode='edge')
+        #    filterCoeff = signal.gaussian(smoothingNumFrames,smoothingNumFrames/6)
+        #    filterCoeff = filterCoeff / np.sum(filterCoeff)
+        #    smoothXpos = np.convolve(focusWindowsPad[:,0], filterCoeff, 'valid')
+        #    smoothYpos = np.convolve(focusWindowsPad[:,1], filterCoeff, 'valid')
+        #    plt.plot(focusWindows)
+        #    plt.plot(smoothXpos)
+        #    plt.plot(smoothYpos)
+        #    plt.show()
+        #    focusWindows = np.stack((smoothXpos, smoothYpos), axis=-1)
+        fovValues = [self.findFov(center,polygon,output_dim) for center, polygon in zip(cropCenterPositions,boundaryPolygons)]
         fovValues = np.array(fovValues)
         if smoothingFocus > 0:
             filterCoeffFocus = signal.gaussian(smoothingFocusFrames,smoothingFocusFrames/6)
@@ -319,7 +347,7 @@ class FisheyeCalibrator:
             plt.show()
             fovValues = fovSmooth
 
-        return fovValues, focusWindows
+        return fovValues, cropCenterPositions
 
 
     def findFocalCenter(self, box, output_dim):
@@ -357,7 +385,7 @@ class FisheyeCalibrator:
         return (fX,fY) #, window_width, window_height)
 
 
-    def boundingBox(self, quat, output_dim, numPoints = 9):
+    def boundingPolygon(self, quat, numPoints = 9):
         (original_width, original_height) = self.calib_dimension
 
         R = np.eye(3)
@@ -381,12 +409,12 @@ class FisheyeCalibrator:
         undistorted_points = cv2.fisheye.undistortPoints(distorted_points, self.K, self.D, R=R, P=self.K)
         undistorted_points = undistorted_points[0,:,:] #remove extra dimension
 
-        mtop = np.max(undistorted_points[:(numPoints-1),1])
-        mbottom = np.min(undistorted_points[numPoints:(2*numPoints-1),1])
-        mleft = np.max(undistorted_points[(2*numPoints):(3*numPoints-1),0])
-        mright = np.min(undistorted_points[(3*numPoints):,0])
+        #mtop = np.max(undistorted_points[:(numPoints-1),1])
+        #mbottom = np.min(undistorted_points[numPoints:(2*numPoints-1),1])
+        #mleft = np.max(undistorted_points[(2*numPoints):(3*numPoints-1),0])
+        #mright = np.min(undistorted_points[(3*numPoints):,0])
 
-        return (mleft,mright,mtop,mbottom)
+        return undistorted_points
 
     def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
         """Get undistortion maps
