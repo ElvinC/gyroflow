@@ -8,6 +8,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
 from scipy.spatial.transform import Rotation
+from scipy.interpolate import interp1d
 from scipy import signal, interpolate
 import math
 
@@ -265,8 +266,7 @@ class FisheyeCalibrator:
         rolling = np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
         return np.min(rolling,axis=axis)
 
-    def findFov(self, center, polygon, output_dim):
-        (original_width, original_height) = self.calib_dimension
+    def findFcorr(self, center, polygon, output_dim):
         (output_width, output_height) = output_dim
         angle_output = np.arctan2( output_height/2, output_width/2 )
 
@@ -293,12 +293,34 @@ class FisheyeCalibrator:
         ffactor[mask] = dHeight[mask]/distP[mask]
 
         fcorr = np.max( ffactor )
+        idx = np.argmax( ffactor )
         #ax.plot([0,6000*np.cos(angle_output)],[0,6000*np.sin(angle_output)])
         #ax.plot(fcorr*distP*np.cos(angles), fcorr*distP*np.sin(angles), 'bo')
         #plt.show()
+        return fcorr, idx
 
-        #xminDist = 2*np.min(np.abs([mleft-xcoord, mright-xcoord]))
-        #yminDist = 2*np.min(np.abs([mbottom-ycoord, mtop-ycoord]))
+    def findFov(self, center, polygon, output_dim, numIntPoints=20):
+        #(original_width, original_height) = self.calib_dimension
+        fcorr, idx = self.findFcorr(center, polygon, output_dim)
+        nP = (polygon.shape)[0]
+        relevantP = polygon[ ((idx-1)%nP,idx,(idx+1)%nP),:]
+
+        distance = np.cumsum( np.sqrt(np.sum( np.diff(relevantP, axis=0)**2, axis=1 )) )
+        distance = np.insert(distance, 0, 0)/distance[-1]
+
+        #interpolations_methods = ['slinear', 'quadratic', 'cubic']
+        alpha = np.linspace(0, 1, numIntPoints)
+        interpolator =  interp1d(distance, relevantP, kind='quadratic', axis=0)
+        interpolated_points = interpolator(alpha)
+
+        fcorrI, _ = self.findFcorr(center, interpolated_points, output_dim)
+
+        fcorr = np.max((fcorr, fcorrI))
+        #plt.plot(polygon[:,0], polygon[:,1], 'ro')
+        #plt.plot(relevantP[:,0], relevantP[:,1], 'bo')
+        #plt.plot(interpolated_points[:,0], interpolated_points[:,1], 'yo')
+        #plt.show()
+
         return 1/fcorr #np.min([xminDist/output_width, yminDist/output_height])
 
     def adaptiveZoom(self, quaternions, output_dim, fps, smoothingFocus=2.0, smoothingCenter=2.0):
@@ -394,14 +416,17 @@ class FisheyeCalibrator:
             R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
 
         distorted_points = []
-        for i in range(numPoints):
+        for i in range(numPoints-1):
             distorted_points.append( (i*(original_width/(numPoints-1)), 0) )
-        for i in range(numPoints):
-            distorted_points.append( (i*(original_width/(numPoints-1)), original_height) )
-        for i in range(numPoints):
-            distorted_points.append( (0, i*(original_height/(numPoints-1)) ) )
-        for i in range(numPoints):
+        for i in range(numPoints-1):
             distorted_points.append( (original_width, i*(original_height/(numPoints-1)) ) )
+        for i in range(numPoints-1):
+            p = numPoints-1 - i
+            distorted_points.append( (p*(original_width/(numPoints-1)), original_height) )
+        for i in range(numPoints-1):
+            p = numPoints-1 - i
+            distorted_points.append( (0, p*(original_height/(numPoints-1)) ) )
+
 
         distorted_points = np.array(distorted_points, np.float64)
         distorted_points = np.expand_dims(distorted_points, axis=0) #add extra dimension so opencv accepts points
