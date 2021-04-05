@@ -1517,7 +1517,7 @@ if __name__ == "__main__":
     #stab.auto_sync_stab(0.24, 870, 2100, 120, debug_plots=True)
     #stab.manual_sync_correction(5.4744, 5.6012, smooth=0.24)
     stab.manual_sync_correctionCLI(5.4744, 5.6012, 870, 2100, 120, 0.24)
-    stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (1200,1000), split_screen = False,
+    stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (3840,2160), split_screen = False,
                    bitrate_mbits = 20, display_preview = True, scale=1, vcodec = "libx264", vprofile="high", pix_fmt = "",
                    debug_text = True, custom_ffmpeg = "", zoom=0.6,
                    smoothingFocus=1.0, smoothingCenter=1.0)
