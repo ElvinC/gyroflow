@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "gyroflow"
-version = "0.1.1"
+version = "0.2.1"
 description = "Gyro-assisted video stabilization"
 authors = ["Elvin Chen <dev@elvinchen.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.7,<3.10"
 numpy = "^1.19.5"
-opencv-python = "^4.5.1"
+opencv-python = "~4.1.2"
 construct = "^2.10.56"
 matplotlib = "^3.3.3"
 hachoir = "^3.1.1"

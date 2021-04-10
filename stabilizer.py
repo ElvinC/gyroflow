@@ -10,12 +10,14 @@ from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
 from vidgear.gears import WriteGear
+from vidgear.gears import helper as vidgearHelper
 from _version import __version__
 
 from scipy import signal, interpolate
 
 import time
 
+import insta360_utility as insta360_util
 
 class Stabilizer:
     def __init__(self):
@@ -572,71 +574,64 @@ class Stabilizer:
         return sum_squared_diff
 
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080),
-                   split_screen = True, hw_accel = False, bitrate_mbits = 20, display_preview = False, scale=1,
-                   vcodec = "", pix_fmt = "", debug_text = False):
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
+                   bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
+                   debug_text = False, custom_ffmpeg = ""):
         
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
-        if vcodec:
+        if vcodec == "libx264":
             output_params = {
                 "-input_framerate": self.fps, 
-                "-vcodec": vcodec,
-                "-b:v": "%sM" % bitrate_mbits,
-            }
-            if pix_fmt:
-                output_params["-pix_fmt"] = pix_fmt
-
-            out = WriteGear(output_filename=outpath, logging=True, **output_params)
-
-        elif hw_accel:
-            if platform.system() == "Darwin":  # macOS
-                output_params = {
-                    "-input_framerate": self.fps, 
-                    #"-vf": "scale=%sx%s" % export_out_size,
-                    "-vcodec": "h264_videotoolbox",
-                    "-profile": "main", 
-                    "-b:v": "%sM" % bitrate_mbits,
-                }
-            elif platform.system() == "Windows":
-                output_params = {
-                    "-input_framerate": self.fps, 
-                    #"-vf": "scale=%sx%s" % export_out_size,
-                    "-vcodec": "h264_nvenc",
-                    "-profile:v": "main",
-                    "-rc:v": "cbr", 
-                    "-b:v": "%sM" % bitrate_mbits,
-                    "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
-                }
-            elif platform.system() == "Linux":
-                output_params = {
-                    "-input_framerate": self.fps, 
-                    #"-vf": "scale=%sx%s" % export_out_size,
-                    "-vcodec": "h264_vaapi",
-                    "-profile": "main", 
-                    "-b:v": "%sM" % bitrate_mbits,
-                }
-
-            if pix_fmt:
-                output_params["-pix_fmt"] = pix_fmt
-
-            out = WriteGear(output_filename=outpath, **output_params)
-
-        else:
-            output_params = {
-                "-input_framerate": self.fps, 
-                #"-vf": "scale=%sx%s" % export_out_size,
-                "-c:v": "libx264",
+                "-vcodec": "libx264",
+                "-profile:v": vprofile,
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
+                "-pix_fmt": "yuv420p",  
             }
-            if pix_fmt:
-                output_params["-pix_fmt"] = pix_fmt
-
-            out = WriteGear(output_filename=outpath, **output_params)
+        elif vcodec == "h264_nvenc":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_nvenc",
+                "-profile:v": vprofile,
+                "-rc:v": "cbr", 
+                "-b:v": "%sM" % bitrate_mbits,
+                "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
+            }
+        elif vcodec == "h264_vaapi":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_vaapi",
+                "-vaapi_device": "/dev/dri/renderD128",
+                "-profile:v": vprofile, 
+                "-b:v": "%sM" % bitrate_mbits,
+            }
+        elif vcodec == "h264_videotoolbox":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_videotoolbox",
+                "-profile:v": vprofile, 
+                "-b:v": "%sM" % bitrate_mbits,
+                }
+        elif vcodec == "prores_ks":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "prores_ks",
+                "-profile:v": vprofile,
+            }
+        else:
+            output_params = {}
         
+        if pix_fmt:
+            output_params["-pix_fmt"] = pix_fmt  # override pix_fmt if user needs to
 
+        if custom_ffmpeg:
+            output_params = eval(custom_ffmpeg)
+            output_params["-input_framerate"] = self.fps
+
+        out = WriteGear(output_filename=outpath, **output_params)
+        output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
         crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
 
 
@@ -649,7 +644,7 @@ class Stabilizer:
         #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
 
         
-        tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
+        #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
         i = 0
         while(True):
@@ -680,8 +675,10 @@ class Stabilizer:
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
+                tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
+
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                frame_undistort = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
 
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
@@ -695,7 +692,7 @@ class Stabilizer:
                 #cv2.imshow("Stabilized?", frame_undistort)
 
                 #print(self.stab_transform[frame_num])
-                frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
+                #frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
@@ -749,6 +746,132 @@ class Stabilizer:
         out.close()
 
     def release(self):
+        self.cap.release()
+
+
+class OnlyUndistort:
+    def __init__(self, videopath, calibrationfile, fov_scale = 1.5):
+        self.undistort_fov_scale = fov_scale
+        self.cap = cv2.VideoCapture(videopath)
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        self.undistort = FisheyeCalibrator()
+        self.undistort.load_calibration_json(calibrationfile, True)
+        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
+
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = False,
+                   bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
+                   debug_text = False, custom_ffmpeg = ""):
+        
+        export_out_size = (int(out_size[0]*scale), int(out_size[1]*scale))
+
+        if vcodec == "libx264":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "libx264",
+                "-profile:v": vprofile,
+                "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
+                "-maxrate": "%sM" % bitrate_mbits,
+                "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
+                "-pix_fmt": "yuv420p",  
+            }
+        elif vcodec == "h264_nvenc":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_nvenc",
+                "-profile:v": vprofile,
+                "-rc:v": "cbr", 
+                "-b:v": "%sM" % bitrate_mbits,
+                "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
+            }
+        elif vcodec == "h264_vaapi":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_vaapi",
+                "-vaapi_device": "/dev/dri/renderD128",
+                "-profile:v": vprofile, 
+                "-b:v": "%sM" % bitrate_mbits,
+            }
+        elif vcodec == "h264_videotoolbox":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "h264_videotoolbox",
+                "-profile:v": vprofile, 
+                "-b:v": "%sM" % bitrate_mbits,
+                }
+        elif vcodec == "prores_ks":
+            output_params = {
+                "-input_framerate": self.fps, 
+                "-vcodec": "prores_ks",
+                "-profile:v": vprofile,
+            }
+        else:
+            output_params = {}
+        
+        if pix_fmt:
+            output_params["-pix_fmt"] = pix_fmt  # override pix_fmt if user needs to
+
+        if custom_ffmpeg:
+            output_params = eval(custom_ffmpeg)
+            output_params["-input_framerate"] = self.fps
+
+        out = WriteGear(output_filename=outpath, **output_params)
+        output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
+        crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
+
+
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+        time.sleep(0.1)
+
+        num_frames = int((stoptime - starttime) * self.fps) 
+
+        tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
+        tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
+
+        i = 0
+        while(True):
+            # Read next frame
+            frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+            success, frame = self.cap.read()
+            
+            # Getting frame_num _before_ cap.read gives index of the read frame. 
+
+            if i % 5 == 0:
+                print("frame: {}, {}/{} ({}%)".format(frame_num, i, num_frames, round(100 * i/num_frames,1)))
+
+            if success:
+                i +=1
+
+            if i > num_frames:
+                break
+
+            if success and i > 0:
+                
+                if scale != 1:
+                    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+                
+                frame_out = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                                              borderMode=cv2.BORDER_CONSTANT)
+
+                frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
+
+                size = np.array(frame_out.shape)
+
+                out.write(frame_out)
+                if display_preview:
+                    if frame_out.shape[1] > 1280:
+                        frame_out = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
+                    cv2.imshow("Stabilized?", frame_out)
+                    cv2.waitKey(2)
+
+        # When everything done, release the capture
+        #out.release()
+        cv2.destroyAllWindows()
+        out.close()
+
         self.cap.release()
 
 
@@ -835,7 +958,7 @@ class GPMFStabilizer(Stabilizer):
 
 
 class InstaStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1):
+    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1, InstaType=""):
         
         super().__init__()
         
@@ -854,35 +977,23 @@ class InstaStabilizer(Stabilizer):
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
+        if InstaType=="smo4k":
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[])
+        elif InstaType=="insta360 oner":
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[], revertIMU=False)
+        else:
+            # Assume SMO4K - For no real reason....
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[])
 
-        self.gyro_data = self.instaCSVGyro(gyrocsv)
-
-
-        sosgyro = signal.butter(10, 5, "lowpass", fs=500, output="sos")
-        self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
-        self.gyro_data[:,0] -= 15
-
-
-        self.gyro_data[:,1] = -self.gyro_data[:,1]
-        self.gyro_data[:,2] = self.gyro_data[:,2]
-        self.gyro_data[:,3] = self.gyro_data[:,3]
+        # Coverting gyro to XYZ to -Z,-X,Y
+        self.gyro_data = np.empty([len(gyro_data_input), 4])
+        self.gyro_data[:,0] = gyro_data_input[:,0][:]
+        self.gyro_data[:,1] = gyro_data_input[:,2][:] * -1
+        self.gyro_data[:,2] = gyro_data_input[:,3][:]
+        self.gyro_data[:,3] = gyro_data_input[:,1][:] * -1
 
         hero = 0
 
-        # Hero 6??
-        if hero == 6:
-            self.gyro_data[:,1] = self.gyro_data[:,1]
-            self.gyro_data[:,2] = -self.gyro_data[:,2]
-            self.gyro_data[:,3] = self.gyro_data[:,3]
-        elif hero == 5:
-            self.gyro_data[:,1] = -self.gyro_data[:,1]
-            self.gyro_data[:,2] = self.gyro_data[:,2]
-            self.gyro_data[:,3] = -self.gyro_data[:,3]
-            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-
-        elif hero == 8:
-            # Hero 8??
-            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
         
@@ -970,12 +1081,16 @@ class BBLStabilizer(Stabilizer):
         # Get gyro data
         print(bblpath)
 
+        # quick fix
+        cam_angle_degrees = -cam_angle_degrees
+
         if use_csv:
             with open(bblpath) as bblcsv:
                 gyro_index = None
                 
                 csv_reader = csv.reader(bblcsv)
                 for i, row in enumerate(csv_reader):
+                    #print(row)
                     if(row[0] == "loopIteration"):
                         gyro_index = row.index('gyroADC[0]')
                         break
@@ -1014,18 +1129,31 @@ class BBLStabilizer(Stabilizer):
                 
 
                 data_list = []
-                gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet. 
+                #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet. 
+                gyroscale = 0.070 * np.pi/180 # 2000 dps
                 r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
                 
                 for line in lines:
-                    splitdata = [int(x) for x in line.split(",")]
+                    splitdata = [float(x) for x in line.split(",")]
                     t = splitdata[0]/1000
-                    gx = splitdata[1] * gyroscale
-                    gy = splitdata[2] * gyroscale
-                    gz = splitdata[3] * gyroscale
+                    #gx = splitdata[1] * gyroscale
+                    #gy = splitdata[2] * gyroscale
+                    #gz = splitdata[3] * gyroscale
+
+                    # RC test
+                    gx = -splitdata[2] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = -splitdata[3] * gyroscale
                 
+                    Z: roll
+                    X: yaw
+                    y: pitch
+
                     data_list.append([t, gx, gy, gz])
-                self.gyro_data = np.array(data_list)
+                from scipy.signal import resample
+                gyro_arr = np.array(data_list)
+                x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
+                self.gyro_data = np.column_stack((t,x))
                 print(self.gyro_data)
 
         else:
@@ -1336,7 +1464,10 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX016015.MP4", "camera_presets/gopro_calib2.JSON", ) # Rotate around
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
-    stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json", "test_clips/starling.csv", use_csv=False, logtype = "gyroflow")
+    #stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json", "test_clips/starling.csv", use_csv=False, logtype = "gyroflow")
+    
+    undistortTest = OnlyUndistort("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json",fov_scale=1)
+    undistortTest.renderfile(0, 5, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     exit()
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
