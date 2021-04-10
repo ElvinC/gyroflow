@@ -17,6 +17,7 @@ from scipy import signal, interpolate
 
 import time
 
+import insta360_utility as insta360_util
 
 class Stabilizer:
     def __init__(self):
@@ -957,7 +958,7 @@ class GPMFStabilizer(Stabilizer):
 
 
 class InstaStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1):
+    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1, InstaType=""):
         
         super().__init__()
         
@@ -976,35 +977,23 @@ class InstaStabilizer(Stabilizer):
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
+        if InstaType=="smo4k":
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[])
+        elif InstaType=="insta360 oner":
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[], revertIMU=False)
+        else:
+            # Assume SMO4K - For no real reason....
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[])
 
-        self.gyro_data = self.instaCSVGyro(gyrocsv)
-
-
-        sosgyro = signal.butter(10, 5, "lowpass", fs=500, output="sos")
-        self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
-        self.gyro_data[:,0] -= 15
-
-
-        self.gyro_data[:,1] = -self.gyro_data[:,1]
-        self.gyro_data[:,2] = self.gyro_data[:,2]
-        self.gyro_data[:,3] = self.gyro_data[:,3]
+        # Coverting gyro to XYZ to -Z,-X,Y
+        self.gyro_data = np.empty([len(gyro_data_input), 4])
+        self.gyro_data[:,0] = gyro_data_input[:,0][:]
+        self.gyro_data[:,1] = gyro_data_input[:,2][:] * -1
+        self.gyro_data[:,2] = gyro_data_input[:,3][:]
+        self.gyro_data[:,3] = gyro_data_input[:,1][:] * -1
 
         hero = 0
 
-        # Hero 6??
-        if hero == 6:
-            self.gyro_data[:,1] = self.gyro_data[:,1]
-            self.gyro_data[:,2] = -self.gyro_data[:,2]
-            self.gyro_data[:,3] = self.gyro_data[:,3]
-        elif hero == 5:
-            self.gyro_data[:,1] = -self.gyro_data[:,1]
-            self.gyro_data[:,2] = self.gyro_data[:,2]
-            self.gyro_data[:,3] = -self.gyro_data[:,3]
-            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-
-        elif hero == 8:
-            # Hero 8??
-            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
         

@@ -18,6 +18,7 @@ import calibrate_video
 import subprocess
 import bundled_images
 
+import insta360_utility as insta360_util
 
 import stabilizer
 
@@ -1429,7 +1430,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.camera_type_control.addItem("hero6")
         self.camera_type_control.addItem("hero7")
         self.camera_type_control.addItem("hero8")
-        self.camera_type_control.addItem("smo4k (N/A)")
+        self.camera_type_control.addItem("smo4k")
+        self.camera_type_control.addItem("Insta360 OneR")
 
         self.input_controls_layout.addWidget(self.camera_type_control)
 
@@ -1841,6 +1843,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         no_suffix = os.path.splitext(self.infile_path)[0]
 
+        # check if Insta360
+        if insta360_util.isInsta360Video(self.infile_path):
+            self.camera_type_control.setCurrentText('smo4k')
+            self.input_lpf_control.setValue(25)
+
         # check gyro logs by priority
         log_suffixes = [".bbl.csv", ".bfl.csv", ".csv", ".bbl"]
         for suffix in log_suffixes:
@@ -2037,16 +2044,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             # GPMF file
 
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
-            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8"]:
+            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "smo4k", "insta360 oner"]:
                 self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
                 return
-
-            heronum = int(gyro_orientation_text.replace("hero",""))
-
-            # initiate stabilization
-            self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val, gyro_lpf_cutoff = gyro_lpf)
+            if gyro_orientation_text=="smo4k" or gyro_orientation_text=="insta360 oner":
+                self.stab = stabilizer.InstaStabilizer(self.infile_path, self.preset_path, None, gyro_lpf_cutoff=gyro_lpf, InstaType=gyro_orientation_text)            
+            else:
+                heronum = int(gyro_orientation_text.replace("hero",""))
+                self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val, gyro_lpf_cutoff = gyro_lpf)
 
 
         else:
