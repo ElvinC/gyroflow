@@ -680,7 +680,7 @@ class Stabilizer:
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
-
+                # borderValue, BORDER_REPLICATE
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
                 #cv2.imshow("Before and After", frame_undistort)
                 #cv2.waitKey(100)
@@ -1129,8 +1129,8 @@ class BBLStabilizer(Stabilizer):
                 
 
                 data_list = []
-                #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet. 
-                gyroscale = 0.070 * np.pi/180 # 2000 dps
+                gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet. 
+                #gyroscale = 0.070/4 * np.pi/180 # 500 dps
                 r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
                 
                 for line in lines:
@@ -1145,15 +1145,16 @@ class BBLStabilizer(Stabilizer):
                     gy = -splitdata[1] * gyroscale
                     gz = -splitdata[3] * gyroscale
                 
-                    Z: roll
-                    X: yaw
-                    y: pitch
+                    # Z: roll
+                    # X: yaw
+                    # y: pitch
 
                     data_list.append([t, gx, gy, gz])
-                from scipy.signal import resample
-                gyro_arr = np.array(data_list)
-                x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
-                self.gyro_data = np.column_stack((t,x))
+                #from scipy.signal import resample
+                #gyro_arr = np.array(data_list)
+                #x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
+                #self.gyro_data = np.column_stack((t,x))
+                self.gyro_data = np.array(data_list)
                 print(self.gyro_data)
 
         else:

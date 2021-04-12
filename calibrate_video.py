@@ -584,7 +584,10 @@ class StandardCalibrator:
                                cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
 
         self.calibration_flags = (cv2.CALIB_SAME_FOCAL_LENGTH +
-                                  cv2.CALIB_RATIONAL_MODEL)
+                                  cv2.CALIB_RATIONAL_MODEL + 
+                                  cv2.CALIB_FIX_PRINCIPAL_POINT + 
+                                  cv2.CALIB_USE_INTRINSIC_GUESS +
+                                  cv2.CALIB_TILTED_MODEL)
 
         # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
         self.objp = np.zeros((chessboard_size[0] * chessboard_size[1],3), np.float32)
@@ -701,6 +704,26 @@ class StandardCalibrator:
         rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(self.num_images)]
         tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(self.num_images)]
 
+        self.K = np.array(
+        [
+                    [
+                        1000,
+                        0.0,
+                        self.calib_dimension[0]/2
+                    ],
+                    [
+                        0.0,
+                        1000,
+                        self.calib_dimension[1]/2
+                    ],
+                    [
+                        0.0,
+                        0.0,
+                        1.0
+                    ]
+                ]
+        )
+
         retval, self.K, self.D, rvecs, tvecs = cv2.calibrateCamera(temp_objpoints,
                 temp_imgpoints,
                 self.calib_dimension,
@@ -773,15 +796,15 @@ class StandardCalibrator:
         scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
         scaled_K[2][2] = 1.0
 
-        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
-                img_dim, np.eye(3), fov_scale=fov_scale)
+        new_K, _ = cv2.getOptimalNewCameraMatrix(scaled_K, self.D,
+                img_dim, 1.3, img_dim)
 
         self.new_K = new_K
 
         #print("FOV BEFORE: {}".format(scaled_K[0,0]))
         #print("FOV EFTER: {}".format(new_K[0,0]))
 
-        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
+        map1, map2 = self.get_maps()
 
 
         undistorted_image = cv2.remap(img, map1, map2, interpolation=cv2.INTER_LINEAR,
@@ -940,7 +963,7 @@ class StandardCalibrator:
 
 
 
-    def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", camera_brand="", camera_model="", lens_model="",  note="", calibrated_by=""):
+    def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", camera_brand="", camera_model="", lens_model="", camera_setting="", note="", calibrated_by=""):
         """Save camera calibration parameters as JSON file
 
         Args:
@@ -958,6 +981,7 @@ class StandardCalibrator:
             "camera_brand": camera_brand,
             "camera_model": camera_model,
             "lens_model": lens_model,
+            "camera_setting": camera_setting,
             "calibrator_version": __version__,
             "date": str(date.today()),
             
@@ -965,18 +989,17 @@ class StandardCalibrator:
                 "w": self.calib_dimension[0],
                 "h": self.calib_dimension[1]
             },
-
             "num_images": self.num_images_used,
 
-            "use_opencv_fisheye": True,
-            "fisheye_params": {
+            "use_opencv_fisheye": False,
+            "fisheye_params": {},
+            # For (potential) use with the standard cv2.calibrateCamera
+            "use_opencv_standard": True,
+            "calib_params": {
                 "RMS_error": self.RMS_error,
                 "camera_matrix": self.K.tolist(),
                 "distortion_coeffs": self.D.flatten().tolist()
-            },
-            # For (potential) use with the standard cv2.calibrateCamera
-            "use_opencv_standard": False,
-            "calib_params": {}
+            }
         }
 
         with open(filename, 'w') as outfile:
