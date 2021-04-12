@@ -1370,23 +1370,29 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.open_preset_button)
 
 
-        self.open_gyro_button = QtWidgets.QPushButton("Open BBL/Gyro log (leave empty for GPMF)")
+        self.open_gyro_button = QtWidgets.QPushButton("Open Gyro log")
         self.open_gyro_button.setMinimumHeight(30)
         self.open_gyro_button.clicked.connect(self.open_gyro_func)
         self.input_controls_layout.addWidget(self.open_gyro_button)
 
-        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically ")
+        self.video_as_log_button = QtWidgets.QPushButton("Set input video as log (GoPro, Insta360)")
+        self.video_as_log_button.setMinimumHeight(30)
+        self.video_as_log_button.clicked.connect(self.video_as_log_func)
+        self.input_controls_layout.addWidget(self.video_as_log_button)
+
+        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically.<br>If BBL doesn't work, use exported CSV file from blackbox explorer")
         explaintext.setWordWrap(True)
         explaintext.setMinimumHeight(60)
         self.input_controls_layout.addWidget(explaintext)
 
 
 
-        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log")]
+        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
 
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
+
 
         #self.gyro_log_model = QtGui.QStandardItemModel()
         for i, text in data:
@@ -1395,13 +1401,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             #self.gyro_log_model.appendRow(itm)
             self.gyro_log_format_select.addItem(text, i)
 
-        #self.gyro_log_format_select.setModel(self.gyro_log_model)
-        #self.gyro_log_format_select.addItem("Gyroflow CSV Log (doesn't work)")
-        #self.gyro_log_format_select.addItem("GoPro GPMF as log?? (doesn't work)")
         self.gyro_log_format_select.setMinimumHeight(20)
 
         self.gyro_log_format_text.setVisible(False)
         self.gyro_log_format_select.setVisible(False)
+        self.gyro_log_format_select.currentIndexChanged.connect(self.update_gyro_input_settings)
 
         self.input_controls_layout.addWidget(self.gyro_log_format_text)
         self.input_controls_layout.addWidget(self.gyro_log_format_select)
@@ -1427,12 +1431,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.camera_type_text)
 
         self.camera_type_control = QtWidgets.QComboBox()
+        self.camera_type_control.clear()
         self.camera_type_control.addItem("hero5")
         self.camera_type_control.addItem("hero6")
         self.camera_type_control.addItem("hero7")
         self.camera_type_control.addItem("hero8")
-        self.camera_type_control.addItem("smo4k")
-        self.camera_type_control.addItem("Insta360 OneR")
 
         self.input_controls_layout.addWidget(self.camera_type_control)
 
@@ -1844,11 +1847,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         no_suffix = os.path.splitext(self.infile_path)[0]
 
-        # check if Insta360
-        if insta360_util.isInsta360Video(self.infile_path):
-            self.camera_type_control.setCurrentText('smo4k')
-            self.input_lpf_control.setValue(25)
-
         # check gyro logs by priority
         log_suffixes = [".bbl.csv", ".bfl.csv", ".csv", ".bbl"]
         for suffix in log_suffixes:
@@ -1857,6 +1855,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
                 break
 
+
+        self.update_gyro_input_settings()
+
+    def video_as_log_func(self):
+        self.gyro_log_path = self.infile_path
+        # check if Insta360
+        if insta360_util.isInsta360Video(self.infile_path):
+            self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("insta360"))
+            #self.camera_type_control.setCurrentText('smo4k')
+            self.input_lpf_control.setValue(25)
+
+        else: # Probably gopro
+            self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("gpmf"))
+            #self.camera_type_control.setCurrentText('hero8')
+            self.input_lpf_control.setValue(-1)
 
         self.update_gyro_input_settings()
 
@@ -1920,40 +1933,56 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def update_gyro_input_settings(self):
         # display/hide relevant gyro log settings
 
-        external = bool(self.gyro_log_path) # display more settings if external log is selected
+        
+
+        self.gyro_log_format_text.setVisible(True)
+        self.gyro_log_format_select.setVisible(True)
+
+        selected_log_type = self.gyro_log_format_select.currentData()
+
+        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow"] # display more settings if external source is used
+
+        videofile_selected = bool(self.infile_path)
+        gyrofile_selected = bool(self.gyro_log_path)
+        internal = not external
 
         self.fpv_tilt_text.setVisible(external)
         self.fpv_tilt_control.setVisible(external)
-        self.gyro_log_format_text.setVisible(external)
-        self.gyro_log_format_select.setVisible(external)
+
+        self.camera_type_control.setVisible(internal)
+        self.camera_type_text.setVisible(internal)
+
+        if gyrofile_selected:
+            self.open_gyro_button.setText("Gyro data: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
+            self.open_gyro_button.setStyleSheet("font-weight:bold;")
+        else:
+            self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
+            self.open_gyro_button.setStyleSheet("font-weight: normal;")
+
 
         if external:
-            self.open_gyro_button.setText("Blackbox file: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
-            self.open_gyro_button.setStyleSheet("font-weight:bold;")
-
             suffix = os.path.splitext(self.gyro_log_path)[1].lower()
             # Guess log type
-            print(suffix)
             gyro_type_id = "rawblackbox"
             idx = 0
             if suffix == ".bbl" or suffix == ".bfl":
                 idx = self.gyro_log_format_select.findData("rawblackbox")
             elif suffix == ".csv":
                 idx = self.gyro_log_format_select.findData("csvblackbox")
-                print(idx)
             if idx != -1:
                 self.gyro_log_format_select.setCurrentIndex(idx)
 
-        else:
-            self.open_gyro_button.setText("Open BBL/Gyro log (leave empty for GPMF)")
-            self.open_gyro_button.setStyleSheet("font-weight: normal;")
-
-        videofile_selected = bool(self.infile_path)
-
-        internal = videofile_selected and not external
-
-        self.camera_type_control.setVisible(internal)
-        self.camera_type_text.setVisible(internal)
+        elif internal:
+            if selected_log_type == "gpmf":
+                self.camera_type_control.clear()
+                self.camera_type_control.addItem("hero5")
+                self.camera_type_control.addItem("hero6")
+                self.camera_type_control.addItem("hero7")
+                self.camera_type_control.addItem("hero8")
+            elif selected_log_type == "insta360":
+                self.camera_type_control.clear()
+                self.camera_type_control.addItem("smo4k")
+                self.camera_type_control.addItem("Insta360 OneR")
 
 
     def open_gyro_func(self):
@@ -2018,6 +2047,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.export_button.setEnabled(False)
             self.sync_correction_button.setEnabled(False)
 
+        if self.gyro_log_path == "":
+            self.show_error("No gyro log given. If you want to use the internal gyro data, there's a convenient button for using the input video as the gyro log.")
+
         fov_val = self.fov_slider.value() / 10
         smoothness_time_constant = self.get_smoothness_timeconstant()
         OF_slice_length = self.OF_frames_control.value()
@@ -2041,21 +2073,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
 
-        if self.gyro_log_path == "":
-            # GPMF file
+        selected_log_type = self.gyro_log_format_select.currentData()
 
+        if selected_log_type == "gpmf":
+            # GPMF file
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
             if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "smo4k", "insta360 oner"]:
                 self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
                 return
-            if gyro_orientation_text=="smo4k" or gyro_orientation_text=="insta360 oner":
-                self.stab = stabilizer.InstaStabilizer(self.infile_path, self.preset_path, None, gyro_lpf_cutoff=gyro_lpf, InstaType=gyro_orientation_text)            
             else:
                 heronum = int(gyro_orientation_text.replace("hero",""))
                 self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val, gyro_lpf_cutoff = gyro_lpf)
 
+        elif selected_log_type == "insta360":
+            gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
+            if gyro_orientation_text == "smo4k" or gyro_orientation_text == "insta360 oner":
+                self.stab = stabilizer.InstaStabilizer(self.infile_path, self.preset_path, None, gyro_lpf_cutoff=gyro_lpf, InstaType=gyro_orientation_text)
+            else:
+                self.show_error("Invalid orientation")
 
         else:
             # blackbox file

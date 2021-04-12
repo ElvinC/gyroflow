@@ -1037,7 +1037,7 @@ class StandardCalibrator:
                                 presets["date"]))
 
                 if presets["calibrator_version"] != __version__:
-                    print("Warning: Versions don't match. Calibrator: {}, Preset: {}"
+                    print("Warning: Versions don't match. Calibrator: {}, Preset: {}. (Usually not a problem)"
                         .format(__version__, presets["calibrator_version"]))
 
                 width = presets["calib_dimension"]["w"]
