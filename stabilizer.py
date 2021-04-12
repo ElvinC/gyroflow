@@ -7,6 +7,7 @@ import math
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
 from scipy.spatial.transform import Rotation
 from gyro_integrator import GyroIntegrator, FrameRotationIntegrator
+from adaptive_zoom import AdaptiveZoom
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
@@ -603,8 +604,6 @@ class Stabilizer:
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
                    debug_text = False, custom_ffmpeg = "", smoothingCenter=2.0, smoothingFocus=2.0, zoom=1.0):
 
-        print(locals())
-
         (out_width, out_height) = out_size
 
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
@@ -676,7 +675,8 @@ class Stabilizer:
         #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
         print("Starting to compute optimal Fov and center")
-        fcorr, focalCenter = self.undistort.adaptiveZoom(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
+        adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
+        fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
                                                         smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter)
         print("Done computing optimal Fov and center")
 
