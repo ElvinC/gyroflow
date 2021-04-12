@@ -2274,16 +2274,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
         smoothingFocus=self.fov_smoothing.value()/10
-        smoothingCenter=-1 #self.center_smoothing.value()/10
         zoomVal = self.zoom.value() /10
-        #if not self.enableSmoothingCenter.isChecked():
-        #    smoothingCenter=-1
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
                              display_preview=preview, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
-                             smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter, zoom=zoomVal)
+                             smoothingFocus=smoothingFocus, zoom=zoomVal)
 
 
 

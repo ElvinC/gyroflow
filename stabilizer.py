@@ -602,7 +602,7 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingCenter=2.0, smoothingFocus=2.0, zoom=1.0):
+                   debug_text = False, custom_ffmpeg = "", smoothingCenter=-1, smoothingFocus=2.0, zoom=1.0):
 
         (out_width, out_height) = out_size
 
@@ -677,7 +677,7 @@ class Stabilizer:
         print("Starting to compute optimal Fov and center")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
-                                                        smoothingFocus=smoothingFocus, smoothingCenter=smoothingCenter)
+                                                        smoothingFocus=smoothingFocus)
         print("Done computing optimal Fov and center")
 
         i = 0
