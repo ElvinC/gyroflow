@@ -2,7 +2,6 @@ import numpy as np
 import cv2
 import csv
 import platform
-import math
 
 from freqAnalysis import FreqAnalysis
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
@@ -77,7 +76,6 @@ class Stabilizer:
 
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
-        print(locals())
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
         d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
