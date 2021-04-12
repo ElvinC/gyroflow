@@ -1971,7 +1971,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def update_gyro_input_settings(self):
         # display/hide relevant gyro log settings
 
-        
+
 
         self.gyro_log_format_text.setVisible(True)
         self.gyro_log_format_select.setVisible(True)
