@@ -24,7 +24,7 @@ class GyroIntegrator:
         """
 
 
-    
+
         self.data = np.copy(input_data)
         # scale input data
         self.data[:,0] *= time_scaling
@@ -58,44 +58,6 @@ class GyroIntegrator:
         self.imuRefY = quat.vector(0,0,1)
 
         self.already_integrated = False
-
-    def sampleFrequencyAnalysis(self):
-        timestamps = self.get_raw_data("t")
-        gyro_data = self.get_raw_data("xyz")
-        interarrival = np.diff(timestamps, n=1)
-        w = int(self.gyro_sample_rate/100.0) # aggregate over 1%, e.g., 9 gyro samples for 900Hz/900 samples per second
-        interarrival = np.convolve(interarrival, np.ones(w), 'valid') / w   # moving average
-        freqs = 1.0/interarrival
-        
-        median = np.median(freqs)
-        mad = stats.median_abs_deviation(freqs)
-        mad_normal = stats.median_abs_deviation(freqs, scale='normal')
-        std = np.std(freqs)
-        
-        print('Computed sample rate is {}'.format(self.gyro_sample_rate))
-        print('Median freq is {}'.format(median))
-        print('Mean freq is {}'.format(np.mean(freqs)))
-        print('Stdev of freqs is {}'.format(std))
-        print('MAD of freqs is {}'.format(mad))
-        print('MAD (normal) of freqs is {}'.format(mad_normal))
-        
-        thresh = mad_normal if mad_normal > std else std
-        thresh = 6*thresh #corresponds to 100% of observations when following normal distribution
-        outlierMask = median - freqs > thresh
-        plt.plot(timestamps, gyro_data)
-        plt.plot(timestamps[:-1-(w-1)], outlierMask*2)
-        plt.show()
-        
-        plt.hist(freqs, bins=300)
-        plt.yscale("log")
-        plt.axvline(x=median+thresh, color="red")
-        plt.axvline(x=median-thresh, color="red")
-        plt.axvline(x=median, color='green')
-        plt.axvline(x=np.mean(freqs), color='orange')
-        plt.show()
-        
-        
-   
 
     def integrate_all(self):
         """go through each gyro sample and integrate to find orientation
@@ -208,9 +170,9 @@ class GyroIntegrator:
             # rotation quaternion from smooth motion -> raw motion to counteract it
             stab_rotations[i,:] = quat.rot_between(smoothed_orientation[i],self.orientation_list[i])
 
-        return (self.time_list, stab_rotations) 
+        return (self.time_list, stab_rotations)
 
-        
+
     def get_interpolated_stab_transform(self,smooth, start=0, interval=1/29.97):
         time_list, smoothed_orientation = self.get_stabilize_transform(smooth)
 
@@ -311,7 +273,7 @@ class FrameRotationIntegrator(GyroIntegrator):
             initial_orientation (float[4]): Quaternion representing the starting orientation, Defaults to [1, 0.0001, 0.0001, 0.0001].
         """
 
-            
+
         self.data = np.copy(input_data)
 
         self.num_data_points = self.data.shape[0]
@@ -348,7 +310,7 @@ class FrameRotationIntegrator(GyroIntegrator):
         # temp lists to save data
         temp_orientation_list = []
         temp_time_list = []
-        
+
 
         temp_orientation_list.append(np.copy(self.orientation))
         temp_time_list.append(self.data[0][0] - 1)
@@ -404,7 +366,7 @@ class EulerIntegrator:
             acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
         """
 
-    
+
         self.data = np.copy(input_data)
         # scale input data
         self.data[:,0] *= time_scaling
@@ -528,9 +490,9 @@ class EulerIntegrator:
             # rotation quaternion from smooth motion -> raw motion to counteract it
             stab_rotations[i,:] = quat.rot_between(smoothed_orientation[i],self.orientation_list[i])
 
-        return (self.time_list, stab_rotations) 
+        return (self.time_list, stab_rotations)
 
-        
+
     def get_interpolated_stab_transform(self,smooth, start=0, interval=1/29.97):
         time_list, smoothed_orientation = self.get_stabilize_transform(smooth)
 
@@ -627,15 +589,15 @@ if __name__ == "__main__":
     integrator.integrate_all()
     stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
     orig = stabtransforms[50]
- 
+
     # Hero 6 as reference
     fake_gyro_data[:,2] = -fake_gyro_data[:,2]
     integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None)
     integrator.integrate_all()
     stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
     weird = stabtransforms[50]
-    
-    print(weird)    
+
+    print(weird)
     print(orig)
 
 

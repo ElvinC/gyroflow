@@ -4,6 +4,7 @@ import csv
 import platform
 import math
 
+from freqAnalysis import FreqAnalysis
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
 from scipy.spatial.transform import Rotation
 from gyro_integrator import GyroIntegrator, FrameRotationIntegrator
@@ -976,7 +977,7 @@ class GPMFStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
-        self.integrator.sampleFrequencyAnalysis()
+        FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
         self.integrator.integrate_all()
         self.times = None
         self.stab_transform = None
@@ -1242,7 +1243,7 @@ class BBLStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
-        self.integrator.sampleFrequencyAnalysis()
+        FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
         self.integrator.integrate_all()
         self.times = None
         self.stab_transform = None
