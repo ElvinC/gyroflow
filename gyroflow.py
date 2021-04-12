@@ -619,13 +619,14 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
 
         # button for exporting preset
+        self.right_layout.addWidget(QtWidgets.QLabel("Check before saving:\nLow RMS error (<5 works, <1 is best)\nImage looks right after 'toggle lens correction'"))
         self.export_button = QtWidgets.QPushButton("Export preset file")
         self.export_button.setMinimumHeight(self.button_height)
         self.export_button.clicked.connect(self.save_preset_file)
         self.export_button.setEnabled(False)
         
         self.right_layout.addWidget(self.export_button, alignment=QtCore.Qt.AlignBottom)
-
+        self.right_layout.addWidget(QtWidgets.QLabel("Want to help? Send new presets here:<br><a href='http://gyroflow.xyz/lens'>http://gyroflow.xyz/lens</a>"))
 
         # file menu setup
         menubar = self.menuBar()
