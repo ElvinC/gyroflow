@@ -91,7 +91,7 @@ class AdaptiveZoom:
 
         return 1/fcorr #np.min([xminDist/output_width, yminDist/output_height])
 
-    def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0, smoothingCenter=2.0):
+    def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0):
         #print(locals())
         #smoothingNumFrames = int(smoothingCenter * fps)
         #if smoothingNumFrames % 2 == 0:
