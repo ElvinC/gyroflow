@@ -7,11 +7,6 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
 from scipy.spatial.transform import Rotation
-from scipy import signal, interpolate
-import math
-
-from matplotlib import pyplot as plt
-import matplotlib
 
 import sys
 
