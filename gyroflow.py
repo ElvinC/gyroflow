@@ -71,7 +71,7 @@ class Launcher(QtWidgets.QWidget):
         self.version_button.setMinimumSize(300,50)
         self.version_button.setStyleSheet("font-size: 14px;")
 
-        self.footer = QtWidgets.QLabel('''Developed by Elvin | <a href='http://gyroflow.xyz/'>gyroflow.xyz</a> | <a href='https://github.com/ElvinC/gyroflow'>Git repo</a> | <a href='http://gyroflow.xyz/donate'>Donate</p>''')
+        self.footer = QtWidgets.QLabel('''Developed by Elvin & Contributors | <a href='http://gyroflow.xyz/'>gyroflow.xyz</a> | <a href='https://github.com/ElvinC/gyroflow'>Git repo</a> | <a href='http://gyroflow.xyz/donate'>Donate</p>''')
         self.footer.setOpenExternalLinks(True)
         self.footer.setAlignment(QtCore.Qt.AlignCenter)
 
@@ -100,6 +100,8 @@ class Launcher(QtWidgets.QWidget):
         self.stabilizer_utility = None
         self.stabilizer_utility_barebone = None
         self.stretch_utility = None
+
+        self.check_version(True)
 
     def open_calib_util(self):
         """Open the camera calibration utility in a new window
@@ -147,7 +149,8 @@ class Launcher(QtWidgets.QWidget):
         self.stretch_utility.resize(500, 500)
         self.stretch_utility.show()
 
-    def check_version(self):
+    def check_version(self, background=False):
+
         with urllib.request.urlopen("https://api.github.com/repos/elvinc/gyroflow/releases") as url:
             releases = json.loads(url.read())
             newest_version = releases[0]["tag_name"]
@@ -158,22 +161,25 @@ class Launcher(QtWidgets.QWidget):
 
             diff = [int(A) - int(B) for A,B in zip(new,current)]
             val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
-            print(val)
+            
+            showpopup = not background
+
             if newest_version.strip() == __version__.strip():
                 extra = "Not much to see here:"
             elif val > 0:
-                extra = "Oh look, there's a shiny new update. <a href='https://github.com/ElvinC/gyroflow'>Here's a link just for you.</a> "
+                extra = "Oh look, there's a shiny new update. <a href='https://elvinchen.com/gyroflow/download/'>Here's a link just for you.</a> "
+                showpopup = True
             elif val < 0:
                 extra = "Looks like somebody is time traveling..."
             else:
                 extra = "Spot the difference:"
 
-           
-            msg_window = QtWidgets.QMessageBox(self)
-            msg_window.setIcon(QtWidgets.QMessageBox.Information)
-            msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
-            msg_window.setWindowTitle("Version check")
-            msg_window.show()
+            if showpopup:
+                msg_window = QtWidgets.QMessageBox(self)
+                msg_window.setIcon(QtWidgets.QMessageBox.Information)
+                msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
+                msg_window.setWindowTitle("Version check")
+                msg_window.show()
 
 
 
@@ -1750,7 +1756,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.display_preview.setChecked(True)
         self.export_controls_layout.addWidget(self.display_preview)
 
-        self.export_debug_text = QtWidgets.QCheckBox("Render with debug text")
+        self.export_debug_text = QtWidgets.QCheckBox("Render with debug info")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
