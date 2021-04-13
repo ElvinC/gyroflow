@@ -1158,16 +1158,18 @@ class BBLStabilizer(Stabilizer):
                 print(self.gyro_data)
 
         else:
-            self.bbe = BlackboxExtractor(bblpath)
-            self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
-
+            try:
+                self.bbe = BlackboxExtractor(bblpath)
+                self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
+            except ValueError:
+                print("Error reading raw blackbox file. Try converting to CSV in blackbox explorer")
 
         # This seems to make the orientation match. Implement auto match later
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
         #self.gyro_data[:,2] = -self.gyro_data[:,2]
 
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-        self.gyro_data[:,2] = self.gyro_data[:,2]
+        #self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
         
         self.gyro_lpf_cutoff = gyro_lpf_cutoff

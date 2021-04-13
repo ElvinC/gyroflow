@@ -21,9 +21,13 @@ class GyroIntegrator:
             acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
         """
 
-
-    
         self.data = np.copy(input_data)
+        # Check for corrupted/out of order timestamps
+        time_order_check = self.data[:-1,0] > self.data[1:,0]
+        if np.any(time_order_check):
+            print("Truncated bad gyro data")
+            self.data = self.data[0:np.argmax(time_order_check)+1,:]
+
         # scale input data
         self.data[:,0] *= time_scaling
         self.data[:,1:4] *= gyro_scaling
