@@ -2067,10 +2067,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         else:
             self.fov_smoothing.setDisabled(True)
 
-    def center_smoothing_changed(self):
-        val = self.center_smoothing.value() / 10
-        self.center_smoothing_text.setText("Smoothing Window Center (sec): {}".format(val))
-
     def zoom_changed(self):
         val = self.zoom.value() / 10
         self.zoom_text.setText("Zoom Factor: {}".format(val))
