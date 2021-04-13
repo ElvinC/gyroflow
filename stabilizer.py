@@ -602,7 +602,7 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingCenter=-1, smoothingFocus=2.0, zoom=1.0):
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0):
 
         (out_width, out_height) = out_size
 
@@ -1114,8 +1114,6 @@ class BBLStabilizer(Stabilizer):
 
         super().__init__()
 
-        print(locals())
-
         # General video stuff
         self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
@@ -1518,8 +1516,8 @@ if __name__ == "__main__":
     stab.manual_sync_correctionCLI(5.4744, 5.6012, 870, 2100, 120, 0.24)
     stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (3840,2160), split_screen = False,
                    bitrate_mbits = 20, display_preview = True, scale=1, vcodec = "libx264", vprofile="high", pix_fmt = "",
-                   debug_text = True, custom_ffmpeg = "", zoom=0.6,
-                   smoothingFocus=1.0, smoothingCenter=1.0)
+                   debug_text = True, custom_ffmpeg = "", zoom=0.9,
+                   smoothingFocus=-1)
     exit()
 
     # insta360 test

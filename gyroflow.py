@@ -1692,6 +1692,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
+        self.enableAdaptiveZoom = QtWidgets.QCheckBox("Adaptive zoom  (if disabled, use zoom to set desired Fov)")
+        self.enableAdaptiveZoom.setChecked(True)
+        self.enableAdaptiveZoom.clicked.connect(self.enableAdaptiveZoomClicked)
+        self.export_controls_layout.addWidget(self.enableAdaptiveZoom)
+
         self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 1.0")
         self.export_controls_layout.addWidget(self.fov_smoothing_text)
         self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
@@ -1702,11 +1707,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_smoothing.setTickInterval(1)
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
         self.export_controls_layout.addWidget(self.fov_smoothing)
-
-        #self.enableSmoothingCenter = QtWidgets.QCheckBox("Smooth position of crop")
-        #self.enableSmoothingCenter.setChecked(True)
-        #self.enableSmoothingCenter.clicked.connect(self.enableSmoothingCenterClicked)
-        #self.export_controls_layout.addWidget(self.enableSmoothingCenter)
 
         #self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 1.0")
         #self.export_controls_layout.addWidget(self.center_smoothing_text)
@@ -2072,11 +2072,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         val = self.fov_smoothing.value() / 10
         self.fov_smoothing_text.setText("Smoothing Window Fov (sec): {}".format(val))
 
-    def enableSmoothingCenterClicked(self):
-        if self.enableSmoothingCenter.isChecked():
-            self.center_smoothing.setDisabled(False)
+    def enableAdaptiveZoomClicked(self):
+        if self.enableAdaptiveZoom.isChecked():
+            self.fov_smoothing.setDisabled(False)
         else:
-            self.center_smoothing.setDisabled(True)
+            self.fov_smoothing.setDisabled(True)
 
     def center_smoothing_changed(self):
         val = self.center_smoothing.value() / 10
@@ -2274,6 +2274,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
         smoothingFocus=self.fov_smoothing.value()/10
+        if not self.enableAdaptiveZoom.isChecked():
+            smoothingFocus = -1
         zoomVal = self.zoom.value() /10
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,

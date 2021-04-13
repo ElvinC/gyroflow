@@ -267,9 +267,6 @@ class FisheyeCalibrator:
 
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
 
-        #scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
-        #scaled_K[2][2] = 1.0
-
         R = np.eye(3)
 
         if type(quat) != type(None):
@@ -285,12 +282,6 @@ class FisheyeCalibrator:
         new_K[1][1] = new_K[1][1] * 1.0/fov_scale
         new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* 1.0/fov_scale + new_img_dim[0]/2
         new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* 1.0/fov_scale + new_img_dim[1]/2
-
-        #new_K[0][0] = new_K[1][1] * 0.98
-        #new_K[1][1] = new_K[1][1] * 0.98
-
-        #print(self.K)
-        #print(new_K)
 
         if update_new_K:
             self.new_K = new_K
@@ -598,8 +589,8 @@ class StandardCalibrator:
                                cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
 
         self.calibration_flags = (cv2.CALIB_SAME_FOCAL_LENGTH +
-                                  cv2.CALIB_RATIONAL_MODEL + 
-                                  cv2.CALIB_FIX_PRINCIPAL_POINT + 
+                                  cv2.CALIB_RATIONAL_MODEL +
+                                  cv2.CALIB_FIX_PRINCIPAL_POINT +
                                   cv2.CALIB_USE_INTRINSIC_GUESS +
                                   cv2.CALIB_TILTED_MODEL)
 

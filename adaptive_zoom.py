@@ -62,9 +62,7 @@ class AdaptiveZoom:
 
         fcorr = np.max( ffactor )
         idx = np.argmax( ffactor )
-        #ax.plot([0,6000*np.cos(angle_output)],[0,6000*np.sin(angle_output)])
-        #ax.plot(fcorr*distP*np.cos(angles), fcorr*distP*np.sin(angles), 'bo')
-        #plt.show()
+
         return fcorr, idx
 
     def findFov(self, center, polygon, output_dim, numIntPoints=20):
@@ -107,8 +105,6 @@ class AdaptiveZoom:
         #focusWindows = np.array(focusWindows)
 
         # TODO: implement smoothing of position of crop, s.t. cropping area can "move" anywhere within bounding polygon
-        #if smoothingCenter < 0: #disabled
-        #print("Smoothing position of crop disabled")
         cropCenterPositions = np.array([(self.calib_dimension[0]/2,self.calib_dimension[1]/2) for q in quaternions])
 
         #if smoothingCenter > 0:
@@ -136,6 +132,9 @@ class AdaptiveZoom:
             plt.plot(fovSmooth)
             plt.show()
             fovValues = fovSmooth
+        elif smoothingFocus < 0: #disabled
+            maxF = np.max(fovValues)
+            fovValues = np.repeat(maxF, fovValues.size )
 
         return fovValues, cropCenterPositions
 
