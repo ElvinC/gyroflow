@@ -687,7 +687,7 @@ class Stabilizer:
                 break
 
             elif frame_num >= len(self.stab_transform):
-                print("No more stabilization data")
+                print("No more stabilization data. Stopping render here.")
                 break
 
             if success and i > 0:
@@ -765,6 +765,7 @@ class Stabilizer:
 
         # When everything done, release the capture
         #out.release()
+        print("Render finished")
         cv2.destroyAllWindows()
         out.close()
 
