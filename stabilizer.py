@@ -600,6 +600,7 @@ class Stabilizer:
 
         return sum_squared_diff
 
+
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
                    debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0):
@@ -660,7 +661,6 @@ class Stabilizer:
 
         out = WriteGear(output_filename=outpath, **output_params)
         output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
-        #crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
 
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
@@ -718,10 +718,8 @@ class Stabilizer:
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
+                # borderValue, BORDER_REPLICATE
 
-                #frame_out = cv2.circle(frame_out, (int(self.width/2),int(self.height/2)), radius=15, color=(0, 0, 255), thickness=-1)
-                #print(points)
-                #plt.scatter(points[:,0], points[:,1])
                 if debug_text:
                     topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
                     bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
@@ -748,7 +746,6 @@ class Stabilizer:
 
                 # Fix border artifacts
 
-                #frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
 
                 # temp debug text
                 if debug_text:
