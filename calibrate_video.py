@@ -263,9 +263,8 @@ class FisheyeCalibrator:
             (np.ndarray,np.ndarray): Undistortion maps
         """
 
-        focalCenter = focalCenter if focalCenter is not None else np.array([0,0])
-
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
+        focalCenter = focalCenter if focalCenter is not None else np.array([0,0])
 
         R = np.eye(3)
 

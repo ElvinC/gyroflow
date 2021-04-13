@@ -1708,17 +1708,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
         self.export_controls_layout.addWidget(self.fov_smoothing)
 
-        #self.center_smoothing_text = QtWidgets.QLabel("Smoothing Window Center (sec): 1.0")
-        #self.export_controls_layout.addWidget(self.center_smoothing_text)
-        #self.center_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        #self.center_smoothing.setMinimum(0)
-        #self.center_smoothing.setValue(10)
-        #self.center_smoothing.setMaximum(40)
-        #self.center_smoothing.setSingleStep(1)
-        #self.center_smoothing.setTickInterval(1)
-        #self.center_smoothing.valueChanged.connect(self.center_smoothing_changed)
-        #self.export_controls_layout.addWidget(self.center_smoothing)
-
         self.zoom_text = QtWidgets.QLabel("Zoom Factor: 1.0")
         self.export_controls_layout.addWidget(self.zoom_text)
         self.zoom = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
