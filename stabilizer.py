@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import csv
+import os
 import platform
 
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
@@ -573,6 +574,28 @@ class Stabilizer:
 
         return sum_squared_diff
 
+    def export_stabilization(self, outpath = "Stabilized.csv"):
+        basename = os.path.splitext(outpath)[0]
+        with open(outpath, 'w') as f, open(basename + ".w.spl", 'w') as w, open(basename + ".x.spl", 'w') as x, open(basename + ".y.spl", 'w') as y, open(basename + ".z.spl", 'w') as z:
+            csv_writer = csv.writer(f, delimiter=",", quotechar='"')
+            csv_writer.writerow(["frame", "w", "x", "y", "z"])
+
+            w.write("DFSP\n")
+            x.write("DFSP\n")
+            y.write("DFSP\n")
+            z.write("DFSP\n")
+
+            for ix in range(len(self.times)):
+                q = self.stab_transform[ix]
+
+                if type(q) != type(None):
+                    q = q.flatten()
+
+                csv_writer.writerow([ix, q[0], q[1], q[2], q[3]])
+                w.write(f"{ix} {q[0]}\n")
+                x.write(f"{ix} {q[1]}\n")
+                y.write(f"{ix} {q[2]}\n")
+                z.write(f"{ix} {q[3]}\n")
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",

@@ -862,10 +862,12 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
             self.export_button.setEnabled(True)
+            self.export_keyframes_button.setEnabled(True)
         else:
             self.preview_toggle_btn.setChecked(False)
             self.preview_toggle_btn.setEnabled(False)
             self.export_button.setEnabled(False)
+            self.export_keyframes_button.setEnabled(False)
 
     def calibrate_frames(self):
         self.calibrator.compute_calibration()
@@ -1358,6 +1360,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.setAlignment(QtCore.Qt.AlignTop)
         self.export_controls.setMinimumWidth(500)
 
+        self.export_keyframes_controls = QtWidgets.QWidget()
+        self.export_keyframes_controls_layout = QtWidgets.QVBoxLayout()
+        self.export_keyframes_controls.setLayout(self.export_keyframes_controls_layout)
+        self.export_keyframes_controls_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.export_keyframes_controls.setMinimumWidth(500)
+
 
         text = QtWidgets.QLabel("<h2>Input parameters:</h2>".format(__version__))
         text.setAlignment(QtCore.Qt.AlignCenter)
@@ -1790,6 +1798,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         
         self.export_controls_layout.addWidget(self.export_button)
 
+        self.export_keyframes_button = QtWidgets.QPushButton("Export (hopefully) stabilized keyframes for the whole clip")
+        self.export_keyframes_button.setMinimumHeight(30)
+        self.export_keyframes_button.setEnabled(False)
+        self.export_keyframes_button.clicked.connect(self.export_keyframes)
+        
+        self.export_controls_layout.addWidget(self.export_keyframes_button)
+
         # warning for HW encoding
         render_description = QtWidgets.QLabel(
         "<b>Note:</b> videotoolbox, vaapi and nvenc are HW accelerated encoders and require FFmpeg with hardware acceleration support!")
@@ -2051,6 +2066,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.infile_path == "" or self.preset_path == "":
             self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
             self.export_button.setEnabled(False)
+            self.export_keyframes_button.setEnabled(False)
             self.sync_correction_button.setEnabled(False)
 
         if self.gyro_log_path == "":
@@ -2087,6 +2103,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "smo4k", "insta360 oner"]:
                 self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
+                self.export_keyframes_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
                 return
             else:
@@ -2142,6 +2159,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.recompute_stab_button.setText("Recompute sync")
         self.export_button.setEnabled(True)
+        self.export_keyframes_button.setEnabled(True)
         
         # Show estimated delays in UI
         self.sync_correction_button.setEnabled(True)
@@ -2160,6 +2178,18 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         smoothness_time_constant = self.get_smoothness_timeconstant()
         self.stab.manual_sync_correction(d1, d2, smoothness_time_constant)
 
+
+    def export_keyframes(self):
+        export_file_filter = "Comma-separated values (*.csv)"
+        
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export keyframes", filter=export_file_filter)
+        print("Output file: {}".format(filename[0]))
+
+        if len(filename[0]) == 0:
+            self.show_error("No output file given")
+            return
+
+        self.stab.export_stabilization(filename[0])
 
     def export_video(self):
         """Gives save location using filedialog
