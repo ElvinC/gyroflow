@@ -156,6 +156,31 @@ class Stabilizer:
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
+    def manual_sync_correctionCLI(self, d1, d2, sliceframe1, sliceframe2, slicelength, smooth):
+        v1 = (sliceframe1 + slicelength/2) / self.fps
+        v2 = (sliceframe2 + slicelength/2) / self.fps
+
+        print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
+
+        g1 = v1 - d1
+        g2 = v2 - d2
+        slope =  (v2 - v1) / (g2 - g1)
+        corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
+        print("Gyro correction slope {}".format(slope))
+
+        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+
+        new_gyro_data = np.copy(self.gyro_data)
+
+        # Correct time scale
+        new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
+
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
+        new_integrator.integrate_all()
+        self.last_smooth = smooth
+        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+
+
     def manual_sync_correction(self, d1, d2, smooth=0.8):
         v1 = self.v1
         v2 = self.v2
@@ -649,11 +674,11 @@ class Stabilizer:
 
         #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
-        print("Starting to compute optimal Fov")
+        print("Starting to compute optimal Fov and center")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
                                                         smoothingFocus=smoothingFocus)
-        print("Done computing optimal Fov")
+        print("Done computing optimal Fov and center")
 
         i = 0
         while(True):
@@ -700,6 +725,8 @@ class Stabilizer:
                     bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
                     frame_out = cv2.rectangle(frame_out, topleft,
                                                          bottomright, (255,0,0), 3)
+                #for p in contour:
+                #    frame_out = cv2.circle(frame_out, (int(p[0]),int(p[1])), radius=5, color=(0, 255, 255), thickness=-1)
 
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
                 #cv2.imshow("Before and After", frame_undistort)
@@ -1473,6 +1500,22 @@ if __name__ == "__main__":
     stab.renderfile("GX016017_2_stab_optical.mp4",out_size = (1920,1080))
     stab.release()
     """
+
+    #test case
+    stab = BBLStabilizer('/home/mroe/fpv_local/walchwil/tarsier/LOOP0095.mp4',
+        '/home/mroe/gyroflow/camera_presets/Caddx/Caddx_Tarsier_4K_F_2_8_2160p_16by9.json',
+        '/home/mroe/fpv_local/walchwil/tarsier/btfl_002.bbl.csv', fov_scale=1.5, cam_angle_degrees=10.0,
+                                         use_csv=True, gyro_lpf_cutoff = -1, logtype='')
+    stab.set_initial_offset(5.0)
+    stab.set_rough_search(10.0)
+    #stab.auto_sync_stab(0.24, 870, 2100, 120, debug_plots=True)
+    #stab.manual_sync_correction(5.4744, 5.6012, smooth=0.24)
+    stab.manual_sync_correctionCLI(5.4744, 5.6012, 870, 2100, 120, 0.24)
+    stab.renderfile(63, 80, outpath = "/home/mroe/fpv_local/walchwil/tarsier/LOOP0095_stab-2.mp4", out_size = (3840,2160), split_screen = False,
+                   bitrate_mbits = 20, display_preview = True, scale=1, vcodec = "libx264", vprofile="high", pix_fmt = "",
+                   debug_text = True, custom_ffmpeg = "", zoom=0.9,
+                   smoothingFocus=-1)
+    exit()
 
     # insta360 test
 
