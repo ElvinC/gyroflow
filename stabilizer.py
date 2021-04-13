@@ -77,6 +77,9 @@ class Stabilizer:
 
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
+        if debug_plots:
+            FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
+            
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
         d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
@@ -946,7 +949,6 @@ class GPMFStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
-        FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
         self.integrator.integrate_all()
         self.times = None
         self.stab_transform = None
@@ -1199,7 +1201,6 @@ class BBLStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
-        FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
         self.integrator.integrate_all()
         self.times = None
         self.stab_transform = None
