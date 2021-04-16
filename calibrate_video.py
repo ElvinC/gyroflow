@@ -277,13 +277,6 @@ class FisheyeCalibrator:
         scaled_K = self.K * img_dim_ratio
         scaled_K[2][2] = 1.0
 
-        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
-                img_dim, np.eye(3), fov_scale=fov_scale)
-
-        #new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(self.K, self.D,
-        #        img_dim, None, balance=1, fov_scale=1)
-        #print(new_K)
-
         new_K = np.copy(self.K)
         new_K[0][0] = new_K[0][0] * 1.0/fov_scale
         new_K[1][1] = new_K[1][1] * 1.0/fov_scale
@@ -315,8 +308,17 @@ class FisheyeCalibrator:
 
 
     def recover_pose(self, pts1, pts2, new_img_dim = None):
+        """ Find rotation matrices using epipolar geometry
+        
+        Args:
+            pts1 (np.ndarray): Initial points
+            pts2 (np.ndarray): Resulting points
+            new_img_dim (tuple, optional): New image dimension. Defaults to None.
+
+        Returns:
+            [type]: [description]
+        """
         # https://answers.opencv.org/question/31421/opencv-3-essentialmatrix-and-recoverpose/
-        # Find essential matrix from fundamental matrix
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
         scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
         scaled_K[2][2] = 1.0
@@ -345,7 +347,6 @@ class FisheyeCalibrator:
         rotZ = (rotZval)*np.pi/180
         rot_mat = np.eye(4)
 
-
         #print(Rotation([quat[0,1],quat[0,2],quat[0,3],quat[0,0]]).as_euler('xyz'))
         quat = quat.flatten()
         eul = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_euler('xyz')
@@ -353,28 +354,8 @@ class FisheyeCalibrator:
         combined_rotation = np.eye(4)
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
         combined_rotation[0:3,0:3] = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
-        #eul = Rotation(quat).as_euler('xyz')[0]
-
-        #rot1 = np.eye(4)
-        #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
-
-        #rot2 = np.eye(4)
-        #rot2[0:3,0:3] = Rotation.from_euler('xyz', [eul[2], 0, 0], degrees=False).as_matrix()
-
-        #rot3 = np.eye(4)
-        #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
-
-        #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
-        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quat)
 
         rot_mat = combined_rotation
-
-        #rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
-
-        #rot_mat[0,1] = 0
-        #rot_mat[1,2] = 0
-        #rot_mat[2,2] = 1
-
         img_dim = img.shape[:2][::-1]
 
         # Scaled 3x4 camera matrix
@@ -382,41 +363,22 @@ class FisheyeCalibrator:
         K[:3,:3] = self.K
 
         # should make the rotation match fov change
-        # Might not work, idk
         K[0,0] = self.new_K[0,0]
         K[1,1] = self.new_K[1,1]
-
-        #print(K)
-
 
         K *= img_dim[0] / self.calib_dimension[0]
 
         K[2][2] = 1.0
-
 
         # compute inverse camera matrix using scaled K
         Kinv = np.zeros((4,3))
         Kinv[0:3,0:3] = inverse_cam_mtx(K[:3,:3])
         Kinv[3,:] = [0, 0, 1]
 
-        distX = 0
-        distY = 0
-        distZ = 0
-
-        translation = np.array([[1,0,0,distX],
-                                [0,1,0,distY],
-                                [0,0,1,distZ],
-                                [0,0,0,1]])
-
-
         H = np.linalg.multi_dot([K, rot_mat, Kinv])
-
-        #trans = rot_mat * translation
-        #trans[2,2] += self.calib_dimension[1]/2
 
         #transform = self.K * trans
         outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
-
         return outimg
 
 
@@ -909,21 +871,7 @@ class StandardCalibrator:
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
         combined_rotation[0:3,0:3] = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
         #eul = Rotation(quat).as_euler('xyz')[0]
-
-        #rot1 = np.eye(4)
-        #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
-
-        #rot2 = np.eye(4)
-        #rot2[0:3,0:3] = Rotation.from_euler('xyz', [eul[2], 0, 0], degrees=False).as_matrix()
-
-        #rot3 = np.eye(4)
-        #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
-
-        #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
-        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quat)
-
         rot_mat = combined_rotation
-
         #rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
 
         #rot_mat[0,1] = 0

@@ -101,14 +101,9 @@ class Stabilizer:
 
         err_slope = (d2-d1)/(v2-v1)
         correction_slope = err_slope + 1
-        gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
+        gyro_start = (d1 - err_slope*v1)
 
         interval = 1/(correction_slope * self.fps)
-
-        # viz_correction = 0.5/self.fps
-
-        #corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
-        #corrected_times = (self.integrator.get_raw_data("t"))*(alpha + 1) + beta
 
         g1 = v1 - d1
         g2 = v2 - d2
@@ -669,8 +664,6 @@ class Stabilizer:
             else:
                 print("No FFmpeg detected in the windows PATH")
 
-
-        #output_params["-ffmpeg_download_path"] = "/ffmpeg"
         out = WriteGear(output_filename=outpath, **output_params)
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
@@ -687,7 +680,7 @@ class Stabilizer:
         print("Starting to compute optimal Fov")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
-                                                        smoothingFocus=smoothingFocus)
+                                                        smoothingFocus=smoothingFocus, debug_plots=(smoothingFocus != -1))
         print("Done computing optimal Fov")
 
 

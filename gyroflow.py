@@ -17,9 +17,7 @@ import re
 import calibrate_video
 import subprocess
 import bundled_images
-
 import insta360_utility as insta360_util
-
 import stabilizer
 
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
@@ -439,7 +437,6 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         # only update when slider not in use
         if self.is_seeking:
             return
-
 
         slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
         # update slider without triggering valueChange
@@ -2169,8 +2166,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.d2_control.setValue(self.stab.d2)
 
         self.analyzed = True
-
-
 
 
     def correct_sync(self):
