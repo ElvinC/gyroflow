@@ -1371,14 +1371,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         explaintext.setMinimumHeight(60)
         self.input_controls_layout.addWidget(explaintext)
 
-
+        self.input_controls_layout.addWidget(QtWidgets.QLabel('Rotate video:'))
+        self.input_video_rotate_select = QtWidgets.QComboBox()
+        self.input_video_rotate_select.addItem("None", -1)
+        self.input_video_rotate_select.addItem("90° Clockwise", cv2.ROTATE_90_CLOCKWISE) # 0
+        self.input_video_rotate_select.addItem("90° Counterclockwise", cv2.ROTATE_90_COUNTERCLOCKWISE) # 2
+        self.input_video_rotate_select.addItem("180°", cv2.ROTATE_180) # 1
+        self.input_controls_layout.addWidget(self.input_video_rotate_select)
+        
 
         data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
 
-
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
-
 
         #self.gyro_log_model = QtGui.QStandardItemModel()
         for i, text in data:
@@ -1420,6 +1425,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.camera_type_control.addItem("hero6")
         self.camera_type_control.addItem("hero7")
         self.camera_type_control.addItem("hero8")
+        self.camera_type_control.addItem("hero9")
 
         self.input_controls_layout.addWidget(self.camera_type_control)
 
@@ -1774,13 +1780,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.export_bitrate)
         self.update_bitrate_visibility()
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
+        #self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
         self.pixfmt_select = QtWidgets.QLineEdit()
-        self.export_controls_layout.addWidget(self.pixfmt_select)
+        #self.export_controls_layout.addWidget(self.pixfmt_select) # Shouldn't be required
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("Background color. #HexCode, CSS color name, or REPLICATE (Extend edge):"))
+        
+        bg_description = QtWidgets.QLabel("Background color. #HexCode, CSS color name, REPLICATE (Extend edge), HISTORY (Keep previous frame):")
+        bg_description.setWordWrap(True)
+        self.export_controls_layout.addWidget(bg_description)
         colornames = list(colors.cnames.keys())
-        completer = QtWidgets.QCompleter(colornames + ["REPLICATE"])
+        completer = QtWidgets.QCompleter(colornames + ["REPLICATE","HISTORY"])
         self.bg_color_select = QtWidgets.QLineEdit()
         self.bg_color_select.setCompleter(completer)
         self.bg_color_select.setPlaceholderText(random.choice(colornames))
@@ -1997,6 +2006,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 self.camera_type_control.addItem("hero6")
                 self.camera_type_control.addItem("hero7")
                 self.camera_type_control.addItem("hero8")
+                self.camera_type_control.addItem("hero9")
             elif selected_log_type == "insta360":
                 self.camera_type_control.clear()
                 self.camera_type_control.addItem("smo4k")
@@ -2109,7 +2119,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if selected_log_type == "gpmf":
             # GPMF file
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
-            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "smo4k", "insta360 oner"]:
+            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "hero9", "smo4k", "insta360 oner"]:
                 self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
                 self.export_keyframes_button.setEnabled(False)

@@ -236,6 +236,8 @@ class Stabilizer:
 
         # Read first frame
         _, prev = self.cap.read()
+        if self.do_video_rotation:
+            prev = cv2.rotate(prev, self.video_rotation_code)
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
 
         for i in range(analyze_length):
@@ -244,6 +246,8 @@ class Stabilizer:
 
 
             succ, curr = self.cap.read()
+            if self.do_video_rotation:
+                curr = cv2.rotate(curr, self.video_rotation_code)
 
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
@@ -611,6 +615,8 @@ class Stabilizer:
 
         if bg_color == "REPLICATE":
             borderMode = cv2.BORDER_REPLICATE
+        elif bg_color == "HISTORY":
+            borderMode = cv2.BORDER_TRANSPARENT
         else:
             borderMode = cv2.BORDER_CONSTANT
             borderValue = [round(x*255) for x in colors.to_rgb(bg_color)][::-1]
@@ -677,16 +683,12 @@ class Stabilizer:
 
         out = WriteGear(output_filename=outpath, **output_params)
 
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
-        time.sleep(0.1)
-
         num_frames = int((stoptime - starttime) * self.fps)
 
         #tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
         #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
 
 
-        #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
 
         print("Starting to compute optimal Fov")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
@@ -694,13 +696,27 @@ class Stabilizer:
                                                         smoothingFocus=smoothingFocus, debug_plots=(smoothingFocus != -1))
         print("Done computing optimal Fov")
 
+        new_img_dim=(int(self.width * scale),int(self.height*scale))
+        
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+        time.sleep(0.1)
+
+        # Generate initial black frame
+        success, frame = self.cap.read()
+        if self.do_video_rotation:
+            frame = cv2.rotate(frame, self.video_rotation_code)
+        frame_out = cv2.resize(frame, new_img_dim, interpolation=cv2.INTER_LINEAR) * 0.0
+
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+        time.sleep(0.1)
 
         i = 0
         while(True):
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read()
-
+            if self.do_video_rotation:
+                frame = cv2.rotate(frame, self.video_rotation_code)
             # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
@@ -735,9 +751,8 @@ class Stabilizer:
 
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, dst=frame_out, # INTER_CUBIC
                                               borderMode=borderMode, borderValue=borderValue)
-
 
                 if debug_text:
                     topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
@@ -940,7 +955,7 @@ class OnlyUndistort:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, gyro_path, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1):
+    def __init__(self, videopath, calibrationfile, gyro_path, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
 
         super().__init__()
 
@@ -952,6 +967,10 @@ class GPMFStabilizer(Stabilizer):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.video_rotate_code = video_rotation
+        self.do_video_rotation = self.video_rotate_code != -1
+        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+            self.width, self.height = self.height, self.width
 
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
@@ -981,6 +1000,10 @@ class GPMFStabilizer(Stabilizer):
             # Hero 8??
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
             self.gyro_data[:,2] = -self.gyro_data[:,2]
+        elif hero == 9:
+            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,2] = self.gyro_data[:,2]
+            self.gyro_data[:,3] = self.gyro_data[:,3]
 
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
 
@@ -1124,7 +1147,7 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype=""):
+    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1):
 
         super().__init__()
 
@@ -1136,6 +1159,10 @@ class BBLStabilizer(Stabilizer):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.video_rotate_code = video_rotation
+        self.do_video_rotation = self.video_rotation != -1
+        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+            self.width, self.height = self.height, self.width
 
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
