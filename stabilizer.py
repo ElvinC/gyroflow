@@ -660,9 +660,18 @@ class Stabilizer:
             output_params = eval(custom_ffmpeg)
             output_params["-input_framerate"] = self.fps
 
-        out = WriteGear(output_filename=outpath, **output_params)
-        output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
+        # Find locally installed ffmpeg from PATH and use it
+        if platform.system() == "Windows":
+            ffmpeg_exe_path = os.popen("WHERE ffmpeg").read()
+            if ffmpeg_exe_path:
+                ffmpeg_local_path = os.path.dirname(ffmpeg_exe_path)
+                output_params["custom_ffmpeg"] = ffmpeg_local_path
+            else:
+                print("No FFmpeg detected in the windows PATH")
 
+
+        #output_params["-ffmpeg_download_path"] = "/ffmpeg"
+        out = WriteGear(output_filename=outpath, **output_params)
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
         time.sleep(0.1)
@@ -680,6 +689,7 @@ class Stabilizer:
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
                                                         smoothingFocus=smoothingFocus)
         print("Done computing optimal Fov")
+
 
         i = 0
         while(True):
@@ -711,10 +721,14 @@ class Stabilizer:
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
                 fac = zoom
+
                 tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
                                                         new_img_dim=out_size,
                                                         update_new_K = False, quat = self.stab_transform[frame_num],
                                                         focalCenter = focalCenter[frame_num])
+
+                #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
+
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
@@ -922,7 +936,7 @@ class OnlyUndistort:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1):
+    def __init__(self, videopath, calibrationfile, gyro_path, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1):
 
         super().__init__()
 
@@ -941,7 +955,7 @@ class GPMFStabilizer(Stabilizer):
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
-        self.gpmf = Extractor(videopath)
+        self.gpmf = Extractor(gyro_path)
         self.gyro_data = self.gpmf.get_gyro(True)
 
         # Hero 6??
