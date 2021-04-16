@@ -6,6 +6,7 @@ import cv2
 import os
 import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
+from matplotlib import colors
 from _version import __version__
 from vidgear.gears.helper import get_valid_ffmpeg_path
 import calibrate_video
@@ -1773,14 +1774,23 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.export_bitrate)
         self.update_bitrate_visibility()
 
-        #yuv420p
         self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
         self.pixfmt_select = QtWidgets.QLineEdit()
         self.export_controls_layout.addWidget(self.pixfmt_select)
 
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("Background color. #HexCode, CSS color name, or REPLICATE (Extend edge):"))
+        colornames = list(colors.cnames.keys())
+        completer = QtWidgets.QCompleter(colornames + ["REPLICATE"])
+        self.bg_color_select = QtWidgets.QLineEdit()
+        self.bg_color_select.setCompleter(completer)
+        self.bg_color_select.setPlaceholderText(random.choice(colornames))
+        self.bg_color_select.setText("REPLICATE")
+        self.export_controls_layout.addWidget(self.bg_color_select)
+
         example_ffmpeg_pipeline = '{"-vcodec": "prores_ks","-profile:v": "hq"}'
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg custom pipeline, overwrites all settings above. \nExample: %s" % example_ffmpeg_pipeline))
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg custom pipeline, overwrites all settings above."))
         self.custom_ffmpeg_pipeline = QtWidgets.QLineEdit()
+        self.custom_ffmpeg_pipeline.setPlaceholderText(example_ffmpeg_pipeline)
         self.export_controls_layout.addWidget(self.custom_ffmpeg_pipeline)
 
         # button for exporting video
@@ -2255,11 +2265,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             smoothingFocus = -1
         zoomVal = self.zoom.value() /10
 
+        bg_color = self.bg_color_select.text()
+
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
                              display_preview=preview, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
-                             smoothingFocus=smoothingFocus, zoom=zoomVal)
+                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color)
 
 
 

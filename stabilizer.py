@@ -12,6 +12,7 @@ from adaptive_zoom import AdaptiveZoom
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
+from matplotlib import colors
 from vidgear.gears import WriteGear
 from vidgear.gears import helper as vidgearHelper
 from _version import __version__
@@ -599,11 +600,21 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0):
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000"):
 
         (out_width, out_height) = out_size
 
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
+        
+        borderMode = 0
+        borderValue = 0
+
+        if bg_color == "REPLICATE":
+            borderMode = cv2.BORDER_REPLICATE
+        else:
+            borderMode = cv2.BORDER_CONSTANT
+            borderValue = [round(x*255) for x in colors.to_rgb(bg_color)][::-1]
+
 
         if vcodec == "libx264":
             output_params = {
@@ -725,8 +736,8 @@ class Stabilizer:
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
-                                              borderMode=cv2.BORDER_CONSTANT)
-                # borderValue, BORDER_REPLICATE
+                                              borderMode=borderMode, borderValue=borderValue)
+
 
                 if debug_text:
                     topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
