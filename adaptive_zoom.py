@@ -9,15 +9,11 @@ from calibrate_video import FisheyeCalibrator, StandardCalibrator
 from scipy.spatial.transform import Rotation
 from scipy.interpolate import interp1d
 from gyro_integrator import GyroIntegrator, FrameRotationIntegrator
-from blackbox_extract import BlackboxExtractor
-from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
-from vidgear.gears import WriteGear
-from vidgear.gears import helper as vidgearHelper
+
 from _version import __version__
 
 from scipy import signal, interpolate
-
 import time
 
 

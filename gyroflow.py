@@ -850,12 +850,10 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
             self.export_button.setEnabled(True)
-            self.export_keyframes_button.setEnabled(True)
         else:
             self.preview_toggle_btn.setChecked(False)
             self.preview_toggle_btn.setEnabled(False)
             self.export_button.setEnabled(False)
-            self.export_keyframes_button.setEnabled(False)
 
     def calibrate_frames(self):
         self.calibrator.compute_calibration()

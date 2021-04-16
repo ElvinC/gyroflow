@@ -264,7 +264,7 @@ class FisheyeCalibrator:
         """
 
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
-        focalCenter = focalCenter if focalCenter is not None else np.array([0,0])
+        focalCenter = focalCenter if focalCenter is not None else np.array([self.calib_dimension[0]/2,self.calib_dimension[1]/2])
 
         R = np.eye(3)
 
@@ -272,19 +272,27 @@ class FisheyeCalibrator:
             quat = quat.flatten()
             R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
 
+        img_dim_ratio = img_dim[0] / self.calib_dimension[0]
+
+        scaled_K = self.K * img_dim_ratio
+        scaled_K[2][2] = 1.0
+
+        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
+                img_dim, np.eye(3), fov_scale=fov_scale)
 
         #new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(self.K, self.D,
         #        img_dim, None, balance=1, fov_scale=1)
         #print(new_K)
+
         new_K = np.copy(self.K)
         new_K[0][0] = new_K[0][0] * 1.0/fov_scale
         new_K[1][1] = new_K[1][1] * 1.0/fov_scale
-        new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* 1.0/fov_scale + new_img_dim[0]/2
-        new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* 1.0/fov_scale + new_img_dim[1]/2
+        new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* img_dim_ratio/fov_scale + new_img_dim[0]/2
+        new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* img_dim_ratio/fov_scale + new_img_dim[1]/2
 
         if update_new_K:
             self.new_K = new_K
-        map1, map2 = cv2.fisheye.initUndistortRectifyMap(self.K, self.D, R, new_K, img_dim, cv2.CV_16SC2)
+        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, img_dim, cv2.CV_16SC2)
 
         return map1, map2
 
@@ -1111,8 +1119,7 @@ if __name__ == "__main__":
     #import glob
     #chessboard_size = (9,6)
     #images = glob.glob('calibrationImg/*.jpg')
-
-
+     
     CAMERA_DIST_COEFS = [
         0.01945104325838463,
         0.1093842438193295,
