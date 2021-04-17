@@ -252,7 +252,7 @@ class FisheyeCalibrator:
 
         return undistorted_image
 
-    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
+    def get_maps(self, fov_scale = 1.0, output_dim = None, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
         """Get undistortion maps
 
         Args:
@@ -264,6 +264,7 @@ class FisheyeCalibrator:
         """
 
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
+        out_dim = output_dim if output_dim else self.calib_dimension
         focalCenter = focalCenter if focalCenter is not None else np.array([self.calib_dimension[0]/2,self.calib_dimension[1]/2])
 
         R = np.eye(3)
@@ -280,12 +281,12 @@ class FisheyeCalibrator:
         new_K = np.copy(self.K)
         new_K[0][0] = new_K[0][0] * 1.0/fov_scale
         new_K[1][1] = new_K[1][1] * 1.0/fov_scale
-        new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* img_dim_ratio/fov_scale + new_img_dim[0]/2
-        new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* img_dim_ratio/fov_scale + new_img_dim[1]/2
+        new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* img_dim_ratio/fov_scale + out_dim[0]/2
+        new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* img_dim_ratio/fov_scale + out_dim[1]/2
 
         if update_new_K:
             self.new_K = new_K
-        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, img_dim, cv2.CV_16SC2)
+        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, out_dim, cv2.CV_16SC2)
 
         return map1, map2
 

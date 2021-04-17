@@ -743,7 +743,8 @@ class Stabilizer:
                 fac = zoom
 
                 tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
-                                                        new_img_dim=out_size,
+                                                        new_img_dim=(self.width,self.height),
+                                                        output_dim=out_size,
                                                         update_new_K = False, quat = self.stab_transform[frame_num],
                                                         focalCenter = focalCenter[frame_num])
 
@@ -1001,9 +1002,10 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
             self.gyro_data[:,2] = -self.gyro_data[:,2]
         elif hero == 9:
-            self.gyro_data[:,1] = self.gyro_data[:,1]
+            self.gyro_data[:,1] = -self.gyro_data[:,1]
             self.gyro_data[:,2] = self.gyro_data[:,2]
             self.gyro_data[:,3] = self.gyro_data[:,3]
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
 
@@ -1160,7 +1162,7 @@ class BBLStabilizer(Stabilizer):
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self.video_rotate_code = video_rotation
-        self.do_video_rotation = self.video_rotation != -1
+        self.do_video_rotation = self.video_rotate_code != -1
         if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
             self.width, self.height = self.height, self.width
 
