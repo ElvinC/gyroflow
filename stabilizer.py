@@ -166,15 +166,6 @@ class Stabilizer:
         times2 = self.times2
 
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
-
-        #err_slope = (d2-d1)/(v2-v1)
-        #correction_slope = err_slope + 1
-        #gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
-
-        #interval = 1/(correction_slope * self.fps)
-
-        #print("Start {}".format(gyro_start))
-
         g1 = v1 - d1
         g2 = v2 - d2
         slope =  (v2 - v1) / (g2 - g1)
@@ -287,35 +278,11 @@ class Stabilizer:
                         filtered_src.append(src_pts[i,:])
                         filtered_dst.append(dst_pts[i,:])
 
-
-
-                #H, mask = cv2.findHomography(np.array(filtered_src), np.array(filtered_dst))
-                #retval, rots, trans, norms = self.undistort.decompose_homography(H, new_img_dim=(self.width,self.height))
-
-
                 # rots contains for solutions for the rotation. Get one with smallest magnitude.
                 # https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
                 # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
                 roteul = None
                 smallest_mag = 1000
-                #for rot in rots:
-                #    thisrot = Rotation.from_matrix(rots[0]) # First one?
-                #    #thisrot = Rotation.from_matrix(rot)
-                #    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.6:
-                #        # For some reason some camera calibrations lead to super high rotation magnitudes... Still testing.
-                #        roteul = Rotation.from_matrix(rot).as_euler("xyz")
-                #        smallest_mag = thisrot.magnitude()
-
-                #if type(roteul) == type(None):
-                #    print("Optical flow rotation determination failed")
-                #    roteul = [0, 0, 0]
-
-                # Compute fundamental matrix
-                #F, mask = cv2.findFundamentalMat(np.array(filtered_src), np.array(filtered_dst),cv2.FM_LMEDS)
-                # Compute essential matrix
-
-                # https://answers.opencv.org/question/206817/extract-rotation-and-translation-from-fundamental-matrix/
-                #E = self.undistort.find_essential_matrix(F, new_img_dim=(self.width,self.height))
 
                 self.use_essential_matrix = True
 
@@ -476,15 +443,6 @@ class Stabilizer:
         # Optical flow movements gives pixel movement, not camera movement
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
         new_OF_transforms[:,1] = -new_OF_transforms[:,1]
-
-        #gyro_x = gyro_data[:,0]
-        #OF_x = -OF_transforms[:,0]
-
-        #gyro_y = gyro_data[:,1]
-        #OF_y = -OF_transforms[:,1]
-
-        #gyro_z = gyro_data[:,2]
-        #OF_z = OF_transforms[:,2]
 
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
@@ -776,25 +734,12 @@ class Stabilizer:
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
-
-                # Fix border artifacts
-
-
                 # temp debug text
                 if debug_text:
                     frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
                                             (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
-                #frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
-                #                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(60,60,60),2)
-                #out.write(frame_out)
-                #print(frame_out.shape)
-
-                # If the image is too big, resize it.
-            #%if(frame_out.shape[1] > 1920):
-            #		frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
 
                 size = np.array(frame_out.shape)
-                #frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
                 if split_screen:
 
@@ -1089,16 +1034,6 @@ class InstaStabilizer(Stabilizer):
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
-        #gyro_data[:,1] = gyro_data[:,1]
-        #gyro_data[:,2] = -gyro_data[:,2]
-        #gyro_data[:,3] = gyro_data[:,3]
-
-        #gyro_data[:,1:] = -gyro_data[:,1:]
-
-        #points_test = np.array([[[0,0],[100,100],[200,300],[400,400]]], dtype = np.float32)
-        #result = self.undistort.undistort_points(points_test, new_img_dim=(self.width,self.height))
-        #print(result)
-        #exit()
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -1531,23 +1466,6 @@ class OpticalStabilizer:
 
 
 if __name__ == "__main__":
-    """
-    #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json")
-    stab = OpticalStabilizer("test_clips/GX016017.MP4", "camera_presets/gopro_calib2.JSON")
-    stab.stabilization_settings(smooth = 0.7)
-    #stab.optical_flow_comparison(start_frame=1300, analyze_length = 50)
-
-
-    # Camera undistortion stuff
-    stab.undistort = FisheyeCalibrator()
-    stab.undistort.load_calibration_json("camera_presets/Hero_7_2.7K_60_4by3_wide.json", True)
-    stab.map1, stab.map2 = stab.undistort.get_maps(2.2,new_img_dim=(stab.width,stab.height))
-
-
-    stab.renderfile("GX016017_2_stab_optical.mp4",out_size = (1920,1080))
-    stab.release()
-    """
-
     # insta360 test
 
     #stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/SMO4K_4K_Wide43.json", gyrocsv="test_clips/insta360_gyro.csv")
