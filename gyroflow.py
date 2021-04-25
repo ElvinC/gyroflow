@@ -448,6 +448,11 @@ class VideoPlayerWidget(QtWidgets.QWidget):
     def destroy_thread(self):
         self.thread.terminate()
 
+    def get_current_timestamp(self):
+        if self.thread.cap:
+            return self.thread.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        return 0
+
 class Form(QtWidgets.QDialog):
 
     def __init__(self, parent=None, title="Dialog"):
@@ -1181,7 +1186,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.input_video_rotate_select)
         
 
-        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
+        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("csvrc", "RC CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
@@ -2183,11 +2188,15 @@ class StabUtility(StabUtilityBarebone):
         self.calib_controls_layout.addWidget(self.info_text)
 
         # button for recomputing image stretching maps
-        self.add_sync_button = QtWidgets.QPushButton("Sync here")
-        self.add_sync_button.setMinimumHeight(self.button_height)
-        self.add_sync_button.clicked.connect(self.add_current_frame)
-        self.calib_controls_layout.addWidget(self.add_sync_button)
+        self.add_sync1_button = QtWidgets.QPushButton("Sync 1 here")
+        self.add_sync1_button.setMinimumHeight(self.button_height)
+        self.add_sync1_button.clicked.connect(self.synchere1)
+        self.calib_controls_layout.addWidget(self.add_sync1_button)
 
+        self.add_sync2_button = QtWidgets.QPushButton("Sync 2 here")
+        self.add_sync2_button.setMinimumHeight(self.button_height)
+        self.add_sync2_button.clicked.connect(self.synchere2)
+        self.calib_controls_layout.addWidget(self.add_sync2_button)
 
         self.fov_scale = 1.4
 
@@ -2237,10 +2246,13 @@ class StabUtility(StabUtilityBarebone):
 
         # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
 
+        # Reconnect open video button to display preview
+        self.open_vid_button.clicked.connect(self.open_video_with_player_func)
+
         icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
         self.open_file = QtWidgets.QAction(icon, 'Open file', self)
         self.open_file.setShortcut("Ctrl+O")
-        self.open_file.triggered.connect(self.open_file_func)
+        self.open_file.triggered.connect(self.open_video_with_player_func)
         filemenu.addAction(self.open_file)
 
         icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
@@ -2254,18 +2266,14 @@ class StabUtility(StabUtilityBarebone):
 
         self.main_setting_widget.show()
 
-    def open_file_func(self):
+    def open_video_with_player_func(self):
         """Open file using Qt filedialog
         """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov *.MP4 *.AVI *.MOV)")
-        self.infile_path = path[0]
-        self.video_viewer.set_video_path(path[0])
-
+        
+        self.open_video_func()
+        self.video_viewer.set_video_path(self.infile_path)
         self.video_viewer.next_frame()
 
-        # reset calibrator and info
-        self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=self.chessboard_size)
-        self.update_calib_info()
 
     def open_preset_func(self):
         """Load in calibration preset
@@ -2362,6 +2370,14 @@ class StabUtility(StabUtilityBarebone):
 
         if self.calibrator.num_images > 0:
             self.process_frames_btn.setEnabled(True)
+
+    def synchere1(self):
+        self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
+        #print(self.video_viewer.get_current_timestamp())
+
+    def synchere2(self):
+        self.sync2_control.setValue(self.video_viewer.get_current_timestamp())
+        #print(self.video_viewer.get_current_timestamp())
 
     def remove_frame(self):
         """Remove last calibration frame
