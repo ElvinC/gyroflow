@@ -208,6 +208,7 @@ class GyroIntegrator:
             elif time < time_list[i]:
                 # continue even if missing gyro data
                 slerped_rotations.append(smoothed_orientation[i])
+                out_times.append(time)
                 time += interval
 
         return (out_times, slerped_rotations)

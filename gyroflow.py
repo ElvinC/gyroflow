@@ -2270,7 +2270,7 @@ class StabUtility(StabUtilityBarebone):
         """Open file using Qt filedialog
         """
         
-        self.open_video_func()
+        #self.open_video_func()
         self.video_viewer.set_video_path(self.infile_path)
         self.video_viewer.next_frame()
 
