@@ -197,6 +197,8 @@ class VideoThread(QtCore.QThread):
         self.map1s = []
         self.map2s = []
 
+        self.map_function = None
+
         # Draw vertical lines at given coords
         self.vert_line_coords = []
 
@@ -239,12 +241,18 @@ class VideoThread(QtCore.QThread):
 
         # https://stackoverflow.com/a/55468544/6622587
         rgbImage = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+        this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
         for i in range(len(self.map1s)):
             # apply the maps using linear interpolation for now
             rgbImage = cv2.remap(rgbImage, self.map1s[i], self.map2s[i], cv2.INTER_LINEAR)
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
+
+        if self.map_function:
+            tmap1, tmap2 = self.map_function(this_frame_num)
+            rgbImage = cv2.remap(rgbImage, tmap1, tmap2, cv2.INTER_LINEAR)
+
 
         if rgbImage.shape[1] > self.max_width:
             new_height = int(self.max_width/rgbImage.shape[1] * rgbImage.shape[0])
@@ -255,7 +263,7 @@ class VideoThread(QtCore.QThread):
         convertToQtFormat = QtGui.QImage(rgbImage.data, w, h, bytesPerLine, QtGui.QImage.Format_RGB888)
         self.changePixmap.emit(convertToQtFormat.copy())
 
-        this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        
         if this_frame_num % 5 == 0 and self.frame_pos_update:
             self.frame_pos_update(this_frame_num)
 
@@ -376,6 +384,12 @@ class VideoPlayerWidget(QtWidgets.QWidget):
     def add_maps(self, map1, map2):
         self.thread.map1s.append(map1)
         self.thread.map2s.append(map2)
+
+    def set_map_function(self, map_function):
+        self.thread.map_function = map_function
+
+    def reset_map_function(self):
+        self.thread.map_function = None
 
     def reset_lines(self):
         self.thread.vert_line_coords = []
@@ -2198,6 +2212,16 @@ class StabUtility(StabUtilityBarebone):
         self.add_sync2_button.clicked.connect(self.synchere2)
         self.calib_controls_layout.addWidget(self.add_sync2_button)
 
+        self.trim_start_button = QtWidgets.QPushButton("Trim start")
+        self.trim_start_button.setMinimumHeight(self.button_height)
+        self.trim_start_button.clicked.connect(self.trimstart)
+        self.calib_controls_layout.addWidget(self.trim_start_button)
+
+        self.trim_end_button = QtWidgets.QPushButton("Trim end")
+        self.trim_end_button.setMinimumHeight(self.button_height)
+        self.trim_end_button.clicked.connect(self.trimend)
+        self.calib_controls_layout.addWidget(self.trim_end_button)
+
         self.fov_scale = 1.4
 
         # slider for adjusting FOV
@@ -2247,6 +2271,7 @@ class StabUtility(StabUtilityBarebone):
         # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
 
         # Reconnect open video button to display preview
+        self.open_vid_button.clicked.disconnect()
         self.open_vid_button.clicked.connect(self.open_video_with_player_func)
 
         icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
@@ -2254,6 +2279,10 @@ class StabUtility(StabUtilityBarebone):
         self.open_file.setShortcut("Ctrl+O")
         self.open_file.triggered.connect(self.open_video_with_player_func)
         filemenu.addAction(self.open_file)
+
+
+        self.recompute_stab_button.clicked.connect(self.update_player_maps)
+        self.sync_correction_button.clicked.connect(self.update_player_maps)
 
         icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
         self.open_preset = QtWidgets.QAction(icon, 'Open calibration preset', self)
@@ -2270,10 +2299,16 @@ class StabUtility(StabUtilityBarebone):
         """Open file using Qt filedialog
         """
         
-        #self.open_video_func()
+        self.open_video_func()
         self.video_viewer.set_video_path(self.infile_path)
         self.video_viewer.next_frame()
 
+    def set_player_video():
+        self.video_viewer.set_video_path(self.infile_path)
+        self.video_viewer.next_frame()
+
+    def update_player_maps(self):
+        self.video_viewer.set_map_function(self.stab.map_function)
 
     def open_preset_func(self):
         """Load in calibration preset
@@ -2378,6 +2413,12 @@ class StabUtility(StabUtilityBarebone):
     def synchere2(self):
         self.sync2_control.setValue(self.video_viewer.get_current_timestamp())
         #print(self.video_viewer.get_current_timestamp())
+
+    def trimstart(self):
+        self.export_starttime.setValue(self.video_viewer.get_current_timestamp())
+    
+    def trimend(self):
+        self.export_stoptime.setValue(self.video_viewer.get_current_timestamp())
 
     def remove_frame(self):
         """Remove last calibration frame

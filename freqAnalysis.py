@@ -34,7 +34,7 @@ class FreqAnalysis:
         print('Stdev of freqs is {}'.format(std))
         print('MAD of freqs is {}'.format(mad))
         print('MAD (normal) of freqs is {}'.format(mad_normal))
-        print('Max delay is {}'.format(np.max(interarrival)))
+        print('Max inter sample delay is {}'.format(np.max(interarrival)))
 
         thresh = mad_normal if mad_normal > std else std
         thresh = 6*thresh #corresponds to 100% of observations when following normal distribution

@@ -560,6 +560,17 @@ class Stabilizer:
                 y.write(f"{ix} {q[2]}\n")
                 z.write(f"{ix} {q[3]}\n")
 
+    def map_function(self, frame_num, out_size = (1280,720), regenerate = False):
+        if frame_num >= len(self.stab_transform):
+            frame_num = len(self.stab_transform)-1
+            print("No more stabilization data. Using last frame")
+        
+        return self.undistort.get_maps(1.1,
+            new_img_dim=(self.width,self.height),
+            output_dim=out_size,
+            update_new_K = False, quat = self.stab_transform[frame_num],
+            focalCenter = None)
+
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
                    debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000"):
