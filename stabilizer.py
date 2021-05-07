@@ -1118,7 +1118,7 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1):
+    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1, use_raw_gyro_data=False):
 
         super().__init__()
 
@@ -1151,10 +1151,18 @@ class BBLStabilizer(Stabilizer):
                 gyro_index = None
 
                 csv_reader = csv.reader(bblcsv)
+                use_debug_field = False
                 for i, row in enumerate(csv_reader):
                     #print(row)
-                    if(row[0] == "loopIteration"):
-                        gyro_index = row.index('gyroADC[0]')
+                    if row[0] == "debug_mode" and row[1] == "1" and use_raw_gyro_data:
+                        use_debug_field = True
+                    elif row[0] == "loopIteration":
+                        if use_debug_field:
+                            gyro_index = row.index('debug[0]')
+                            print('Using raw gyro data')
+                        else:
+                            gyro_index = row.index('gyroADC[0]')
+                            print('Using filtered gyro data')
                         break
 
                 data_list = []
