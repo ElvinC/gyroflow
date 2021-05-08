@@ -23,6 +23,40 @@ import time
 
 import insta360_utility as insta360_util
 
+def impute_gyro_data(input_data):
+    frame_durations = input_data[1:,0] - input_data[:-1,0]
+    min_frame_duration = frame_durations.min()
+    max_frame_duration = np.percentile(frame_durations, 10) * 1.5
+    average_frame_duration = frame_durations[(frame_durations >= min_frame_duration) & (frame_durations <= max_frame_duration)].mean()
+    print(f'average_frame_duration: {average_frame_duration}')
+    max_allowed_frame_duration = average_frame_duration * 2
+
+    missing_runs = []
+
+    last_ts = input_data[0,0]
+    for ix, ts in np.ndenumerate(input_data[1:,0]):
+        if ts - last_ts > max_allowed_frame_duration:
+            missing_runs.append((ix[0], round((ts - last_ts) / average_frame_duration) - 1))
+        last_ts = ts
+    print(f'missing_runs: {missing_runs}')
+
+    last_ix = 0
+    arrays_to_concat = []
+    if len(missing_runs) > 0:
+        for start, length in missing_runs:
+            print(f'Appending {input_data[last_ix, 0]}..={input_data[start, 0]}')
+            arrays_to_concat.append(input_data[last_ix:start+1,:])
+            prev_row = input_data[start]
+            next_row = input_data[start+1]
+            filled_data = np.linspace(prev_row, next_row, length + 1, endpoint=False)[1:]
+            print(f'Appending {filled_data[0, 0]}..={filled_data[-1, 0]} (filled)')
+            arrays_to_concat.append(filled_data)
+            last_ix = start + 1
+    print(f'Appending {input_data[last_ix, 0]}..={input_data[-1, 0]}')
+    arrays_to_concat.append(input_data[last_ix:,:])
+
+    return np.concatenate(arrays_to_concat)
+
 class Stabilizer:
     def __init__(self):
 
@@ -1207,6 +1241,8 @@ class BBLStabilizer(Stabilizer):
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+
+        self.gyro_data = impute_gyro_data(self.gyro_data)
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
         self.integrator.integrate_all()
