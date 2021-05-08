@@ -145,37 +145,39 @@ class Launcher(QtWidgets.QWidget):
         self.stretch_utility.show()
 
     def check_version(self, background=False):
-        with urllib.request.urlopen("https://api.github.com/repos/elvinc/gyroflow/releases") as url:
+        try:
+            with urllib.request.urlopen("https://api.github.com/repos/elvinc/gyroflow/releases") as url:
 
-            releases = json.loads(url.read())
-            newest_version = releases[0]["tag_name"]
-            new = re.match("(\d+).(\d+).(\d+).*", newest_version).groups()
-            current = re.match("(\d+).(\d+).(\d+).*", __version__).groups()
+                releases = json.loads(url.read())
+                newest_version = releases[0]["tag_name"]
+                new = re.match("(\d+).(\d+).(\d+).*", newest_version).groups()
+                current = re.match("(\d+).(\d+).(\d+).*", __version__).groups()
 
-            extra = ""
+                extra = ""
 
-            diff = [int(A) - int(B) for A,B in zip(new,current)]
-            val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
-            
-            showpopup = not background
+                diff = [int(A) - int(B) for A,B in zip(new,current)]
+                val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
+                
+                showpopup = not background
 
-            if newest_version.strip() == __version__.strip():
-                extra = "Not much to see here:"
-            elif val > 0:
-                extra = "Oh look, there's a shiny new update. <a href='https://elvinchen.com/gyroflow/download/'>Here's a link just for you.</a> "
-                showpopup = True
-            elif val < 0:
-                extra = "Looks like somebody is time traveling..."
-            else:
-                extra = "Spot the difference:"
+                if newest_version.strip() == __version__.strip():
+                    extra = "Not much to see here:"
+                elif val > 0:
+                    extra = "Oh look, there's a shiny new update. <a href='https://elvinchen.com/gyroflow/download/'>Here's a link just for you.</a> "
+                    showpopup = True
+                elif val < 0:
+                    extra = "Looks like somebody is time traveling..."
+                else:
+                    extra = "Spot the difference:"
 
-            if showpopup:
-                msg_window = QtWidgets.QMessageBox(self)
-                msg_window.setIcon(QtWidgets.QMessageBox.Information)
-                msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
-                msg_window.setWindowTitle("Version check")
-                msg_window.show()
-
+                if showpopup:
+                    msg_window = QtWidgets.QMessageBox(self)
+                    msg_window.setIcon(QtWidgets.QMessageBox.Information)
+                    msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
+                    msg_window.setWindowTitle("Version check")
+                    msg_window.show()
+        except: 
+            print("Unable to check version")
 
 
 class VideoThread(QtCore.QThread):
@@ -2298,7 +2300,7 @@ class StabUtility(StabUtilityBarebone):
     def open_video_with_player_func(self):
         """Open file using Qt filedialog
         """
-        
+        self.video_viewer.reset_map_function()
         self.open_video_func()
         self.video_viewer.set_video_path(self.infile_path)
         self.video_viewer.next_frame()
