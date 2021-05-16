@@ -23,6 +23,8 @@ import time
 
 import insta360_utility as insta360_util
 
+NUM_FRAMES_SKIPPED = 1
+
 class Stabilizer:
     def __init__(self):
 
@@ -31,6 +33,8 @@ class Stabilizer:
         self.rough_sync_search_interval = 10
         self.better_sync_search_interval = 0.2
         self.gyro_lpf_cutoff = -1
+
+        self.do_video_rotation = False
 
 
         # General video stuff
@@ -246,7 +250,7 @@ class Stabilizer:
             if i % 10 == 0:
                 print("Analyzing frame: {}/{}".format(i,analyze_length))
 
-            if succ:
+            if succ and i % NUM_FRAMES_SKIPPED == 0:
                 # Only add if succeeded
                 frame_idx.append(frame_id)
                 frame_times.append(frame_time)
@@ -304,7 +308,7 @@ class Stabilizer:
                 # Extract rotation angle
                 #da = np.arctan2(m[1,0], m[0,0])
                 #transforms.append([dx,dy,da])
-                transforms.append(list(roteul))
+                transforms.append(list(roteul/NUM_FRAMES_SKIPPED))
 
 
                 prev_gray = curr_gray
@@ -1015,6 +1019,7 @@ class InstaStabilizer(Stabilizer):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.do_video_rotation = False
 
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()

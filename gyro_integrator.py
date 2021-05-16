@@ -196,7 +196,7 @@ class GyroIntegrator:
 
 
         for i in range(len(time_list)-1):
-            if time_list[i] <= time < time_list[i+1]:
+            while time_list[i] <= time < time_list[i+1]:
 
                 # interpolate between two quaternions
                 weight = (time - time_list[i])/(time_list[i+1]-time_list[i])
@@ -205,7 +205,7 @@ class GyroIntegrator:
 
                 time += interval
 
-            elif time < time_list[i]:
+            if time < time_list[i]:
                 # continue even if missing gyro data
                 slerped_rotations.append(smoothed_orientation[i])
                 out_times.append(time)

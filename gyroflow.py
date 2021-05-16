@@ -1351,7 +1351,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Number of frames to analyze per slice using optical flow:"))
         self.OF_frames_control = QtWidgets.QSpinBox(self)
         self.OF_frames_control.setMinimum(10)
-        self.OF_frames_control.setMaximum(300)
+        self.OF_frames_control.setMaximum(600)
         self.OF_frames_control.setValue(60)
 
         self.sync_controls_layout.addWidget(self.OF_frames_control)
