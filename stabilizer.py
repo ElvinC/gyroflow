@@ -1151,13 +1151,10 @@ class BBLStabilizer(Stabilizer):
                 gyro_index = None
 
                 csv_reader = csv.reader(bblcsv)
-                use_debug_field = use_raw_gyro_data
                 for i, row in enumerate(csv_reader):
                     #print(row)
-                    if row[0] == "debug_mode" and row[1] != "1":
-                        use_debug_field = False
-                    elif row[0] == "loopIteration":
-                        if use_debug_field:
+                    if row[0] == "loopIteration":
+                        if use_raw_gyro_data:
                             gyro_index = row.index('debug[0]')
                             print('Using raw gyro data')
                         else:
