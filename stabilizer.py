@@ -1136,7 +1136,8 @@ class BBLStabilizer(Stabilizer):
                 for i, row in enumerate(csv_reader):
                     #print(row)
                     if(row[0] == "loopIteration"):
-                        gyro_index = row.index('gyroADC[0]')
+                        stripped_row = [field.strip() for field in row]
+                        gyro_index = stripped_row.index('gyroADC[0]')
                         break
 
                 data_list = []
