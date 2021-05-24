@@ -23,8 +23,6 @@ import time
 
 import insta360_utility as insta360_util
 
-NUM_FRAMES_SKIPPED = 1
-
 class Stabilizer:
     def __init__(self):
 
@@ -35,6 +33,8 @@ class Stabilizer:
         self.gyro_lpf_cutoff = -1
 
         self.do_video_rotation = False
+
+        self.num_frames_skipped = 1
 
 
         # General video stuff
@@ -65,6 +65,9 @@ class Stabilizer:
 
     def set_gyro_lpf(self, cutoff_frequency = -1):
         self.gyro_lpf_cutoff = cutoff_frequency
+
+    def set_num_frames_skipped(self, num=1):
+        self.num_frames_skipped = num
 
     def filter_gyro(self):
 
@@ -250,7 +253,7 @@ class Stabilizer:
             if i % 10 == 0:
                 print("Analyzing frame: {}/{}".format(i,analyze_length))
 
-            if succ and i % NUM_FRAMES_SKIPPED == 0:
+            if succ and i % self.num_frames_skipped == 0:
                 # Only add if succeeded
                 frame_idx.append(frame_id)
                 frame_times.append(frame_time)
@@ -308,7 +311,7 @@ class Stabilizer:
                 # Extract rotation angle
                 #da = np.arctan2(m[1,0], m[0,0])
                 #transforms.append([dx,dy,da])
-                transforms.append(list(roteul/NUM_FRAMES_SKIPPED))
+                transforms.append(list(roteul/self.num_frames_skipped))
 
 
                 prev_gray = curr_gray

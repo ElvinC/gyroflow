@@ -1356,6 +1356,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.sync_controls_layout.addWidget(self.OF_frames_control)
 
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Analyze every Nth frame (increase for high fps footage)"))
+        self.num_frames_skipped_control = QtWidgets.QSpinBox(self)
+        self.num_frames_skipped_control.setMinimum(1)
+        self.num_frames_skipped_control.setMaximum(50)
+        self.num_frames_skipped_control.setValue(1)
+
+        self.sync_controls_layout.addWidget(self.num_frames_skipped_control)
+
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Sync search size (seconds)"))
         self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
         self.sync_search_size.setMinimum(0)
@@ -1981,6 +1989,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.stab.set_initial_offset(self.offset_control.value())
         self.stab.set_rough_search(self.sync_search_size.value())
+        self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
 
         print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
                 smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
