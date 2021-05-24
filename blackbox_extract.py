@@ -6,7 +6,11 @@ import numpy as np
 class BlackboxExtractor:
     def __init__(self, path):
         print("Opening {}".format(path))
-        self.parser = Parser.load(path)
+        try:
+            self.parser = Parser.load(path)
+        except RuntimeError:
+            raise RuntimeError("Couldn't parse the raw blackbox file. Try converting to a CSV file using blackbox explorer.")
+
         self.n_of_logs = self.parser.reader.log_count
 
         self.gyro_scale = self.parser.headers["gyro_scale"] #should be already scaled in the fc
