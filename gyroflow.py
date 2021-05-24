@@ -1238,6 +1238,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.fpv_tilt_text)
         self.input_controls_layout.addWidget(self.fpv_tilt_control)
 
+        self.gyro_log_use_raw_data_text = QtWidgets.QLabel("Use raw gyro data (debug_mode = GYRO_SCALED):")
+        self.gyro_log_use_raw_data_control = QtWidgets.QCheckBox(self)
+        self.gyro_log_use_raw_data_control.setChecked(False)
+
+        self.gyro_log_use_raw_data_text.setVisible(False)
+        self.gyro_log_use_raw_data_control.setVisible(False)
+
+        self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_text)
+        self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_control)
+
         self.camera_type_text = QtWidgets.QLabel('Camera type (integrated gyro)')
         self.input_controls_layout.addWidget(self.camera_type_text)
 
@@ -1802,6 +1812,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.camera_type_control.setVisible(internal)
         self.camera_type_text.setVisible(internal)
 
+        self.gyro_log_use_raw_data_text.setVisible(selected_log_type == "csvblackbox")
+        self.gyro_log_use_raw_data_control.setVisible(selected_log_type == "csvblackbox")
+
         if gyrofile_selected:
             self.open_gyro_button.setText("Gyro data: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
             self.open_gyro_button.setStyleSheet("font-weight:bold;")
@@ -1970,11 +1983,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             log_type_id = self.gyro_log_format_select.currentData()#self.gyro_log_model.item(log_select_index).data()
 
             use_csv = False
+            use_raw_gyro_data = False
             logtype = ""
 
             if log_type_id == "csvblackbox":
                 print("using blackbox csv")
                 use_csv = True
+                use_raw_gyro_data = self.gyro_log_use_raw_data_control.isChecked()
             elif log_type_id == "rawblackbox":
                 print("using raw blackbox file")
                 pass
@@ -1983,8 +1998,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             else:
                 print("Unknown log type selected")
                 return
+
             self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
-                                                 use_csv=use_csv, gyro_lpf_cutoff = gyro_lpf, logtype=logtype)
+                                                 use_csv=use_csv, gyro_lpf_cutoff = gyro_lpf, logtype=logtype, use_raw_gyro_data=use_raw_gyro_data)
 
 
         self.stab.set_initial_offset(self.offset_control.value())
