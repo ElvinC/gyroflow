@@ -1,8 +1,6 @@
 ---
 layout: single
-sidebar:
-  title: "Sample Title"
-  nav: sidebar-sample
+title: "Sample Title"
 ---
 
 ### In-depth video guide:
@@ -22,4 +20,4 @@ sidebar:
 
 [FPV stabilization tools FB group](https://www.facebook.com/groups/fpvtools)
 
-[RSgoBlackbox discord server](https://discord.gg/6Yk2dJQv)
+[RSgoBlackbox discord server](https://discord.gg/2He3XTjtpt)
