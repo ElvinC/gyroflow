@@ -1430,6 +1430,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.camera_type_control.addItem("hero6")
         self.camera_type_control.addItem("hero7")
         self.camera_type_control.addItem("hero8")
+        self.camera_type_control.addItem("hero9")
         self.camera_type_control.addItem("smo4k (N/A)")
 
         self.input_controls_layout.addWidget(self.camera_type_control)
@@ -2038,7 +2039,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             # GPMF file
 
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
-            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8"]:
+            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "hero9"]:
                 self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)

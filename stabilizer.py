@@ -917,6 +917,10 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
             self.gyro_data[:,2] = -self.gyro_data[:,2]
 
+        elif hero == 9:
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
+            self.gyro_data[:,1] = -self.gyro_data[:,1]
+
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
         
         if self.gyro_lpf_cutoff > 0:
