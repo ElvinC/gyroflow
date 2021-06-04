@@ -12,6 +12,14 @@ The main goal of creating something that can stabilize footage based on blackbox
 
 The launcher containing all the utilities is available by executing `gyroflow.py` if all the dependencies are met. Otherwise a binary can be found over in [releases](https://github.com/ElvinC/gyroflow/releases). Also, check out the wiki where there's some more information about the camera calibration and video stabilization process.
 
+## Run using python and Poetry:
+Note: Try the dev branch for the newest features.
+
+* Install [poetry](https://python-poetry.org/docs/#installation)
+* Clone or download the files from this repo
+* Navigate to the folder using a commandline and install dependencies using `poetry install`
+* Run the application using `poetry run python gyroflow.py`
+
 ## Other things to check out:
 * [BlackboxToGPMF](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui) by Cleric-K and Attilafustos. Tool for adding GoPro metadata and blackbox data to non-GoPro cameras for use with Reelsteady GO. Initial discussion [here](https://github.com/ElvinC/gyroflow/issues/1).
 * [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) by Jaromeyer. Tool for adding blackbox gyro data to Hero 7 files for Reelsteady Go.
