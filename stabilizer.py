@@ -1225,14 +1225,14 @@ class BBLStabilizer(Stabilizer):
                 for line in lines:
                     splitdata = [float(x) for x in line.split(",")]
                     t = splitdata[0]/1000
-                    #gx = splitdata[1] * gyroscale
-                    #gy = splitdata[2] * gyroscale
-                    #gz = splitdata[3] * gyroscale
+                    gx = splitdata[1] * gyroscale
+                    gy = splitdata[2] * gyroscale
+                    gz = splitdata[3] * gyroscale
 
                     # RC test
-                    gx = -splitdata[2] * gyroscale
-                    gy = -splitdata[1] * gyroscale
-                    gz = -splitdata[3] * gyroscale
+                    #gx = -splitdata[2] * gyroscale
+                    #gy = -splitdata[1] * gyroscale
+                    #gz = -splitdata[3] * gyroscale
 
                     # Z: roll
                     # X: yaw
