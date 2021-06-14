@@ -21,6 +21,9 @@ import bundled_images
 
 import stabilizer
 
+# area for environment variables
+os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
+
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
 cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Arri",
                     "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
