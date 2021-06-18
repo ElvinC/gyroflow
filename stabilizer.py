@@ -1,14 +1,18 @@
 import numpy as np
 import cv2
 import csv
+import os
 import platform
 
+from freqAnalysis import FreqAnalysis
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
 from scipy.spatial.transform import Rotation
 from gyro_integrator import GyroIntegrator, FrameRotationIntegrator
+from adaptive_zoom import AdaptiveZoom
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor
 from matplotlib import pyplot as plt
+from matplotlib import colors
 from vidgear.gears import WriteGear
 from vidgear.gears import helper as vidgearHelper
 from _version import __version__
@@ -17,6 +21,41 @@ from scipy import signal, interpolate
 
 import time
 
+import insta360_utility as insta360_util
+
+def impute_gyro_data(input_data):
+    frame_durations = input_data[1:,0] - input_data[:-1,0]
+    min_frame_duration = frame_durations.min()
+    max_frame_duration = np.percentile(frame_durations, 10) * 1.5
+    average_frame_duration = frame_durations[(frame_durations >= min_frame_duration) & (frame_durations <= max_frame_duration)].mean()
+    print(f'average_frame_duration: {average_frame_duration}')
+    max_allowed_frame_duration = average_frame_duration * 2
+
+    missing_runs = []
+
+    last_ts = input_data[0,0]
+    for ix, ts in np.ndenumerate(input_data[1:,0]):
+        if ts - last_ts > max_allowed_frame_duration:
+            missing_runs.append((ix[0], round((ts - last_ts) / average_frame_duration) - 1))
+        last_ts = ts
+    print(f'missing_runs: {missing_runs}')
+
+    last_ix = 0
+    arrays_to_concat = []
+    if len(missing_runs) > 0:
+        for start, length in missing_runs:
+            print(f'Appending {input_data[last_ix, 0]}..={input_data[start, 0]}')
+            arrays_to_concat.append(input_data[last_ix:start+1,:])
+            prev_row = input_data[start]
+            next_row = input_data[start+1]
+            filled_data = np.linspace(prev_row, next_row, length + 1, endpoint=False)[1:]
+            print(f'Appending {filled_data[0, 0]}..={filled_data[-1, 0]} (filled)')
+            arrays_to_concat.append(filled_data)
+            last_ix = start + 1
+    print(f'Appending {input_data[last_ix, 0]}..={input_data[-1, 0]}')
+    arrays_to_concat.append(input_data[last_ix:,:])
+
+    return np.concatenate(arrays_to_concat)
 
 class Stabilizer:
     def __init__(self):
@@ -26,6 +65,10 @@ class Stabilizer:
         self.rough_sync_search_interval = 10
         self.better_sync_search_interval = 0.2
         self.gyro_lpf_cutoff = -1
+
+        self.do_video_rotation = False
+
+        self.num_frames_skipped = 1
 
 
         # General video stuff
@@ -57,6 +100,9 @@ class Stabilizer:
     def set_gyro_lpf(self, cutoff_frequency = -1):
         self.gyro_lpf_cutoff = cutoff_frequency
 
+    def set_num_frames_skipped(self, num=1):
+        self.num_frames_skipped = num
+
     def filter_gyro(self):
 
         # Replaces self.gyrodata and should only be used once
@@ -74,6 +120,9 @@ class Stabilizer:
 
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
+        if debug_plots:
+            FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
+            
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
         d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
@@ -94,14 +143,9 @@ class Stabilizer:
 
         err_slope = (d2-d1)/(v2-v1)
         correction_slope = err_slope + 1
-        gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
+        gyro_start = (d1 - err_slope*v1)
 
         interval = 1/(correction_slope * self.fps)
-
-        # viz_correction = 0.5/self.fps
-
-        #corrected_times = (self.integrator.get_raw_data("t"))*correction_slope + gyro_start + viz_correction
-        #corrected_times = (self.integrator.get_raw_data("t"))*(alpha + 1) + beta
 
         g1 = v1 - d1
         g2 = v2 - d2
@@ -120,7 +164,7 @@ class Stabilizer:
         plt.ylabel("omega x [rad/s]")
 
         plt.subplot(312, sharex=xplot)
-        
+
         plt.plot(times1, -transforms1[:,1] * self.fps)
         plt.plot(times2, -transforms2[:,1] * self.fps)
         plt.plot(corrected_times, self.integrator.get_raw_data("y"))
@@ -163,15 +207,6 @@ class Stabilizer:
         times2 = self.times2
 
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
-
-        #err_slope = (d2-d1)/(v2-v1)
-        #correction_slope = err_slope + 1
-        #gyro_start = (d1 - err_slope*v1)#  + 1.5/self.fps
-
-        #interval = 1/(correction_slope * self.fps)
-
-        #print("Start {}".format(gyro_start))
-
         g1 = v1 - d1
         g2 = v2 - d2
         slope =  (v2 - v1) / (g2 - g1)
@@ -186,7 +221,7 @@ class Stabilizer:
         plt.ylabel("omega x [rad/s]")
 
         plt.subplot(312, sharex=xplot)
-        
+
         plt.plot(times1, -transforms1[:,1] * self.fps)
         plt.plot(times2, -transforms2[:,1] * self.fps)
         plt.plot(corrected_times, self.integrator.get_raw_data("y"))
@@ -233,6 +268,8 @@ class Stabilizer:
 
         # Read first frame
         _, prev = self.cap.read()
+        if self.do_video_rotation:
+            prev = cv2.rotate(prev, self.video_rotation_code)
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
 
         for i in range(analyze_length):
@@ -241,6 +278,8 @@ class Stabilizer:
 
 
             succ, curr = self.cap.read()
+            if self.do_video_rotation:
+                curr = cv2.rotate(curr, self.video_rotation_code)
 
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
@@ -248,7 +287,7 @@ class Stabilizer:
             if i % 10 == 0:
                 print("Analyzing frame: {}/{}".format(i,analyze_length))
 
-            if succ:
+            if succ and i % self.num_frames_skipped == 0:
                 # Only add if succeeded
                 frame_idx.append(frame_id)
                 frame_times.append(frame_time)
@@ -280,64 +319,40 @@ class Stabilizer:
                         filtered_src.append(src_pts[i,:])
                         filtered_dst.append(dst_pts[i,:])
 
-
-
-                #H, mask = cv2.findHomography(np.array(filtered_src), np.array(filtered_dst))
-                #retval, rots, trans, norms = self.undistort.decompose_homography(H, new_img_dim=(self.width,self.height))
-
-
                 # rots contains for solutions for the rotation. Get one with smallest magnitude.
                 # https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
                 # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
                 roteul = None
                 smallest_mag = 1000
-                #for rot in rots:
-                #    thisrot = Rotation.from_matrix(rots[0]) # First one?
-                #    #thisrot = Rotation.from_matrix(rot)
-                #    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.6:
-                #        # For some reason some camera calibrations lead to super high rotation magnitudes... Still testing.
-                #        roteul = Rotation.from_matrix(rot).as_euler("xyz")
-                #        smallest_mag = thisrot.magnitude()
-
-                #if type(roteul) == type(None):
-                #    print("Optical flow rotation determination failed")
-                #    roteul = [0, 0, 0]
-
-                # Compute fundamental matrix
-                #F, mask = cv2.findFundamentalMat(np.array(filtered_src), np.array(filtered_dst),cv2.FM_LMEDS)
-                # Compute essential matrix
-
-                # https://answers.opencv.org/question/206817/extract-rotation-and-translation-from-fundamental-matrix/
-                #E = self.undistort.find_essential_matrix(F, new_img_dim=(self.width,self.height))
 
                 self.use_essential_matrix = True
 
                 if self.use_essential_matrix:
                     R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
-                
+
                     rot1 = Rotation.from_matrix(R1)
                     rot2 = Rotation.from_matrix(R2)
 
                     if rot1.magnitude() < rot2.magnitude():
                         roteul = rot1.as_euler("xyz")
-                    else: 
+                    else:
                         roteul = rot2.as_euler("xyz")
 
 
-                #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts) 
+                #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
                 #dx = m[0,2]
                 #dy = m[1,2]
                 # Extract rotation angle
                 #da = np.arctan2(m[1,0], m[0,0])
-                #transforms.append([dx,dy,da]) 
-                transforms.append(list(roteul))
-                
-                
+                #transforms.append([dx,dy,da])
+                transforms.append(list(roteul/self.num_frames_skipped))
+
+
                 prev_gray = curr_gray
 
             else:
                 print("Frame {}".format(i))
-        
+
         transforms = np.array(transforms)
         estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
         return estimated_offset, frame_times, transforms
@@ -401,7 +416,7 @@ class Stabilizer:
 
         # run both gyro and video through high pass filter
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.butter.html
-        
+
         if do_hpf:
             filterorder = 10
             filterfreq = 4 # hz
@@ -470,15 +485,6 @@ class Stabilizer:
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
         new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
-        #gyro_x = gyro_data[:,0]
-        #OF_x = -OF_transforms[:,0]
-
-        #gyro_y = gyro_data[:,1]
-        #OF_y = -OF_transforms[:,1]
-
-        #gyro_z = gyro_data[:,2]
-        #OF_z = OF_transforms[:,2]
-
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
         sum_squared_diff = 0
@@ -499,7 +505,7 @@ class Stabilizer:
             gyro_idx += 1
 
 
-        for OF_idx in range(len(OF_times)):			
+        for OF_idx in range(len(OF_times)):
             cumulative = next_gyro_snip
             cumulative_time =  next_cumulative_time
 
@@ -572,56 +578,103 @@ class Stabilizer:
 
         return sum_squared_diff
 
+    def export_stabilization(self, outpath = "Stabilized.csv"):
+        basename = os.path.splitext(outpath)[0]
+        with open(outpath, 'w') as f, open(basename + ".w.spl", 'w') as w, open(basename + ".x.spl", 'w') as x, open(basename + ".y.spl", 'w') as y, open(basename + ".z.spl", 'w') as z:
+            csv_writer = csv.writer(f, delimiter=",", quotechar='"')
+            csv_writer.writerow(["frame", "w", "x", "y", "z"])
+
+            w.write("DFSP\n")
+            x.write("DFSP\n")
+            y.write("DFSP\n")
+            z.write("DFSP\n")
+
+            for ix in range(len(self.times)):
+                q = self.stab_transform[ix]
+
+                if type(q) != type(None):
+                    q = q.flatten()
+
+                csv_writer.writerow([ix, q[0], q[1], q[2], q[3]])
+                w.write(f"{ix} {q[0]}\n")
+                x.write(f"{ix} {q[1]}\n")
+                y.write(f"{ix} {q[2]}\n")
+                z.write(f"{ix} {q[3]}\n")
+
+    def map_function(self, frame_num, out_size = (1280,720), regenerate = False):
+        if frame_num >= len(self.stab_transform):
+            frame_num = len(self.stab_transform)-1
+            print("No more stabilization data. Using last frame")
+        
+        return self.undistort.get_maps(1.1,
+            new_img_dim=(self.width,self.height),
+            output_dim=out_size,
+            update_new_K = False, quat = self.stab_transform[frame_num],
+            focalCenter = None)
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = ""):
-        
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000"):
+
+        (out_width, out_height) = out_size
+
         export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
+        
+        borderMode = 0
+        borderValue = 0
+
+        if bg_color == "REPLICATE":
+            borderMode = cv2.BORDER_REPLICATE
+        elif bg_color == "HISTORY":
+            borderMode = cv2.BORDER_TRANSPARENT
+        else:
+            borderMode = cv2.BORDER_CONSTANT
+            borderValue = [round(x*255) for x in colors.to_rgb(bg_color)][::-1]
+
 
         if vcodec == "libx264":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "libx264",
                 "-profile:v": vprofile,
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
-                "-pix_fmt": "yuv420p",  
+                "-pix_fmt": "yuv420p",
             }
         elif vcodec == "h264_nvenc":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "h264_nvenc",
                 "-profile:v": vprofile,
-                "-rc:v": "cbr", 
+                "-rc:v": "cbr",
                 "-b:v": "%sM" % bitrate_mbits,
                 "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
             }
         elif vcodec == "h264_vaapi":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "h264_vaapi",
                 "-vaapi_device": "/dev/dri/renderD128",
-                "-profile:v": vprofile, 
+                "-profile:v": vprofile,
                 "-b:v": "%sM" % bitrate_mbits,
             }
         elif vcodec == "h264_videotoolbox":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "h264_videotoolbox",
-                "-profile:v": vprofile, 
+                "-profile:v": vprofile,
                 "-b:v": "%sM" % bitrate_mbits,
                 }
         elif vcodec == "prores_ks":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "prores_ks",
                 "-profile:v": vprofile,
             }
         else:
             output_params = {}
-        
+
         if pix_fmt:
             output_params["-pix_fmt"] = pix_fmt  # override pix_fmt if user needs to
 
@@ -629,29 +682,52 @@ class Stabilizer:
             output_params = eval(custom_ffmpeg)
             output_params["-input_framerate"] = self.fps
 
+        # Find locally installed ffmpeg from PATH and use it
+        if platform.system() == "Windows":
+            ffmpeg_exe_path = os.popen("WHERE ffmpeg").read()
+            if ffmpeg_exe_path:
+                ffmpeg_local_path = os.path.dirname(ffmpeg_exe_path)
+                output_params["custom_ffmpeg"] = ffmpeg_local_path
+            else:
+                print("No FFmpeg detected in the windows PATH")
+
         out = WriteGear(output_filename=outpath, **output_params)
-        output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
-        crop = (int(scale*(self.width-out_size[0])/2), int(scale*(self.height-out_size[1])/2))
 
-
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
-        time.sleep(0.1)
-
-        num_frames = int((stoptime - starttime) * self.fps) 
+        num_frames = int((stoptime - starttime) * self.fps)
 
         #tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
         #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
 
+
+
+        print("Starting to compute optimal Fov")
+        adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
+        fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
+                                                        smoothingFocus=smoothingFocus, debug_plots=(smoothingFocus != -1))
+        print("Done computing optimal Fov")
+
+        new_img_dim=(int(self.width * scale),int(self.height*scale))
         
-        #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+        time.sleep(0.1)
+
+        # Generate initial black frame
+        success, frame = self.cap.read()
+        if self.do_video_rotation:
+            frame = cv2.rotate(frame, self.video_rotation_code)
+        frame_out = cv2.resize(frame, new_img_dim, interpolation=cv2.INTER_LINEAR) * 0.0
+
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
+        time.sleep(0.1)
 
         i = 0
         while(True):
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read()
-            
-            # Getting frame_num _before_ cap.read gives index of the read frame. 
+            if self.do_video_rotation:
+                frame = cv2.rotate(frame, self.video_rotation_code)
+            # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
                 print("frame: {}, {}/{} ({}%)".format(frame_num, i, num_frames, round(100 * i/num_frames,1)))
@@ -663,28 +739,43 @@ class Stabilizer:
                 break
 
             elif frame_num >= len(self.stab_transform):
-                print("No more stabilization data")
+                print("No more stabilization data. Stopping render here.")
                 break
 
             if success and i > 0:
-                
-                if scale != 1:
-                    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                
+
+                #if scale != 1:
+                #    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
 
-                tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
+                fac = zoom
+
+                tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
+                                                        new_img_dim=(self.width,self.height),
+                                                        output_dim=out_size,
+                                                        update_new_K = False, quat = self.stab_transform[frame_num],
+                                                        focalCenter = focalCenter[frame_num])
+
+                #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
+
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
-                                              borderMode=cv2.BORDER_CONSTANT)
-                # borderValue, BORDER_REPLICATE
+                frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, dst=frame_out, # INTER_CUBIC
+                                              borderMode=borderMode, borderValue=borderValue)
+
+                if debug_text:
+                    topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
+                    bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
+                    frame_out = cv2.rectangle(frame_out, topleft,
+                                                         bottomright, (255,0,0), 3)
+
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
                 #cv2.imshow("Before and After", frame_undistort)
                 #cv2.waitKey(100)
                 #cv2.imshow("Before and After", frame_undistort2)
-                
+
                 #cv2.waitKey(100)
                 #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                 #                              borderMode=cv2.BORDER_CONSTANT)
@@ -695,26 +786,12 @@ class Stabilizer:
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
-
-                # Fix border artifacts
-
-                frame_out = frame_out[crop[1]:crop[1]+out_size[1] * scale, crop[0]:crop[0]+out_size[0]* scale]
-
                 # temp debug text
                 if debug_text:
                     frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
                                             (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
-                #frame_out = cv2.putText(frame_out, "V{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
-                #                        (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(60,60,60),2)
-                #out.write(frame_out)
-                #print(frame_out.shape)
 
-                # If the image is too big, resize it.
-            #%if(frame_out.shape[1] > 1920): 
-            #		frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
-                
                 size = np.array(frame_out.shape)
-                #frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
                 if split_screen:
 
@@ -741,6 +818,7 @@ class Stabilizer:
 
         # When everything done, release the capture
         #out.release()
+        print("Render finished")
         cv2.destroyAllWindows()
         out.close()
 
@@ -764,52 +842,52 @@ class OnlyUndistort:
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = False,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
                    debug_text = False, custom_ffmpeg = ""):
-        
+
         export_out_size = (int(out_size[0]*scale), int(out_size[1]*scale))
 
         if vcodec == "libx264":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "libx264",
                 "-profile:v": vprofile,
                 "-crf": "1",  # Can't use 0 as it triggers "lossless" which does not allow  -maxrate
                 "-maxrate": "%sM" % bitrate_mbits,
                 "-bufsize": "%sM" % int(bitrate_mbits * 1.2),
-                "-pix_fmt": "yuv420p",  
+                "-pix_fmt": "yuv420p",
             }
         elif vcodec == "h264_nvenc":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "h264_nvenc",
                 "-profile:v": vprofile,
-                "-rc:v": "cbr", 
+                "-rc:v": "cbr",
                 "-b:v": "%sM" % bitrate_mbits,
                 "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
             }
         elif vcodec == "h264_vaapi":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "h264_vaapi",
                 "-vaapi_device": "/dev/dri/renderD128",
-                "-profile:v": vprofile, 
+                "-profile:v": vprofile,
                 "-b:v": "%sM" % bitrate_mbits,
             }
         elif vcodec == "h264_videotoolbox":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "h264_videotoolbox",
-                "-profile:v": vprofile, 
+                "-profile:v": vprofile,
                 "-b:v": "%sM" % bitrate_mbits,
                 }
         elif vcodec == "prores_ks":
             output_params = {
-                "-input_framerate": self.fps, 
+                "-input_framerate": self.fps,
                 "-vcodec": "prores_ks",
                 "-profile:v": vprofile,
             }
         else:
             output_params = {}
-        
+
         if pix_fmt:
             output_params["-pix_fmt"] = pix_fmt  # override pix_fmt if user needs to
 
@@ -825,7 +903,7 @@ class OnlyUndistort:
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
         time.sleep(0.1)
 
-        num_frames = int((stoptime - starttime) * self.fps) 
+        num_frames = int((stoptime - starttime) * self.fps)
 
         tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
         tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
@@ -835,8 +913,8 @@ class OnlyUndistort:
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read()
-            
-            # Getting frame_num _before_ cap.read gives index of the read frame. 
+
+            # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
                 print("frame: {}, {}/{} ({}%)".format(frame_num, i, num_frames, round(100 * i/num_frames,1)))
@@ -848,10 +926,10 @@ class OnlyUndistort:
                 break
 
             if success and i > 0:
-                
+
                 if scale != 1:
                     frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                
+
                 frame_out = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                               borderMode=cv2.BORDER_CONSTANT)
 
@@ -875,7 +953,7 @@ class OnlyUndistort:
 
 
 class GPMFStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1):
+    def __init__(self, videopath, calibrationfile, gyro_path, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
 
         super().__init__()
 
@@ -887,6 +965,10 @@ class GPMFStabilizer(Stabilizer):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.video_rotate_code = video_rotation
+        self.do_video_rotation = self.video_rotate_code != -1
+        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+            self.width, self.height = self.height, self.width
 
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
@@ -894,7 +976,7 @@ class GPMFStabilizer(Stabilizer):
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
-        self.gpmf = Extractor(videopath)
+        self.gpmf = Extractor(gyro_path)
         self.gyro_data = self.gpmf.get_gyro(True)
 
         # Hero 6??
@@ -916,9 +998,14 @@ class GPMFStabilizer(Stabilizer):
             # Hero 8??
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
             self.gyro_data[:,2] = -self.gyro_data[:,2]
+        elif hero == 9:
+            self.gyro_data[:,1] = -self.gyro_data[:,1]
+            self.gyro_data[:,2] = self.gyro_data[:,2]
+            self.gyro_data[:,3] = self.gyro_data[:,3]
+            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
-        
+
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
@@ -930,7 +1017,7 @@ class GPMFStabilizer(Stabilizer):
         self.times = None
         self.stab_transform = None
 
-    
+
     def stabilization_settings(self, smooth = 0.95):
 
 
@@ -957,10 +1044,10 @@ class GPMFStabilizer(Stabilizer):
 
 
 class InstaStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1):
-        
+    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1, InstaType=""):
+
         super().__init__()
-        
+
         # General video stuff
         self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
@@ -969,6 +1056,7 @@ class InstaStabilizer(Stabilizer):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.do_video_rotation = False
 
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
@@ -976,51 +1064,29 @@ class InstaStabilizer(Stabilizer):
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
 
         # Get gyro data
+        if InstaType=="smo4k":
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[])
+        elif InstaType=="insta360 oner":
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[], revertIMU=False)
+        else:
+            # Assume SMO4K - For no real reason....
+            gyro_data_input, self.acc_data = insta360_util.get_insta360_gyro_data(videopath, filterArray=[])
 
-        self.gyro_data = self.instaCSVGyro(gyrocsv)
-
-
-        sosgyro = signal.butter(10, 5, "lowpass", fs=500, output="sos")
-        self.gyro_data[:,1:4] = signal.sosfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
-        self.gyro_data[:,0] -= 15
-
-
-        self.gyro_data[:,1] = -self.gyro_data[:,1]
-        self.gyro_data[:,2] = self.gyro_data[:,2]
-        self.gyro_data[:,3] = self.gyro_data[:,3]
+        # Coverting gyro to XYZ to -Z,-X,Y
+        self.gyro_data = np.empty([len(gyro_data_input), 4])
+        self.gyro_data[:,0] = gyro_data_input[:,0][:]
+        self.gyro_data[:,1] = gyro_data_input[:,2][:] * -1
+        self.gyro_data[:,2] = gyro_data_input[:,3][:]
+        self.gyro_data[:,3] = gyro_data_input[:,1][:] * -1
 
         hero = 0
 
-        # Hero 6??
-        if hero == 6:
-            self.gyro_data[:,1] = self.gyro_data[:,1]
-            self.gyro_data[:,2] = -self.gyro_data[:,2]
-            self.gyro_data[:,3] = self.gyro_data[:,3]
-        elif hero == 5:
-            self.gyro_data[:,1] = -self.gyro_data[:,1]
-            self.gyro_data[:,2] = self.gyro_data[:,2]
-            self.gyro_data[:,3] = -self.gyro_data[:,3]
-            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-
-        elif hero == 8:
-            # Hero 8??
-            self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
-        
+
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
-        #gyro_data[:,1] = gyro_data[:,1]
-        #gyro_data[:,2] = -gyro_data[:,2]
-        #gyro_data[:,3] = gyro_data[:,3]
-
-        #gyro_data[:,1:] = -gyro_data[:,1:]
-
-        #points_test = np.array([[[0,0],[100,100],[200,300],[400,400]]], dtype = np.float32)
-        #result = self.undistort.undistort_points(points_test, new_img_dim=(self.width,self.height))
-        #print(result)
-        #exit()
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -1045,7 +1111,7 @@ class InstaStabilizer(Stabilizer):
         gyrodata = np.array(gyrodata)
         print(gyrodata)
         return gyrodata
-    
+
     def stabilization_settings(self, smooth = 0.95):
 
 
@@ -1071,10 +1137,10 @@ class InstaStabilizer(Stabilizer):
 
 
 class BBLStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype=""):
-        
+    def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1, use_raw_gyro_data=False):
+
         super().__init__()
-        
+
         # General video stuff
         self.undistort_fov_scale = fov_scale
         self.cap = cv2.VideoCapture(videopath)
@@ -1083,6 +1149,10 @@ class BBLStabilizer(Stabilizer):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.video_rotate_code = video_rotation
+        self.do_video_rotation = self.video_rotate_code != -1
+        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+            self.width, self.height = self.height, self.width
 
         # Camera undistortion stuff
         self.undistort = FisheyeCalibrator()
@@ -1098,12 +1168,20 @@ class BBLStabilizer(Stabilizer):
         if use_csv:
             with open(bblpath) as bblcsv:
                 gyro_index = None
-                
+
                 csv_reader = csv.reader(bblcsv)
                 for i, row in enumerate(csv_reader):
                     #print(row)
-                    if(row[0] == "loopIteration"):
-                        gyro_index = row.index('gyroADC[0]')
+
+                    stripped_row = [field.strip() for field in row]
+                    if stripped_row[0] == "loopIteration":
+                        if use_raw_gyro_data:
+                            gyro_index = stripped_row.index('debug[0]')
+                            print('Using raw gyro data')
+                        else:
+                            gyro_index = stripped_row.index('gyroADC[0]')
+                            print('Using filtered gyro data')
+
                         break
 
                 data_list = []
@@ -1114,13 +1192,13 @@ class BBLStabilizer(Stabilizer):
                     gx = float(row[gyro_index+1])* gyroscale
                     gy = float(row[gyro_index+2])* gyroscale
                     gz = float(row[gyro_index]) * gyroscale
-                    
+
                     to_rotate = [-(gx),
                                     (gy),
                                     -(gz)]
-                    
+
                     rotated = r.apply(to_rotate)
-                    
+
                     f = [float(row[1]) / 1000000,
                             rotated[0],
                             rotated[1],
@@ -1136,26 +1214,26 @@ class BBLStabilizer(Stabilizer):
                 next(csvfile)
 
                 lines = csvfile.readlines()
-                
-                
+
+
 
                 data_list = []
-                gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet. 
+                gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
                 #gyroscale = 0.070/4 * np.pi/180 # 500 dps
                 r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
-                
+
                 for line in lines:
                     splitdata = [float(x) for x in line.split(",")]
                     t = splitdata[0]/1000
-                    #gx = splitdata[1] * gyroscale
-                    #gy = splitdata[2] * gyroscale
-                    #gz = splitdata[3] * gyroscale
+                    gx = splitdata[1] * gyroscale
+                    gy = splitdata[2] * gyroscale
+                    gz = splitdata[3] * gyroscale
 
                     # RC test
-                    gx = -splitdata[2] * gyroscale
-                    gy = -splitdata[1] * gyroscale
-                    gz = -splitdata[3] * gyroscale
-                
+                    #gx = -splitdata[2] * gyroscale
+                    #gy = -splitdata[1] * gyroscale
+                    #gz = -splitdata[3] * gyroscale
+
                     # Z: roll
                     # X: yaw
                     # y: pitch
@@ -1169,25 +1247,29 @@ class BBLStabilizer(Stabilizer):
                 print(self.gyro_data)
 
         else:
-            self.bbe = BlackboxExtractor(bblpath)
-            self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
-
+            try:
+                self.bbe = BlackboxExtractor(bblpath)
+                self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
+            except ValueError:
+                print("Error reading raw blackbox file. Try converting to CSV in blackbox explorer")
 
         # This seems to make the orientation match. Implement auto match later
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
         #self.gyro_data[:,2] = -self.gyro_data[:,2]
 
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-        self.gyro_data[:,2] = self.gyro_data[:,2]
+        #self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
-        
+
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
-        
+
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+
+        self.gyro_data = impute_gyro_data(self.gyro_data)
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
         self.integrator.integrate_all()
@@ -1196,7 +1278,7 @@ class BBLStabilizer(Stabilizer):
 
         self.initial_offset = initial_offset
 
-    
+
     def stabilization_settings(self, smooth = 0.99):
 
 
@@ -1243,7 +1325,7 @@ class OpticalStabilizer:
         self.times = None
         self.stab_transform = None
 
-    
+
     def stabilization_settings(self, smooth = 0.65):
 
         frame_idx, transforms = self.optical_flow_comparison(112 * 30, 29 * 30)
@@ -1257,7 +1339,7 @@ class OpticalStabilizer:
         transforms[:,2] = transforms[:,2]
 
         stacked_data = np.hstack([np.atleast_2d(frame_idx).T,transforms])
-        
+
 
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
@@ -1294,7 +1376,7 @@ class OpticalStabilizer:
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
-            
+
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
 
@@ -1334,7 +1416,7 @@ class OpticalStabilizer:
                 #smallest_mag = 1000
                 #for rot in rots:
                 #    thisrot = Rotation.from_matrix(rots[0]) # first one?
-                #    
+                #
                 #    if thisrot.magnitude() < smallest_mag and thisrot.magnitude() < 0.3:
                 #        roteul = Rotation.from_matrix(rot).as_euler("xyz")
                 #        smallest_mag = thisrot.magnitude()
@@ -1353,30 +1435,30 @@ class OpticalStabilizer:
 
                 if self.use_essential_matrix:
                     R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
-                
+
                     rot1 = Rotation.from_matrix(R1)
                     rot2 = Rotation.from_matrix(R2)
 
                     if rot1.magnitude() < rot2.magnitude():
                         roteul = rot1.as_euler("xyz")
-                    else: 
+                    else:
                         roteul = rot2.as_euler("xyz")
 
 
-                #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts) 
+                #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
 
                 #dx = m[0,2]
                 #dy = m[1,2]
-                
+
                 # Extract rotation angle
                 #da = np.arctan2(m[1,0], m[0,0])
-                #transforms.append([dx,dy,da]) 
+                #transforms.append([dx,dy,da])
                 transforms.append(list(roteul))
                 prev_gray = curr_gray
 
             else:
                 print("Frame {}".format(i))
-        
+
         transforms = np.array(transforms)
         return frame_idx, transforms
 
@@ -1388,16 +1470,16 @@ class OpticalStabilizer:
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
 
-        num_frames = int((stoptime - starttime) * self.fps) 
+        num_frames = int((stoptime - starttime) * self.fps)
 
         i = 0
         while(True):
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
-            
-            # Read next frame
-            success, frame = self.cap.read() 
 
-            
+            # Read next frame
+            success, frame = self.cap.read()
+
+
             print("FRAME: {}, IDX: {}".format(frame_num, i))
 
             if success:
@@ -1423,9 +1505,9 @@ class OpticalStabilizer:
                 #print(frame_out.shape)
 
                 # If the image is too big, resize it.
-            #%if(frame_out.shape[1] > 1920): 
+            #%if(frame_out.shape[1] > 1920):
             #		frame_out = cv2.resize(frame_out, (int(frame_out.shape[1]/2), int(frame_out.shape[0]/2)));
-                
+
                 size = np.array(frame_out.shape)
                 frame_out = cv2.resize(frame_out, (int(size[1]), int(size[0])))
 
@@ -1447,26 +1529,8 @@ class OpticalStabilizer:
 
 
 if __name__ == "__main__":
-    """
-    #stab = GPMFStabilizer("test_clips/GX016017.MP4", "camera_presets/Hero_7_2.7K_60_4by3_wide.json")
-    stab = OpticalStabilizer("test_clips/GX016017.MP4", "camera_presets/gopro_calib2.JSON")
-    stab.stabilization_settings(smooth = 0.7)
-    #stab.optical_flow_comparison(start_frame=1300, analyze_length = 50)
-    
-
-    # Camera undistortion stuff
-    stab.undistort = FisheyeCalibrator()
-    stab.undistort.load_calibration_json("camera_presets/Hero_7_2.7K_60_4by3_wide.json", True)
-    stab.map1, stab.map2 = stab.undistort.get_maps(2.2,new_img_dim=(stab.width,stab.height))
-
-
-    stab.renderfile("GX016017_2_stab_optical.mp4",out_size = (1920,1080))
-    stab.release()
-    """
-
-
     # insta360 test
-    
+
     #stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/SMO4K_4K_Wide43.json", gyrocsv="test_clips/insta360_gyro.csv")
     #stab.auto_sync_stab(0.985,100 *24, 119 * 24, 70)
     #stab.renderfile(100, 125, "insta360test4split.mp4",out_size = (2560,1440), split_screen=False, scale=0.5)
@@ -1477,7 +1541,7 @@ if __name__ == "__main__":
     #stab = GPMFStabilizer("test_clips/GX010010.MP4", "camera_presets/gopro_calib2.JSON", hero6=False) # Parking lot
 
     #stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json", "test_clips/starling.csv", use_csv=False, logtype = "gyroflow")
-    
+
     undistortTest = OnlyUndistort("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json",fov_scale=1)
     undistortTest.renderfile(0, 5, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     exit()

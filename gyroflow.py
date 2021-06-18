@@ -6,6 +6,7 @@ import cv2
 import os
 import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
+from matplotlib import colors
 from _version import __version__
 from vidgear.gears.helper import get_valid_ffmpeg_path
 import calibrate_video
@@ -17,8 +18,7 @@ import re
 import calibrate_video
 import subprocess
 import bundled_images
-
-
+import insta360_utility as insta360_util
 import stabilizer
 
 # area for environment variables
@@ -40,7 +40,6 @@ class Launcher(QtWidgets.QWidget):
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
         self.setFixedWidth(450)
-        
         # image
         pixmap = QtGui.QPixmap(':/media/logo_rev0_w400.png')
         self.top_logo = QtWidgets.QLabel()
@@ -61,7 +60,7 @@ class Launcher(QtWidgets.QWidget):
 
         self.stabilizer_button = QtWidgets.QPushButton("Video Stabilizer (Fancy version)")
         self.stabilizer_button.setMinimumSize(300,50)
-        self.stabilizer_button.setEnabled(False)
+        self.stabilizer_button.setEnabled(True)
         self.stabilizer_button.setStyleSheet("font-size: 14px;")
 
         self.stretch_button = QtWidgets.QPushButton("Non-linear Stretch")
@@ -73,7 +72,7 @@ class Launcher(QtWidgets.QWidget):
         self.version_button.setMinimumSize(300,50)
         self.version_button.setStyleSheet("font-size: 14px;")
 
-        self.footer = QtWidgets.QLabel('''Developed by Elvin | <a href='http://gyroflow.xyz/'>gyroflow.xyz</a> | <a href='https://github.com/ElvinC/gyroflow'>Git repo</a> | <a href='http://gyroflow.xyz/donate'>Donate</p>''')
+        self.footer = QtWidgets.QLabel('''Developed by Elvin & Contributors | <a href='http://gyroflow.xyz/'>gyroflow.xyz</a> | <a href='https://github.com/ElvinC/gyroflow'>Git repo</a> | <a href='http://gyroflow.xyz/donate'>Donate</p>''')
         self.footer.setOpenExternalLinks(True)
         self.footer.setAlignment(QtCore.Qt.AlignCenter)
 
@@ -103,6 +102,8 @@ class Launcher(QtWidgets.QWidget):
         self.stabilizer_utility_barebone = None
         self.stretch_utility = None
 
+        self.check_version(True)
+
     def open_calib_util(self):
         """Open the camera calibration utility in a new window
         """
@@ -111,7 +112,6 @@ class Launcher(QtWidgets.QWidget):
         if self.calibrator_utility:
             if self.calibrator_utility.isVisible():
                 return
-        
         self.calibrator_utility = CalibratorUtility()
         self.calibrator_utility.resize(500, 500)
         self.calibrator_utility.show()
@@ -123,7 +123,6 @@ class Launcher(QtWidgets.QWidget):
         if self.stabilizer_utility:
             if self.stabilizer_utility.isVisible():
                 return
-        
         self.stab_utility = StabUtility()
         self.stab_utility.resize(500, 500)
         self.stab_utility.show()
@@ -144,39 +143,44 @@ class Launcher(QtWidgets.QWidget):
         if self.stretch_utility:
             if self.calibrator_utility.isVisible():
                 return
-        
         self.stretch_utility = StretchUtility()
         self.stretch_utility.resize(500, 500)
         self.stretch_utility.show()
 
-    def check_version(self):
-        with urllib.request.urlopen("https://api.github.com/repos/elvinc/gyroflow/releases") as url:
-            releases = json.loads(url.read())
-            newest_version = releases[0]["tag_name"]
-            new = re.match("(\d+).(\d+).(\d+).*", newest_version).groups()
-            current = re.match("(\d+).(\d+).(\d+).*", __version__).groups()
+    def check_version(self, background=False):
+        try:
+            with urllib.request.urlopen("https://api.github.com/repos/elvinc/gyroflow/releases") as url:
 
-            extra = ""
+                releases = json.loads(url.read())
+                newest_version = releases[0]["tag_name"]
+                new = re.match("(\d+).(\d+).(\d+).*", newest_version).groups()
+                current = re.match("(\d+).(\d+).(\d+).*", __version__).groups()
 
-            diff = [int(A) - int(B) for A,B in zip(new,current)]
-            val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
-            print(val)
-            if newest_version.strip() == __version__.strip():
-                extra = "Not much to see here:"
-            elif val > 0:
-                extra = "Oh look, there's a shiny new update. <a href='https://github.com/ElvinC/gyroflow'>Here's a link just for you.</a> "
-            elif val < 0:
-                extra = "Looks like somebody is time traveling..."
-            else:
-                extra = "Spot the difference:"
+                extra = ""
 
-           
-            msg_window = QtWidgets.QMessageBox(self)
-            msg_window.setIcon(QtWidgets.QMessageBox.Information)
-            msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
-            msg_window.setWindowTitle("Version check")
-            msg_window.show()
+                diff = [int(A) - int(B) for A,B in zip(new,current)]
+                val = diff[0] if diff[0] != 0 else diff[1] if diff[1] != 0 else diff[2] if diff[2] != 0 else 0  
+                
+                showpopup = not background
 
+                if newest_version.strip() == __version__.strip():
+                    extra = "Not much to see here:"
+                elif val > 0:
+                    extra = "Oh look, there's a shiny new update. <a href='https://elvinchen.com/gyroflow/download/'>Here's a link just for you.</a> "
+                    showpopup = True
+                elif val < 0:
+                    extra = "Looks like somebody is time traveling..."
+                else:
+                    extra = "Spot the difference:"
+
+                if showpopup:
+                    msg_window = QtWidgets.QMessageBox(self)
+                    msg_window.setIcon(QtWidgets.QMessageBox.Information)
+                    msg_window.setText("{}<br>Your version: <b>{}</b>, newest release: <b>{}</b>".format(extra, __version__, newest_version))
+                    msg_window.setWindowTitle("Version check")
+                    msg_window.show()
+        except: 
+            print("Unable to check version")
 
 
 class VideoThread(QtCore.QThread):
@@ -197,6 +201,8 @@ class VideoThread(QtCore.QThread):
         self.frame_pos_update = frame_pos_update
         self.map1s = []
         self.map2s = []
+
+        self.map_function = None
 
         # Draw vertical lines at given coords
         self.vert_line_coords = []
@@ -240,13 +246,18 @@ class VideoThread(QtCore.QThread):
 
         # https://stackoverflow.com/a/55468544/6622587
         rgbImage = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+        this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
         for i in range(len(self.map1s)):
             # apply the maps using linear interpolation for now
             rgbImage = cv2.remap(rgbImage, self.map1s[i], self.map2s[i], cv2.INTER_LINEAR)
-            
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
+
+        if self.map_function:
+            tmap1, tmap2 = self.map_function(this_frame_num)
+            rgbImage = cv2.remap(rgbImage, tmap1, tmap2, cv2.INTER_LINEAR)
+
 
         if rgbImage.shape[1] > self.max_width:
             new_height = int(self.max_width/rgbImage.shape[1] * rgbImage.shape[0])
@@ -257,7 +268,7 @@ class VideoThread(QtCore.QThread):
         convertToQtFormat = QtGui.QImage(rgbImage.data, w, h, bytesPerLine, QtGui.QImage.Format_RGB888)
         self.changePixmap.emit(convertToQtFormat.copy())
 
-        this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        
         if this_frame_num % 5 == 0 and self.frame_pos_update:
             self.frame_pos_update(this_frame_num)
 
@@ -271,7 +282,7 @@ class VideoPlayer(QtWidgets.QLabel):
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
         self.pixmap = QtGui.QPixmap(img)
         #self.setPixmap(self.pixmap)
-        
+
         self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
 
 
@@ -333,13 +344,13 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.frame_width = 1920 # placeholder
         self.frame_height = 1080
         self.num_frames = 0
-        
+
 
         # initialize thread for video player with frame update function
         self.thread = VideoThread(self, self.set_seek_frame)
         self.thread.changePixmap.connect(self.setImage)
         self.thread.start()
-        
+
     @QtCore.Slot(QtGui.QImage)
     def setImage(self, image):
         pixmap = QtGui.QPixmap.fromImage(image)
@@ -379,6 +390,12 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.thread.map1s.append(map1)
         self.thread.map2s.append(map2)
 
+    def set_map_function(self, map_function):
+        self.thread.map_function = map_function
+
+    def reset_map_function(self):
+        self.thread.map_function = None
+
     def reset_lines(self):
         self.thread.vert_line_coords = []
 
@@ -387,7 +404,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
     def update_frame(self):
         self.thread.update_once = True
-    
+
     def next_frame(self):
         self.thread.next_frame = True
 
@@ -395,7 +412,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.is_seeking = True
         self.was_playing_before = self.thread.playing
         self.stop()
-    
+
     def stop_seek(self):
         self.is_seeking = False
 
@@ -423,14 +440,13 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         selected_frame = int(self.num_frames * self.time_slider.value() / self.seek_ticks)
         print(selected_frame)
         self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, selected_frame)
-        
+
         # restart if it was playing
         if (was_playing or self.was_playing_before) and not self.is_seeking:
             self.play()
         else:
             self.next_frame()
 
-        
     def set_seek_frame(self, frame_pos):
         """Set the seek bar position to match frame
 
@@ -442,7 +458,6 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         if self.is_seeking:
             return
 
-
         slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
         # update slider without triggering valueChange
         self.time_slider.blockSignals(True)
@@ -451,6 +466,11 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
     def destroy_thread(self):
         self.thread.terminate()
+
+    def get_current_timestamp(self):
+        if self.thread.cap:
+            return self.thread.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        return 0
 
 class Form(QtWidgets.QDialog):
 
@@ -468,14 +488,11 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def __init__(self):
         """Qt window containing camera calibration utility
         """
-
-        
-
         super().__init__()
 
         calib_input = QtWidgets.QInputDialog.getText(self, "Calibration setting","Calibration chessboard size. w, h",
                                                      QtWidgets.QLineEdit.Normal, "9,6")[0].split(",")
-        
+
         try:
             w, h = [min(max(int(x), 1),30) for x in calib_input]
             self.chessboard_size = (w,h)
@@ -483,6 +500,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         except:
             print("setting to default 9,6 pattern")
             self.chessboard_size = (9,6)
+
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Calibrator {}".format(__version__))
@@ -528,14 +546,14 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.add_frame_button = QtWidgets.QPushButton("Add current frame")
         self.add_frame_button.setMinimumHeight(self.button_height)
         self.add_frame_button.clicked.connect(self.add_current_frame)
-        
+
         self.calib_controls_layout.addWidget(self.add_frame_button)
 
         # button for recomputing image stretching maps
         self.del_frame_button = QtWidgets.QPushButton("Remove last frame")
         self.del_frame_button.setMinimumHeight(self.button_height)
         self.del_frame_button.clicked.connect(self.remove_frame)
-        
+
         self.calib_controls_layout.addWidget(self.del_frame_button)
 
         # button for recomputing image stretching maps
@@ -550,7 +568,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.calib_controls_layout.addWidget(self.info_text)
 
         self.fov_scale = 1.4
-        
+
         # slider for adjusting FOV
         self.fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.fov_scale))
         self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
@@ -589,12 +607,12 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         completer = QtWidgets.QCompleter(cam_company_list)
         completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
         # create line edit and add auto complete
-                            
+
         self.cam_company_input = QtWidgets.QLineEdit()
         self.cam_company_input.setCompleter(completer)
         self.cam_company_input.setPlaceholderText(random.choice(cam_company_list + ["Potatocam"]))
         self.right_layout.addWidget(self.cam_company_input)
-        
+
         self.right_layout.addWidget(QtWidgets.QLabel("Camera make (*)"))
         self.cam_model_input = QtWidgets.QLineEdit()
         self.cam_model_input.setPlaceholderText(random.choice(["Hero5", "D5100", "Hero8", "Komodo", "Pocket Cinema", "2000D", "Alexa", "Potato"])) # Don't ask...
@@ -627,7 +645,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.export_button.setMinimumHeight(self.button_height)
         self.export_button.clicked.connect(self.save_preset_file)
         self.export_button.setEnabled(False)
-        
+
         self.right_layout.addWidget(self.export_button, alignment=QtCore.Qt.AlignBottom)
         self.right_layout.addWidget(QtWidgets.QLabel("Want to help? Send new presets here:<br><a href='http://gyroflow.xyz/lens'>http://gyroflow.xyz/lens</a>"))
 
@@ -712,7 +730,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.chess_window.setLayout(self.chess_layout)
 
         # VideoPlayer class doubles as a auto resizing image viewer
-        
 
         # generate chessboard pattern so no external images are needed
 
@@ -736,7 +753,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         # convert to Qt image
         h, w = chess_pic.shape
         convertToQtFormat = QtGui.QImage(chess_pic.data, w, h, w, QtGui.QImage.Format_Grayscale8)
-        
+
         # VideoPlayer doubles as a autoresiznig image viewer
         chess_viewer = VideoPlayer(convertToQtFormat.copy())
 
@@ -744,7 +761,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.chess_window.resize(500, 500)
         self.chess_window.show()
-        
+
 
     def closeEvent(self, event):
         print("Closing now")
@@ -797,14 +814,13 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             self.show_warning("No output file given")
             return
 
-        self.calibrator.save_calibration_json(filename[0], calib_name=calib_name, camera_brand=cam_brand, camera_model=cam_model, 
+        self.calibrator.save_calibration_json(filename[0], calib_name=calib_name, camera_brand=cam_brand, camera_model=cam_model,
                                               lens_model=cam_lens, camera_setting=cam_setting, note=cam_note, calibrated_by=calibrated_by)
 
     def show_error(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awfully wrong", msg)
 
         return
-        
         #self.err_window = QtWidgets.QMessageBox(self)
         #self.err_window.setIcon(QtWidgets.QMessageBox.Warning)
         #self.err_window.setText(msg)
@@ -836,7 +852,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.update_calib_info()
 
-        
 
     def update_calib_info(self):
         """ Update the status text in the utility
@@ -846,7 +861,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
                                                                                 self.calibrator.num_images_used,
                                                                                 self.calibrator.RMS_error,
                                                                                 self.calib_msg)
-    
         self.info_text.setText(txt)
 
         # enable/disable buttons
@@ -854,7 +868,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             self.process_frames_btn.setEnabled(True)
         else:
             self.process_frames_btn.setEnabled(False)
- 
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
             self.export_button.setEnabled(True)
@@ -937,7 +950,7 @@ class StretchUtility(QtWidgets.QMainWindow):
 
 
         self.stretch_controls_layout.addWidget(self.expo_text)
-        self.stretch_controls_layout.addWidget(self.expo_slider)        
+        self.stretch_controls_layout.addWidget(self.expo_slider)
 
         # checkmark for showing untouched area
         self.show_safe_check = QtWidgets.QCheckBox("Show safe area: ")
@@ -956,7 +969,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.out_width_control.setValue(1920)
         self.out_width_control.valueChanged.connect(self.update_out_size)
 
-        self.stretch_controls_layout.addWidget(self.out_width_control)       
+        self.stretch_controls_layout.addWidget(self.out_width_control)
 
         # output size choice
         self.out_height_control = QtWidgets.QSpinBox(self)
@@ -965,18 +978,16 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.out_height_control.setValue(1080)
         self.out_height_control.valueChanged.connect(self.update_out_size)
 
-        self.stretch_controls_layout.addWidget(self.out_height_control)   
+        self.stretch_controls_layout.addWidget(self.out_height_control)
 
         # button for recomputing image stretching maps
         self.recompute_stretch_button = QtWidgets.QPushButton("Apply settings")
         self.recompute_stretch_button.clicked.connect(self.recompute_stretch)
-        
         self.stretch_controls_layout.addWidget(self.recompute_stretch_button)
 
         # button for recomputing image stretching maps
         self.export_button = QtWidgets.QPushButton("Export video")
         self.export_button.clicked.connect(self.export_video)
-        
         self.stretch_controls_layout.addWidget(self.export_button)
 
         # add control bar to main layout
@@ -999,7 +1010,6 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         self.infile_path = ""
 
-        
 
         self.show()
 
@@ -1009,7 +1019,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         self.nonlin = nonlinear_stretch.NonlinearStretch((1280,720), (1920,1080))
 
     def open_file_func(self):
-        """Open file using Qt filedialog 
+        """Open file using Qt filedialog
         """
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
         self.infile_path = path[0]
@@ -1021,7 +1031,6 @@ class StretchUtility(QtWidgets.QMainWindow):
 
         self.video_viewer.next_frame()
 
-        
 
     def closeEvent(self, event):
         print("Closing now")
@@ -1073,7 +1082,6 @@ class StretchUtility(QtWidgets.QMainWindow):
 
             self.video_viewer.add_vert_lines(line1)
             self.video_viewer.add_vert_lines(line2)
-        
         self.video_viewer.update_frame()
 
     def export_video(self):
@@ -1095,7 +1103,6 @@ class StretchUtility(QtWidgets.QMainWindow):
         if len(filename[0]) == 0:
             self.show_error("No output file given")
             return
-        
         self.nonlin.stretch_save_video(self.infile_path, filename[0])
 
     def show_error(self, msg):
@@ -1109,230 +1116,27 @@ class StretchUtility(QtWidgets.QMainWindow):
         err_window.show()
 
 
-
-class StabUtility(QtWidgets.QMainWindow):
-    def __init__(self):
-        """Qt window containing utility for syncing and stabilization
-        """
-        super().__init__()
-
-        # Initialize UI
-        self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
-        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
-
-        self.main_widget = QtWidgets.QWidget()
-        self.layout = QtWidgets.QVBoxLayout()
-        self.main_widget.setLayout(self.layout)
-
-        # video player with controls
-        self.video_viewer = VideoPlayerWidget()
-        self.layout.addWidget(self.video_viewer)
-
-        self.setCentralWidget(self.main_widget)
-
-        # control buttons
-        self.main_controls = QtWidgets.QWidget()
-        self.main_controls_layout = QtWidgets.QHBoxLayout()
-        self.main_controls.setLayout(self.main_controls_layout)
-
-        # button for syncing around current frame
-        self.syncpoint_button = QtWidgets.QPushButton("Add sync point")
-        self.syncpoint_button.clicked.connect(self.syncpoint_handler)
-        self.main_controls_layout.addWidget(self.syncpoint_button)
-
-
-        # slider for adjusting unwarped area
-        self.smooth_text = QtWidgets.QLabel("Smoothness (0%):")
-        self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.smooth_slider.setMinimum(0)
-        self.smooth_slider.setValue(0)
-        self.smooth_slider.setMaximum(100)
-        self.smooth_slider.setSingleStep(1)
-        self.smooth_slider.setTickInterval(1)
-        self.smooth_slider.valueChanged.connect(self.smooth_changed)
-
-        self.main_controls_layout.addWidget(self.smooth_text)
-        self.main_controls_layout.addWidget(self.smooth_slider)
-
-        # slider for adjusting non linear crop
-        self.crop_text = QtWidgets.QLabel("Crop (2.0):")
-        self.crop_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.crop_slider.setMinimum(10)
-        self.crop_slider.setValue(20)
-        self.crop_slider.setMaximum(40)
-        self.crop_slider.setSingleStep(1)
-        self.crop_slider.setTickInterval(1)
-        self.crop_slider.valueChanged.connect(self.crop_changed)
-
-
-        self.main_controls_layout.addWidget(self.crop_text)
-        self.main_controls_layout.addWidget(self.crop_slider)        
-
-        # output size choice
-        self.out_size_text = QtWidgets.QLabel("Output size: ")
-        self.main_controls_layout.addWidget(self.out_size_text)
-
-        self.out_width_control = QtWidgets.QSpinBox(self)
-        self.out_width_control.setMinimum(16)
-        self.out_width_control.setMaximum(7680) # 8K max is probably fine
-        self.out_width_control.setValue(1920)
-        self.out_width_control.valueChanged.connect(self.update_out_size)
-
-        self.main_controls_layout.addWidget(self.out_width_control)       
-
-        # output size choice
-        self.out_height_control = QtWidgets.QSpinBox(self)
-        self.out_height_control.setMinimum(9)
-        self.out_height_control.setMaximum(4320)
-        self.out_height_control.setValue(1080)
-        self.out_height_control.valueChanged.connect(self.update_out_size)
-
-        self.main_controls_layout.addWidget(self.out_height_control)   
-
-        # button for recomputing image stretching maps
-        self.recompute_stab_button = QtWidgets.QPushButton("Apply settings and recompute")
-        self.recompute_stab_button.clicked.connect(self.recompute_stab)
-        
-        self.main_controls_layout.addWidget(self.recompute_stab_button)
-
-        # button for exporting video
-        self.export_button = QtWidgets.QPushButton("Export video")
-        self.export_button.clicked.connect(self.export_video)
-        
-        self.main_controls_layout.addWidget(self.export_button)
-
-        # add control bar to main layout
-        self.layout.addWidget(self.main_controls)
-
-        # file menu setup
-        menubar = self.menuBar()
-        filemenu = menubar.addMenu('&File')
-
-        # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
-        icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
-
-        self.open_file = QtWidgets.QAction(icon, 'Open file', self)
-        self.open_file.setShortcut("Ctrl+O")
-        self.open_file.triggered.connect(self.open_file_func)
-        filemenu.addAction(self.open_file)
-
-        icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
-        self.open_preset = QtWidgets.QAction(icon, 'Open calibration preset', self)
-        self.open_preset.triggered.connect(self.open_preset_func)
-        filemenu.addAction(self.open_preset)
-
-        self.statusBar()
-
-        self.infile_path = ""
-
-        
-
-        self.show()
-
-        self.main_widget.show()
-
-        # non linear setup
-        
-
-    def open_file_func(self):
-        """Open file using Qt filedialog 
-        """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
-        self.infile_path = path[0]
-        self.video_viewer.set_video_path(path[0])
-
-        #self.recompute_stab()
-
-        self.video_viewer.next_frame()
-
-    def open_preset_func(self):
-        pass
-        
-
-    def closeEvent(self, event):
-        print("Closing now")
-        self.video_viewer.destroy_thread()
-        event.accept()
-
-    def smooth_changed(self):
-        """Smoothness has changed
-        """
-        pass
-
-
-    def crop_changed(self):
-        """Nonlinear expo has changed
-        """
-        crop_val = self.crop_slider.value() / 10
-        self.crop_text.setText("Crop ({}):".format(crop_val))
-
-    def syncpoint_handler(self):
-        """Add sync point
-        """
-        pass
-
-    def update_out_size(self):
-        """Update export image size
-        """
-        #print(self.out_width_control.value())
-        pass
-
-    def recompute_stab(self):
-        """Update sync and stabilization
-        """
-        pass
-
-
-    def export_video(self):
-        """Gives save location using filedialog
-           and saves video to given location
-        """
-        # no input file opened
-        if self.infile_path == "":
-            self.show_error("No video file loaded")
-            return
-
-        self.video_viewer.stop()
-
-        # get file
-
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter="mp4 (*.mp4);; Quicktime (*.mov)")
-        print(filename[0])
-
-        if len(filename[0]) == 0:
-            self.show_error("No output file given")
-            return
-        
-        pass
-
-    def show_error(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
-
-        return
-        err_window = QtWidgets.QMessageBox(self)
-        err_window.setIcon(QtWidgets.QMessageBox.Critical)
-        err_window.setText(msg)
-        err_window.setWindowTitle("Something's gone awry")
-        err_window.show()
-
-
-
 class StabUtilityBarebone(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, with_UI = True):
         """Qt window containing barebone utility for stabilization. (No video viewer)
         """
         super().__init__()
+        if with_UI:
+            # Initialize UI
+            self.setWindowTitle("Gyroflow Stabilizer Barebone {}".format(__version__))
+            self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
 
-        # Initialize UI
-        self.setWindowTitle("Gyroflow Stabilizer Barebone {}".format(__version__))
-        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
+            self.main_setting_widget = QtWidgets.QTabWidget()
+            self.layout = QtWidgets.QHBoxLayout()
+            self.main_setting_widget.setLayout(self.layout)
+            self.main_setting_widget.setStyleSheet("font-size: 12px")
+            self.setCentralWidget(self.main_setting_widget)
+        
+            self.init_UI()
+            self.show()
+            self.main_setting_widget.show()
 
-        self.main_widget = QtWidgets.QTabWidget()
-        self.layout = QtWidgets.QHBoxLayout()
-        self.main_widget.setLayout(self.layout)
-        self.main_widget.setStyleSheet("font-size: 12px")
-
-        self.setCentralWidget(self.main_widget)
+    def init_UI(self):
 
         # input tab
         self.input_controls = QtWidgets.QWidget()
@@ -1354,6 +1158,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.setAlignment(QtCore.Qt.AlignTop)
         self.export_controls.setMinimumWidth(500)
 
+        self.export_keyframes_controls = QtWidgets.QWidget()
+        self.export_keyframes_controls_layout = QtWidgets.QVBoxLayout()
+        self.export_keyframes_controls.setLayout(self.export_keyframes_controls_layout)
+        self.export_keyframes_controls_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.export_keyframes_controls.setMinimumWidth(500)
+
 
         text = QtWidgets.QLabel("<h2>Input parameters:</h2>".format(__version__))
         text.setAlignment(QtCore.Qt.AlignCenter)
@@ -1362,7 +1172,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_vid_button = QtWidgets.QPushButton("Open video file")
         self.open_vid_button.setMinimumHeight(30)
         self.open_vid_button.clicked.connect(self.open_video_func)
-        
         self.input_controls_layout.addWidget(self.open_vid_button)
 
         # lens preset
@@ -1372,20 +1181,31 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.open_preset_button)
 
 
-        self.open_gyro_button = QtWidgets.QPushButton("Open BBL/Gyro log (leave empty for GPMF)")
+        self.open_gyro_button = QtWidgets.QPushButton("Open Gyro log")
         self.open_gyro_button.setMinimumHeight(30)
         self.open_gyro_button.clicked.connect(self.open_gyro_func)
         self.input_controls_layout.addWidget(self.open_gyro_button)
 
-        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically ")
+        self.video_as_log_button = QtWidgets.QPushButton("Set input video as log (GoPro, Insta360)")
+        self.video_as_log_button.setMinimumHeight(30)
+        self.video_as_log_button.clicked.connect(self.video_as_log_func)
+        self.input_controls_layout.addWidget(self.video_as_log_button)
+
+        explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically.<br>If BBL doesn't work, use exported CSV file from blackbox explorer")
         explaintext.setWordWrap(True)
         explaintext.setMinimumHeight(60)
         self.input_controls_layout.addWidget(explaintext)
 
+        self.input_controls_layout.addWidget(QtWidgets.QLabel('Rotate video:'))
+        self.input_video_rotate_select = QtWidgets.QComboBox()
+        self.input_video_rotate_select.addItem("None", -1)
+        self.input_video_rotate_select.addItem("90° Clockwise", cv2.ROTATE_90_CLOCKWISE) # 0
+        self.input_video_rotate_select.addItem("90° Counterclockwise", cv2.ROTATE_90_COUNTERCLOCKWISE) # 2
+        self.input_video_rotate_select.addItem("180°", cv2.ROTATE_180) # 1
+        self.input_controls_layout.addWidget(self.input_video_rotate_select)
+        
 
-
-        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log")]
-
+        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("csvrc", "RC CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
@@ -1397,13 +1217,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             #self.gyro_log_model.appendRow(itm)
             self.gyro_log_format_select.addItem(text, i)
 
-        #self.gyro_log_format_select.setModel(self.gyro_log_model)
-        #self.gyro_log_format_select.addItem("Gyroflow CSV Log (doesn't work)")
-        #self.gyro_log_format_select.addItem("GoPro GPMF as log?? (doesn't work)")
         self.gyro_log_format_select.setMinimumHeight(20)
 
         self.gyro_log_format_text.setVisible(False)
         self.gyro_log_format_select.setVisible(False)
+        self.gyro_log_format_select.currentIndexChanged.connect(self.update_gyro_input_settings)
 
         self.input_controls_layout.addWidget(self.gyro_log_format_text)
         self.input_controls_layout.addWidget(self.gyro_log_format_select)
@@ -1423,17 +1241,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.fpv_tilt_text)
         self.input_controls_layout.addWidget(self.fpv_tilt_control)
 
+        self.gyro_log_use_raw_data_text = QtWidgets.QLabel("Use raw gyro data (debug_mode = GYRO_SCALED):")
+        self.gyro_log_use_raw_data_control = QtWidgets.QCheckBox(self)
+        self.gyro_log_use_raw_data_control.setChecked(False)
 
-        
+        self.gyro_log_use_raw_data_text.setVisible(False)
+        self.gyro_log_use_raw_data_control.setVisible(False)
+
+        self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_text)
+        self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_control)
+
         self.camera_type_text = QtWidgets.QLabel('Camera type (integrated gyro)')
         self.input_controls_layout.addWidget(self.camera_type_text)
 
         self.camera_type_control = QtWidgets.QComboBox()
+        self.camera_type_control.clear()
         self.camera_type_control.addItem("hero5")
         self.camera_type_control.addItem("hero6")
         self.camera_type_control.addItem("hero7")
         self.camera_type_control.addItem("hero8")
-        self.camera_type_control.addItem("smo4k (N/A)")
+        self.camera_type_control.addItem("hero9")
 
         self.input_controls_layout.addWidget(self.camera_type_control)
 
@@ -1537,10 +1364,18 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Number of frames to analyze per slice using optical flow:"))
         self.OF_frames_control = QtWidgets.QSpinBox(self)
         self.OF_frames_control.setMinimum(10)
-        self.OF_frames_control.setMaximum(300)
+        self.OF_frames_control.setMaximum(600)
         self.OF_frames_control.setValue(60)
 
         self.sync_controls_layout.addWidget(self.OF_frames_control)
+
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Analyze every Nth frame (increase for high fps footage)"))
+        self.num_frames_skipped_control = QtWidgets.QSpinBox(self)
+        self.num_frames_skipped_control.setMinimum(1)
+        self.num_frames_skipped_control.setMaximum(50)
+        self.num_frames_skipped_control.setValue(1)
+
+        self.sync_controls_layout.addWidget(self.num_frames_skipped_control)
 
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Sync search size (seconds)"))
         self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
@@ -1555,7 +1390,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stabilization_algo_select.addItem("SLERP-based IIR (standard)")
         self.stabilization_algo_select.addItem("(More methods under development)")
         self.sync_controls_layout.addWidget(self.stabilization_algo_select)
-        
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
         self.smooth_max_period = 30 # seconds
@@ -1591,8 +1425,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.sync_controls_layout.addWidget(self.fov_text)
-        self.sync_controls_layout.addWidget(self.fov_slider)   
-        
+        self.sync_controls_layout.addWidget(self.fov_slider)
+
         self.sync_debug_select = QtWidgets.QCheckBox("Display sync plots")
         self.sync_debug_select.setChecked(True)
         self.sync_controls_layout.addWidget(self.sync_debug_select)
@@ -1641,7 +1475,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(text)
 
         # output size choice
-        self.out_size_text = QtWidgets.QLabel("Output crop: ")
+        self.out_size_text = QtWidgets.QLabel("Output dimensions: ")
         self.export_controls_layout.addWidget(self.out_size_text)
 
         self.out_width_control = QtWidgets.QSpinBox(self)
@@ -1659,22 +1493,22 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.out_height_control.valueChanged.connect(self.update_out_size)
 
         self.export_controls_layout.addWidget(self.out_width_control)
-        self.export_controls_layout.addWidget(self.out_height_control)   
+        self.export_controls_layout.addWidget(self.out_height_control)
 
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("Output upscale"))
+        #self.export_controls_layout.addWidget(QtWidgets.QLabel("Output upscale"))
 
-        self.out_scale_control = QtWidgets.QSpinBox(self)
-        self.out_scale_control.setMinimum(1)
-        self.out_scale_control.setMaximum(4)
-        self.out_scale_control.setValue(1)
-        self.export_controls_layout.addWidget(self.out_scale_control)
+        #self.out_scale_control = QtWidgets.QSpinBox(self)
+        #self.out_scale_control.setMinimum(1)
+        #self.out_scale_control.setMaximum(4)
+        #self.out_scale_control.setValue(1)
+        #self.export_controls_layout.addWidget(self.out_scale_control)
 
 
-        explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
-        "and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
-        explaintext.setWordWrap(True)
-        explaintext.setMinimumHeight(60)
-        self.export_controls_layout.addWidget(explaintext)
+        #explaintext = QtWidgets.QLabel("<b>Note:</b> The current code uses two image remappings for lens correction " \
+        #"and perspective transform, so output must be cropped separately to avoid black borders. These steps can be combined later. For now fov_scale = 1.5 with appropriate crop depending on resolution works.")
+        #explaintext.setWordWrap(True)
+        #explaintext.setMinimumHeight(60)
+        #self.export_controls_layout.addWidget(explaintext)
 
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Video export start and stop (seconds)"))
         self.export_starttime = QtWidgets.QDoubleSpinBox(self)
@@ -1690,20 +1524,46 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
+        self.enableAdaptiveZoom = QtWidgets.QCheckBox("Adaptive zoom  (if disabled, use zoom to set desired Fov)")
+        self.enableAdaptiveZoom.setChecked(True)
+        self.enableAdaptiveZoom.clicked.connect(self.enableAdaptiveZoomClicked)
+        self.export_controls_layout.addWidget(self.enableAdaptiveZoom)
+
+        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 1.0")
+        self.export_controls_layout.addWidget(self.fov_smoothing_text)
+        self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_smoothing.setMinimum(0)
+        self.fov_smoothing.setValue(10)
+        self.fov_smoothing.setMaximum(40)
+        self.fov_smoothing.setSingleStep(1)
+        self.fov_smoothing.setTickInterval(1)
+        self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
+        self.export_controls_layout.addWidget(self.fov_smoothing)
+
+        self.zoom_text = QtWidgets.QLabel("Zoom Factor: 1.0")
+        self.export_controls_layout.addWidget(self.zoom_text)
+        self.zoom = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.zoom.setMinimum(5)
+        self.zoom.setValue(10)
+        self.zoom.setMaximum(20)
+        self.zoom.setSingleStep(1)
+        self.zoom.setTickInterval(1)
+        self.zoom.valueChanged.connect(self.zoom_changed)
+        self.export_controls_layout.addWidget(self.zoom)
+
         # Check for available encoders and grey out those who are not available
         self.available_encoders = self.get_available_encoders()
-        # TODO: Use subprocess or lib to import these dynamically directly from FFmpeg. They dont really change much but would be more robust in terms 
+        # TODO: Use subprocess or lib to import these dynamically directly from FFmpeg. They dont really change much but would be more robust in terms
         # of different FFmpeg versions etc
         supported_encoders = {
-            "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"], 
+            "libx264": ["baseline", "main", "high", "high10", "high422", "hight444"],
             "h264_nvenc": ["baseline", "main", "high", "high444p"],
             "h264_vaapi": ["baseline", "main", "high"],
-            "h264_videotoolbox": ["baseline", "main", "high", "extended"], 
+            "h264_videotoolbox": ["baseline", "main", "high", "extended"],
             "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"]
         }
 
         self.encoder_model = QtGui.QStandardItemModel()
-        
         self.video_encoder_text = QtWidgets.QLabel('Video encoder')
         self.video_encoder_select = QtWidgets.QComboBox()
         self.video_encoder_select.setModel(self.encoder_model)
@@ -1725,7 +1585,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # Prevent a unsupported/disabled item to be default selection
         for i in range(0, self.video_encoder_select.count()):
             if self.encoder_model.item(i).isEnabled():
-                self.video_encoder_select.setCurrentIndex(i) 
+                self.video_encoder_select.setCurrentIndex(i)
                 break
 
         self.video_encoder_select.currentIndexChanged.connect(self.update_profile_select)
@@ -1733,7 +1593,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_encoder_select.currentIndexChanged.connect(self.update_container_selection)
         self.update_container_selection()
         self.update_profile_select()
-        
         self.export_controls_layout.addWidget(self.video_encoder_text)
         self.export_controls_layout.addWidget(self.video_encoder_select)
         self.export_controls_layout.addWidget(self.encoder_profile_text)
@@ -1748,7 +1607,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.display_preview.setChecked(True)
         self.export_controls_layout.addWidget(self.display_preview)
 
-        self.export_debug_text = QtWidgets.QCheckBox("Render with debug text")
+        self.export_debug_text = QtWidgets.QCheckBox("Render with debug info")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
@@ -1764,14 +1623,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.export_bitrate)
         self.update_bitrate_visibility()
 
-        #yuv420p
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
+        #self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg color space selection (Try 'yuv420p' if output doesn't play):"))
         self.pixfmt_select = QtWidgets.QLineEdit()
-        self.export_controls_layout.addWidget(self.pixfmt_select)
+        #self.export_controls_layout.addWidget(self.pixfmt_select) # Shouldn't be required
+
+        
+        bg_description = QtWidgets.QLabel("Background color. #HexCode, CSS color name, REPLICATE (Extend edge), HISTORY (Keep previous frame):")
+        bg_description.setWordWrap(True)
+        self.export_controls_layout.addWidget(bg_description)
+        colornames = list(colors.cnames.keys())
+        completer = QtWidgets.QCompleter(colornames + ["REPLICATE","HISTORY"])
+        self.bg_color_select = QtWidgets.QLineEdit()
+        self.bg_color_select.setCompleter(completer)
+        self.bg_color_select.setPlaceholderText(random.choice(colornames))
+        self.bg_color_select.setText("REPLICATE")
+        self.export_controls_layout.addWidget(self.bg_color_select)
 
         example_ffmpeg_pipeline = '{"-vcodec": "prores_ks","-profile:v": "hq"}'
-        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg custom pipeline, overwrites all settings above. \nExample: %s" % example_ffmpeg_pipeline))
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("FFmpeg custom pipeline, overwrites all settings above."))
         self.custom_ffmpeg_pipeline = QtWidgets.QLineEdit()
+        self.custom_ffmpeg_pipeline.setPlaceholderText(example_ffmpeg_pipeline)
         self.export_controls_layout.addWidget(self.custom_ffmpeg_pipeline)
 
         # button for exporting video
@@ -1779,8 +1650,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_button.setMinimumHeight(30)
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self.export_video)
-        
         self.export_controls_layout.addWidget(self.export_button)
+
+        self.export_keyframes_button = QtWidgets.QPushButton("Export (hopefully) stabilized keyframes for the whole clip")
+        self.export_keyframes_button.setMinimumHeight(30)
+        self.export_keyframes_button.setEnabled(False)
+        self.export_keyframes_button.clicked.connect(self.export_keyframes)
+        
+        self.export_controls_layout.addWidget(self.export_keyframes_button)
 
         # warning for HW encoding
         render_description = QtWidgets.QLabel(
@@ -1792,29 +1669,20 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # add control bar to main layout
         #self.layout.addWidget(self.input_controls)
         #self.layout.addWidget(self.sync_controls)
-        self.main_widget.addTab(self.input_controls, "Input")
-        self.main_widget.addTab(self.sync_controls, "Sync/stabilization")
-        self.main_widget.addTab(self.export_controls, "Export")
-                
+        self.main_setting_widget.addTab(self.input_controls, "Input")
+        self.main_setting_widget.addTab(self.sync_controls, "Sync/stabilization")
+        self.main_setting_widget.addTab(self.export_controls, "Export")
 
         self.infile_path = ""
         self.preset_path = ""
         self.gyro_log_path = ""
         self.stab = None
         self.analyzed = False
-        
         self.update_gyro_input_settings()
 
 
-        self.show()
-
-        self.main_widget.show()
-
-        # non linear setup
-        
-
     def open_video_func(self):
-        """Open file using Qt filedialog 
+        """Open file using Qt filedialog
         """
         #path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file")
         dialog = QtWidgets.QFileDialog()
@@ -1824,7 +1692,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if (len(path) == 0 or len(path[0]) == 0):
             print("No file selected")
             return
-        
         self.infile_path = path[0]
         self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
         self.open_vid_button.setStyleSheet("font-weight:bold;")
@@ -1835,7 +1702,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_info_dict["width"] = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.video_info_dict["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.video_info_dict["fps"] = cap.get(cv2.CAP_PROP_FPS)
-        self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"]) 
+        self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
 
         self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
 
@@ -1853,6 +1720,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
                 break
 
+
+        self.update_gyro_input_settings()
+
+    def video_as_log_func(self):
+        self.gyro_log_path = self.infile_path
+        # check if Insta360
+        if insta360_util.isInsta360Video(self.infile_path):
+            self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("insta360"))
+            #self.camera_type_control.setCurrentText('smo4k')
+            self.input_lpf_control.setValue(25)
+
+        else: # Probably gopro
+            self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("gpmf"))
+            #self.camera_type_control.setCurrentText('hero8')
+            self.input_lpf_control.setValue(-1)
 
         self.update_gyro_input_settings()
 
@@ -1916,45 +1798,62 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def update_gyro_input_settings(self):
         # display/hide relevant gyro log settings
 
-        external = bool(self.gyro_log_path) # display more settings if external log is selected
+        self.gyro_log_format_text.setVisible(True)
+        self.gyro_log_format_select.setVisible(True)
+
+        selected_log_type = self.gyro_log_format_select.currentData()
+
+        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow"] # display more settings if external source is used
+
+        videofile_selected = bool(self.infile_path)
+        gyrofile_selected = bool(self.gyro_log_path)
+        internal = not external
 
         self.fpv_tilt_text.setVisible(external)
         self.fpv_tilt_control.setVisible(external)
-        self.gyro_log_format_text.setVisible(external)
-        self.gyro_log_format_select.setVisible(external)
+
+        self.camera_type_control.setVisible(internal)
+        self.camera_type_text.setVisible(internal)
+
+        self.gyro_log_use_raw_data_text.setVisible(selected_log_type == "csvblackbox")
+        self.gyro_log_use_raw_data_control.setVisible(selected_log_type == "csvblackbox")
+
+        if gyrofile_selected:
+            self.open_gyro_button.setText("Gyro data: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
+            self.open_gyro_button.setStyleSheet("font-weight:bold;")
+        else:
+            self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
+            self.open_gyro_button.setStyleSheet("font-weight: normal;")
+
 
         if external:
-            self.open_gyro_button.setText("Blackbox file: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
-            self.open_gyro_button.setStyleSheet("font-weight:bold;")
-
             suffix = os.path.splitext(self.gyro_log_path)[1].lower()
             # Guess log type
-            print(suffix)
             gyro_type_id = "rawblackbox"
             idx = 0
             if suffix == ".bbl" or suffix == ".bfl":
                 idx = self.gyro_log_format_select.findData("rawblackbox")
             elif suffix == ".csv":
                 idx = self.gyro_log_format_select.findData("csvblackbox")
-                print(idx)
             if idx != -1:
                 self.gyro_log_format_select.setCurrentIndex(idx)
 
-        else:
-            self.open_gyro_button.setText("Open BBL/Gyro log (leave empty for GPMF)")
-            self.open_gyro_button.setStyleSheet("font-weight: normal;")
-
-        videofile_selected = bool(self.infile_path)
-
-        internal = videofile_selected and not external
-
-        self.camera_type_control.setVisible(internal)
-        self.camera_type_text.setVisible(internal)
+        elif internal:
+            if selected_log_type == "gpmf":
+                self.camera_type_control.clear()
+                self.camera_type_control.addItem("hero5")
+                self.camera_type_control.addItem("hero6")
+                self.camera_type_control.addItem("hero7")
+                self.camera_type_control.addItem("hero8")
+                self.camera_type_control.addItem("hero9")
+            elif selected_log_type == "insta360":
+                self.camera_type_control.clear()
+                self.camera_type_control.addItem("smo4k")
+                self.camera_type_control.addItem("Insta360 OneR")
 
 
     def open_gyro_func(self):
         # Remove file if already added
-        
 
         if self.gyro_log_path:
             self.gyro_log_path = ""
@@ -1963,7 +1862,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open blackbox file",
-                                                     filter="Blackbox log (*.bbl *.bfl *.bbl.csv *.BBL .BFL *.BBL.CSV);; CSV file (*.csv *.CSV)")
+                                                     filter="Blackbox log (*.bbl *.bfl *.bbl.csv *.BBL .BFL *.BBL.CSV);; CSV file (*.csv *.CSV);; MP4 file (*.mp4 *.MP4)")
 
         if (len(path[0]) == 0):
             print("No file selected")
@@ -1997,12 +1896,25 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         fov_val = self.fov_slider.value() / 10
         self.fov_text.setText("FOV scale ({}):".format(fov_val))
 
+    def fov_smoothing_changed(self):
+        val = self.fov_smoothing.value() / 10
+        self.fov_smoothing_text.setText("Smoothing Window Fov (sec): {}".format(val))
+
+    def enableAdaptiveZoomClicked(self):
+        if self.enableAdaptiveZoom.isChecked():
+            self.fov_smoothing.setDisabled(False)
+        else:
+            self.fov_smoothing.setDisabled(True)
+
+    def zoom_changed(self):
+        val = self.zoom.value() / 10
+        self.zoom_text.setText("Zoom Factor: {}".format(val))
+
     def update_out_size(self):
         """Update export image size
         """
         #print(self.out_width_control.value())
         pass
-        
 
     def recompute_stab(self):
         """Update sync and stabilization
@@ -2012,7 +1924,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.infile_path == "" or self.preset_path == "":
             self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
             self.export_button.setEnabled(False)
+            self.export_keyframes_button.setEnabled(False)
             self.sync_correction_button.setEnabled(False)
+
+        if self.gyro_log_path == "":
+            self.show_error("No gyro log given. If you want to use the internal gyro data, there's a convenient button for using the input video as the gyro log.")
 
         fov_val = self.fov_slider.value() / 10
         smoothness_time_constant = self.get_smoothness_timeconstant()
@@ -2037,21 +1953,27 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
 
-        if self.gyro_log_path == "":
-            # GPMF file
+        selected_log_type = self.gyro_log_format_select.currentData()
 
+        if selected_log_type == "gpmf":
+            # GPMF file
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
-            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8"]:
+            if gyro_orientation_text not in ["hero6","hero5", "hero7", "hero8", "hero9", "smo4k", "insta360 oner"]:
                 self.show_error("{} is not a valid orientation preset (yet). Sorry about that".format(gyro_orientation_text))
                 self.export_button.setEnabled(False)
+                self.export_keyframes_button.setEnabled(False)
                 self.sync_correction_button.setEnabled(False)
                 return
+            else:
+                heronum = int(gyro_orientation_text.replace("hero",""))
+                self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, gyro_path=self.gyro_log_path, hero=heronum, fov_scale=fov_val, gyro_lpf_cutoff = gyro_lpf)
 
-            heronum = int(gyro_orientation_text.replace("hero",""))
-
-            # initiate stabilization
-            self.stab = stabilizer.GPMFStabilizer(self.infile_path, self.preset_path, hero=heronum, fov_scale=fov_val, gyro_lpf_cutoff = gyro_lpf)
-
+        elif selected_log_type == "insta360":
+            gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
+            if gyro_orientation_text == "smo4k" or gyro_orientation_text == "insta360 oner":
+                self.stab = stabilizer.InstaStabilizer(self.infile_path, self.preset_path, None, gyro_lpf_cutoff=gyro_lpf, InstaType=gyro_orientation_text)
+            else:
+                self.show_error("Invalid orientation")
 
         else:
             # blackbox file
@@ -2064,11 +1986,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             log_type_id = self.gyro_log_format_select.currentData()#self.gyro_log_model.item(log_select_index).data()
 
             use_csv = False
+            use_raw_gyro_data = False
             logtype = ""
 
             if log_type_id == "csvblackbox":
                 print("using blackbox csv")
                 use_csv = True
+                use_raw_gyro_data = self.gyro_log_use_raw_data_control.isChecked()
             elif log_type_id == "rawblackbox":
                 print("using raw blackbox file")
                 pass
@@ -2077,33 +2001,34 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             else:
                 print("Unknown log type selected")
                 return
-            
+
             self.stab = stabilizer.BBLStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
-                                                 use_csv=use_csv, gyro_lpf_cutoff = gyro_lpf, logtype=logtype)
+                                                 use_csv=use_csv, gyro_lpf_cutoff = gyro_lpf, logtype=logtype, use_raw_gyro_data=use_raw_gyro_data)
 
 
         self.stab.set_initial_offset(self.offset_control.value())
         self.stab.set_rough_search(self.sync_search_size.value())
+        self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
 
         print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
                 smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
-        
-        
+
+
 
         self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame,
                                  OF_slice_length, debug_plots=self.sync_debug_select.isChecked())
 
         self.recompute_stab_button.setText("Recompute sync")
         self.export_button.setEnabled(True)
-        
+
+        self.export_keyframes_button.setEnabled(True)
+
         # Show estimated delays in UI
         self.sync_correction_button.setEnabled(True)
         self.d1_control.setValue(self.stab.d1)
         self.d2_control.setValue(self.stab.d2)
 
         self.analyzed = True
-
-
 
 
     def correct_sync(self):
@@ -2114,25 +2039,37 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.manual_sync_correction(d1, d2, smoothness_time_constant)
 
 
+    def export_keyframes(self):
+        export_file_filter = "Comma-separated values (*.csv)"
+        
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export keyframes", filter=export_file_filter)
+        print("Output file: {}".format(filename[0]))
+
+        if len(filename[0]) == 0:
+            self.show_error("No output file given")
+            return
+
+        self.stab.export_stabilization(filename[0])
+
     def export_video(self):
         """Gives save location using filedialog
            and saves video to given location
         """
 
 
-        
+
         out_size = (self.out_width_control.value(), self.out_height_control.value())
 
-        if out_size[0] > self.stab.width:
-            self.show_error("The given output cropped width ({}) is greater than the video width ({})".format(out_size[0], self.stab.width))
-            return
-        if out_size[1] > self.stab.height:
-            self.show_error("The given output cropped height ({}) is greater than the video height ({})".format(out_size[1], self.stab.height))
-            return
+        #if out_size[0] > self.stab.width:
+        #    self.show_error("The given output cropped width ({}) is greater than the video width ({})".format(out_size[0], self.stab.width))
+        #    return
+        #if out_size[1] > self.stab.height:
+        #    self.show_error("The given output cropped height ({}) is greater than the video height ({})".format(out_size[1], self.stab.height))
+        #    return
 
         start_time = self.export_starttime.value()
         stop_time = self.export_stoptime.value()
-        
+
         if (stop_time < start_time):
             self.show_error("Start time is later than stop time.")
             return
@@ -2170,19 +2107,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #hardware_acceleration = self.hw_acceleration_select.isChecked()
         vcodec = self.video_encoder_select.currentText()
         vprofile = self.encoder_profile_select.currentText()
-        bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s 
+        bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s
         preview = self.display_preview.isChecked()
-        output_scale = int(self.out_scale_control.value())
+        #output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
+        smoothingFocus=self.fov_smoothing.value()/10
+        if not self.enableAdaptiveZoom.isChecked():
+            smoothingFocus = -1
+        zoomVal = self.zoom.value() /10
+
+        bg_color = self.bg_color_select.text()
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
-                             display_preview=preview, scale=output_scale, vcodec=vcodec, vprofile=vprofile,
-                             pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg)
+                             display_preview=preview, vcodec=vcodec, vprofile=vprofile,
+                             pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
+                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color)
 
-        
+
 
     def show_error(self, msg):
         err_window = QtWidgets.QMessageBox(self)
@@ -2233,6 +2177,526 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         else:
             self.enable_mp4_export = True
             self.enable_mov_export = True
+
+class StabUtility(StabUtilityBarebone):
+    def __init__(self):
+        """Qt window containing camera calibration utility
+        """
+
+        super().__init__(False)
+
+         
+        # Initialize UI
+        self.setWindowTitle("Gyroflow Stabilizer (WIP fancy version) {}".format(__version__))
+        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
+        
+        self.main_widget = QtWidgets.QWidget()
+        self.layout = QtWidgets.QHBoxLayout()
+        self.main_widget.setLayout(self.layout)
+
+        # left half of screen with player/buttons
+        self.left_side_widget = QtWidgets.QWidget()
+        self.left_layout = QtWidgets.QVBoxLayout()
+        self.left_side_widget.setLayout(self.left_layout)
+
+        self.layout.addWidget(self.left_side_widget)
+        
+
+        # right half of screen with export options
+        self.right_side_widget = QtWidgets.QWidget()
+        self.right_layout = QtWidgets.QVBoxLayout()
+        self.right_side_widget.setLayout(self.right_layout)
+        self.right_side_widget.setFixedWidth(550)
+        self.right_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.layout.addWidget(self.right_side_widget)
+
+
+
+        # video player with controls
+        self.video_viewer = VideoPlayerWidget()
+        self.left_layout.addWidget(self.video_viewer)
+
+        self.setCentralWidget(self.main_widget)
+
+        # control buttons for stretching [Safe area slider] [expo slider] [X]View safe area [recompute maps] [render to file]
+        self.calib_controls = QtWidgets.QWidget()
+        self.calib_controls_layout = QtWidgets.QHBoxLayout()
+        self.calib_controls.setLayout(self.calib_controls_layout)
+
+        self.button_height = 40
+
+        self.calib_msg = ""
+
+        # info text box
+        self.info_text = QtWidgets.QLabel("No frames loaded")
+        self.calib_controls_layout.addWidget(self.info_text)
+
+        # button for recomputing image stretching maps
+        self.add_sync1_button = QtWidgets.QPushButton("Sync 1 here")
+        self.add_sync1_button.setMinimumHeight(self.button_height)
+        self.add_sync1_button.clicked.connect(self.synchere1)
+        self.calib_controls_layout.addWidget(self.add_sync1_button)
+
+        self.add_sync2_button = QtWidgets.QPushButton("Sync 2 here")
+        self.add_sync2_button.setMinimumHeight(self.button_height)
+        self.add_sync2_button.clicked.connect(self.synchere2)
+        self.calib_controls_layout.addWidget(self.add_sync2_button)
+
+        self.trim_start_button = QtWidgets.QPushButton("Trim start")
+        self.trim_start_button.setMinimumHeight(self.button_height)
+        self.trim_start_button.clicked.connect(self.trimstart)
+        self.calib_controls_layout.addWidget(self.trim_start_button)
+
+        self.trim_end_button = QtWidgets.QPushButton("Trim end")
+        self.trim_end_button.setMinimumHeight(self.button_height)
+        self.trim_end_button.clicked.connect(self.trimend)
+        self.calib_controls_layout.addWidget(self.trim_end_button)
+
+        self.fov_scale = 1.4
+
+        # slider for adjusting FOV
+        self.fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.fov_scale))
+        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_slider.setMinimum(8)
+        self.fov_slider.setValue(14)
+        self.fov_slider.setMaximum(30)
+        self.fov_slider.setMaximumWidth(300)
+        self.fov_slider.setSingleStep(1)
+        self.fov_slider.setTickInterval(1)
+        self.fov_slider.valueChanged.connect(self.fov_changed)
+        self.fov_slider.sliderReleased.connect(self.update_preview)
+
+        self.calib_controls_layout.addWidget(self.fov_text)
+        self.calib_controls_layout.addWidget(self.fov_slider)
+
+        # checkbox to preview lens distortion correction
+        self.preview_toggle_btn = QtWidgets.QCheckBox("Toggle lens correction: ")
+        self.preview_toggle_btn.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.preview_toggle_btn.stateChanged.connect(self.update_preview)
+        self.preview_toggle_btn.setEnabled(False)
+
+        self.calib_controls_layout.addWidget(self.preview_toggle_btn)
+
+        # add control bar to main layout
+        self.left_layout.addWidget(self.calib_controls)
+
+
+
+        # Right layout: Export settings
+
+        self.main_setting_widget = QtWidgets.QTabWidget()
+        self.layout = QtWidgets.QHBoxLayout()
+        self.main_setting_widget.setLayout(self.layout)
+        self.main_setting_widget.setStyleSheet("font-size: 12px")
+
+        self.right_layout.addWidget(self.main_setting_widget)
+        
+
+        self.init_UI()
+
+        # file menu setup
+        menubar = self.menuBar()
+        filemenu = menubar.addMenu('&File')
+
+        # https://joekuan.wordpress.com/2015/09/23/list-of-qt-icons/
+
+        # Reconnect open video button to display preview
+        self.open_vid_button.clicked.disconnect()
+        self.open_vid_button.clicked.connect(self.open_video_with_player_func)
+
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon)
+        self.open_file = QtWidgets.QAction(icon, 'Open file', self)
+        self.open_file.setShortcut("Ctrl+O")
+        self.open_file.triggered.connect(self.open_video_with_player_func)
+        filemenu.addAction(self.open_file)
+
+
+        self.recompute_stab_button.clicked.connect(self.update_player_maps)
+        self.sync_correction_button.clicked.connect(self.update_player_maps)
+
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
+        self.open_preset = QtWidgets.QAction(icon, 'Open calibration preset', self)
+        self.open_preset.triggered.connect(self.open_preset_func)
+        filemenu.addAction(self.open_preset)
+
+        self.statusBar()
+        self.infile_path = ""
+        self.show()
+
+        self.main_setting_widget.show()
+
+    def open_video_with_player_func(self):
+        """Open file using Qt filedialog
+        """
+        self.video_viewer.reset_map_function()
+        self.open_video_func()
+        self.video_viewer.set_video_path(self.infile_path)
+        self.video_viewer.next_frame()
+
+    def set_player_video():
+        self.video_viewer.set_video_path(self.infile_path)
+        self.video_viewer.next_frame()
+
+    def update_player_maps(self):
+        self.video_viewer.set_map_function(self.stab.map_function)
+
+    def open_preset_func(self):
+        """Load in calibration preset
+        """
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open preset file", filter="JSON preset (*.json)")
+
+        if (len(path[0]) == 0):
+            print("No file selected")
+            return
+
+        self.calibrator.load_calibration_json(path[0])
+
+        self.update_calib_info()
+
+
+    def closeEvent(self, event):
+        print("Closing now")
+        self.video_viewer.destroy_thread()
+        event.accept()
+
+    def fov_changed(self):
+        self.fov_scale = self.fov_slider.value()/10
+        self.fov_text.setText("FOV scale ({}):".format(self.fov_scale))
+
+
+    def save_preset_file(self):
+        """save camera preset file
+        """
+        print("Exporting preset")
+
+        # Window to set export data
+
+        cam_brand = self.cam_company_input.text()
+        cam_model = self.cam_model_input.text()
+        cam_lens = self.cam_lens_input.text()
+        cam_setting = self.cam_setting_input.text()
+        cam_note = self.cam_note_input.text()
+        calibrated_by = self.calibrated_by_input.text()
+
+        if not (cam_brand and cam_model and cam_setting):
+            self.show_error("Missing information about the camera system")
+            return
+
+        if not calibrated_by:
+            self.show_error("You went through all the trouble to make a calibration profile but don't want credit? I'll just fill in 'Anonymous' for you, but feel free to write a (nick)name or a handle instead.")
+            self.calibrated_by_input.setText("Anonymous")
+            return
+
+
+
+        calib_name = f"{cam_brand}_{cam_model}_{cam_lens}_{cam_setting}"
+
+        # make sure name works
+        default_file_name = calib_name.replace("@", "At") # 18-55mm@18mm -> 18-55mmAt18mm, eh works I guess
+        default_file_name = default_file_name.replace("/", "_").replace(".", "_").replace(" ","_") # f/1.8 -> f_1_8
+        default_file_name = "".join([c for c in default_file_name if c.isalpha() or c.isdigit() or c in "_-"]).rstrip()
+        default_file_name = default_file_name.replace("__", "_").replace("__", "_")
+
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", default_file_name,
+                                                        filter="JSON preset (*.json)")
+        print(filename[0])
+
+        if len(filename[0]) == 0:
+            self.show_warning("No output file given")
+            return
+
+        self.calibrator.save_calibration_json(filename[0], calib_name=calib_name, camera_brand=cam_brand, camera_model=cam_model,
+                                              lens_model=cam_lens, camera_setting=cam_setting, note=cam_note, calibrated_by=calibrated_by)
+
+    def show_error(self, msg):
+        QtWidgets.QMessageBox.critical(self, "Something's gone awfully wrong", msg)
+
+        return
+        #self.err_window = QtWidgets.QMessageBox(self)
+        #self.err_window.setIcon(QtWidgets.QMessageBox.Warning)
+        #self.err_window.setText(msg)
+        #self.err_window.setWindowTitle("Something's gone awry")
+        #self.err_window.exec_()
+        #self.err_window.close()
+
+    def show_warning(self, msg):
+        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+
+
+    def add_current_frame(self):
+        print("Adding frame")
+
+        ret, self.calib_msg, corners = self.calibrator.add_calib_image(self.video_viewer.thread.frame)
+
+        if ret:
+            self.video_viewer.set_cv_frame(cv2.drawChessboardCorners(self.video_viewer.thread.frame, self.calibrator.chessboard_size,corners,True) )
+
+        self.update_calib_info()
+
+        if self.calibrator.num_images > 0:
+            self.process_frames_btn.setEnabled(True)
+
+    def synchere1(self):
+        self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
+        #print(self.video_viewer.get_current_timestamp())
+
+    def synchere2(self):
+        self.sync2_control.setValue(self.video_viewer.get_current_timestamp())
+        #print(self.video_viewer.get_current_timestamp())
+
+    def trimstart(self):
+        self.export_starttime.setValue(self.video_viewer.get_current_timestamp())
+    
+    def trimend(self):
+        self.export_stoptime.setValue(self.video_viewer.get_current_timestamp())
+
+    def remove_frame(self):
+        """Remove last calibration frame
+        """
+        self.calibrator.remove_calib_image()
+
+        self.update_calib_info()
+
+
+    def update_calib_info(self):
+        """ Update the status text in the utility
+        """
+
+        txt = "Good frames: {}\nProcessed frames: {}\nRMS error: {}\n{}".format(self.calibrator.num_images,
+                                                                                self.calibrator.num_images_used,
+                                                                                self.calibrator.RMS_error,
+                                                                                self.calib_msg)
+        self.info_text.setText(txt)
+
+        # enable/disable buttons
+        if self.calibrator.num_images > 0:
+            self.process_frames_btn.setEnabled(True)
+        else:
+            self.process_frames_btn.setEnabled(False)
+        if self.calibrator.num_images_used > 0:
+            self.preview_toggle_btn.setEnabled(True)
+            self.export_button.setEnabled(True)
+        else:
+            self.preview_toggle_btn.setChecked(False)
+            self.preview_toggle_btn.setEnabled(False)
+            self.export_button.setEnabled(False)
+
+    def calibrate_frames(self):
+        self.calibrator.compute_calibration()
+        self.update_calib_info()
+        self.preview_toggle_btn.setEnabled(True)
+        self.update_preview()
+
+
+
+    def update_preview(self):
+        self.video_viewer.reset_maps()
+        if self.preview_toggle_btn.isChecked():
+            img_dim = (int(self.video_viewer.frame_width), int(self.video_viewer.frame_height))
+            map1, map2 = self.calibrator.get_maps(fov_scale=self.fov_scale, new_img_dim=img_dim)
+            self.video_viewer.add_maps(map1, map2)
+
+            #map1, map2 = self.calibrator.get_rotation_map()
+            #self.video_viewer.add_maps(map1, map2)
+
+        self.video_viewer.update_frame()
+
+
+    def open_video_func(self):
+        """Open file using Qt filedialog
+        """
+        #path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file")
+        dialog = QtWidgets.QFileDialog()
+        dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime"])
+        dialog.exec_()
+        path = dialog.selectedFiles()
+        if (len(path) == 0 or len(path[0]) == 0):
+            print("No file selected")
+            return
+        self.infile_path = path[0]
+        self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
+        self.open_vid_button.setStyleSheet("font-weight:bold;")
+
+        # Extract information about the clip
+
+        cap = cv2.VideoCapture(self.infile_path)
+        self.video_info_dict["width"] = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.video_info_dict["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.video_info_dict["fps"] = cap.get(cv2.CAP_PROP_FPS)
+        self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
+
+        self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
+
+        cap.release()
+
+        self.display_video_info()
+
+        no_suffix = os.path.splitext(self.infile_path)[0]
+
+        # check gyro logs by priority
+        log_suffixes = [".bbl.csv", ".bfl.csv", ".csv", ".bbl"]
+        for suffix in log_suffixes:
+            if os.path.isfile(no_suffix + suffix):
+                self.gyro_log_path = no_suffix + suffix
+                print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
+                break
+
+
+        self.update_gyro_input_settings()
+
+    def video_as_log_func(self):
+        self.gyro_log_path = self.infile_path
+        # check if Insta360
+        if insta360_util.isInsta360Video(self.infile_path):
+            self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("insta360"))
+            #self.camera_type_control.setCurrentText('smo4k')
+            self.input_lpf_control.setValue(25)
+
+        else: # Probably gopro
+            self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("gpmf"))
+            #self.camera_type_control.setCurrentText('hero8')
+            self.input_lpf_control.setValue(-1)
+
+        self.update_gyro_input_settings()
+
+    def display_video_info(self):
+
+
+        info = self.video_info_template.format(fps = self.video_info_dict["fps"],
+                                               width = self.video_info_dict["width"],
+                                               height = self.video_info_dict["height"],
+                                               time = self.video_info_dict["time"],
+                                               aspect = self.video_info_dict["aspect"])
+
+        self.video_info_text.setText(info)
+
+        # set default sync and export options
+        self.out_width_control.setValue(self.video_info_dict["width"])
+        self.out_height_control.setValue(self.video_info_dict["height"])
+        self.export_stoptime.setValue(int(self.video_info_dict["time"])) # round down
+        self.sync1_control.setValue(5)
+        self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
+
+        self.check_aspect()
+
+    def open_preset_func(self):
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open preset file", filter="JSON preset (*.json *.JSON)")
+
+        if (len(path[0]) == 0):
+            print("No file selected")
+            return
+        #print(path)
+        self.preset_path = path[0]
+        self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
+        self.open_preset_button.setStyleSheet("font-weight:bold;")
+
+        self.preset_info_dict = calibrate_video.FisheyeCalibrator().load_calibration_json(self.preset_path)
+        #print(self.preset_info_dict)
+        self.display_preset_info()
+
+    def display_preset_info(self):
+
+        info = self.preset_info_template.format(**self.preset_info_dict)
+        self.preset_info_text.setText(info)
+
+        self.check_aspect()
+
+    def check_aspect(self):
+        if self.preset_path and self.infile_path:
+            # Check if the aspect ratios match
+            self.preset_info_dict.get("aspect")
+            v_aspect = self.video_info_dict.get("aspect")
+            p_aspect = self.preset_info_dict.get("aspect")
+            if abs(v_aspect - p_aspect) > 0.01:
+                self.aspect_warning_text.setText(f"<h3>Seems like the aspect ratios don't quite match. Video: {v_aspect:.3f}, preset: {p_aspect:.3f}</h3>")
+            else:
+                self.aspect_warning_text.setText("")
+
+
+
+
+
+    def update_gyro_input_settings(self):
+        # display/hide relevant gyro log settings
+
+        self.gyro_log_format_text.setVisible(True)
+        self.gyro_log_format_select.setVisible(True)
+
+        selected_log_type = self.gyro_log_format_select.currentData()
+
+        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow"] # display more settings if external source is used
+
+        videofile_selected = bool(self.infile_path)
+        gyrofile_selected = bool(self.gyro_log_path)
+        internal = not external
+
+        self.fpv_tilt_text.setVisible(external)
+        self.fpv_tilt_control.setVisible(external)
+
+        self.camera_type_control.setVisible(internal)
+        self.camera_type_text.setVisible(internal)
+
+        if gyrofile_selected:
+            self.open_gyro_button.setText("Gyro data: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
+            self.open_gyro_button.setStyleSheet("font-weight:bold;")
+        else:
+            self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
+            self.open_gyro_button.setStyleSheet("font-weight: normal;")
+
+
+        if external:
+            suffix = os.path.splitext(self.gyro_log_path)[1].lower()
+            # Guess log type
+            gyro_type_id = "rawblackbox"
+            idx = 0
+            if suffix == ".bbl" or suffix == ".bfl":
+                idx = self.gyro_log_format_select.findData("rawblackbox")
+            elif suffix == ".csv":
+                idx = self.gyro_log_format_select.findData("csvblackbox")
+            if idx != -1:
+                self.gyro_log_format_select.setCurrentIndex(idx)
+
+        elif internal:
+            if selected_log_type == "gpmf":
+                self.camera_type_control.clear()
+                self.camera_type_control.addItem("hero5")
+                self.camera_type_control.addItem("hero6")
+                self.camera_type_control.addItem("hero7")
+                self.camera_type_control.addItem("hero8")
+                self.camera_type_control.addItem("hero9")
+            elif selected_log_type == "insta360":
+                self.camera_type_control.clear()
+                self.camera_type_control.addItem("smo4k")
+                self.camera_type_control.addItem("Insta360 OneR")
+
+
+    def open_gyro_func(self):
+        # Remove file if already added
+
+        if self.gyro_log_path:
+            self.gyro_log_path = ""
+            self.update_gyro_input_settings()
+            return
+
+
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open blackbox file",
+                                                     filter="Blackbox log (*.bbl *.bfl *.bbl.csv *.BBL .BFL *.BBL.CSV);; CSV file (*.csv *.CSV);; MP4 file (*.mp4 *.MP4)")
+
+        if (len(path[0]) == 0):
+            print("No file selected")
+            return
+
+        self.gyro_log_path = path[0]
+        self.update_gyro_input_settings()
+
+
+    def closeEvent(self, event):
+        print("Closing now")
+        #self.video_viewer.destroy_thread()
+        self.stab.release()
+        event.accept()
+
+
 
 def main():
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))

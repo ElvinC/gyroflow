@@ -15,7 +15,7 @@ def inverse_cam_mtx(K):
     # inverse for zero skew case
     if K.shape != (3,3):
         raise ValueError("Not 3x3 matrix")
-    
+
     fx = K[0,0]
     fy = K[1,1]
     px = K[0,2]
@@ -40,7 +40,7 @@ class FisheyeCalibrator:
         self.chessboard_size = chessboard_size
 
         # termination criteria
-        self.subpix_criteria = (cv2.TERM_CRITERIA_EPS + 
+        self.subpix_criteria = (cv2.TERM_CRITERIA_EPS +
                                 cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
         self.calib_criteria = (cv2.TERM_CRITERIA_EPS +
@@ -252,7 +252,7 @@ class FisheyeCalibrator:
 
         return undistorted_image
 
-    def get_maps(self, fov_scale = 1.0, new_img_dim = None, update_new_K = True, quat = None):
+    def get_maps(self, fov_scale = 1.0, output_dim = None, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
         """Get undistortion maps
 
         Args:
@@ -262,25 +262,31 @@ class FisheyeCalibrator:
         Returns:
             (np.ndarray,np.ndarray): Undistortion maps
         """
-        
+
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
-
-        scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
-        scaled_K[2][2] = 1.0
-
-        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(scaled_K, self.D,
-                img_dim, np.eye(3), fov_scale=fov_scale)
+        out_dim = output_dim if output_dim else self.calib_dimension
+        focalCenter = focalCenter if focalCenter is not None else np.array([self.calib_dimension[0]/2,self.calib_dimension[1]/2])
 
         R = np.eye(3)
-        
 
         if type(quat) != type(None):
             quat = quat.flatten()
             R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
 
+        img_dim_ratio = img_dim[0] / self.calib_dimension[0]
+
+        scaled_K = self.K * img_dim_ratio
+        scaled_K[2][2] = 1.0
+
+        new_K = np.copy(self.K)
+        new_K[0][0] = new_K[0][0] * 1.0/fov_scale
+        new_K[1][1] = new_K[1][1] * 1.0/fov_scale
+        new_K[0][2] = (self.calib_dimension[0]/2 - focalCenter[0])* img_dim_ratio/fov_scale + out_dim[0]/2
+        new_K[1][2] = (self.calib_dimension[1]/2 - focalCenter[1])* img_dim_ratio/fov_scale + out_dim[1]/2
+
         if update_new_K:
             self.new_K = new_K
-        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, img_dim, cv2.CV_16SC2)
+        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, out_dim, cv2.CV_16SC2)
 
         return map1, map2
 
@@ -303,21 +309,30 @@ class FisheyeCalibrator:
 
 
     def recover_pose(self, pts1, pts2, new_img_dim = None):
+        """ Find rotation matrices using epipolar geometry
+        
+        Args:
+            pts1 (np.ndarray): Initial points
+            pts2 (np.ndarray): Resulting points
+            new_img_dim (tuple, optional): New image dimension. Defaults to None.
+
+        Returns:
+            [type]: [description]
+        """
         # https://answers.opencv.org/question/31421/opencv-3-essentialmatrix-and-recoverpose/
-        # Find essential matrix from fundamental matrix
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
         scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
         scaled_K[2][2] = 1.0
 
         E, mask = cv2.findEssentialMat(pts1, pts2, scaled_K, cv2.RANSAC, 0.999, 0.1) # cv2.LMEDS or cv2.RANSAC
         #retval, R, t, mask = cv2.recoverPose(E, pts1, pts2, scaled_K)
-        R1, R2, t = cv2.decomposeEssentialMat(E) 
+        R1, R2, t = cv2.decomposeEssentialMat(E)
 
         return R1, R2, t
 
     def get_rotation_map(self, img, quat):
         """Get maps for doing perspective rotations
-        
+
             WORK IN PROGRESS. Currently for testing
         """
 
@@ -333,7 +348,6 @@ class FisheyeCalibrator:
         rotZ = (rotZval)*np.pi/180
         rot_mat = np.eye(4)
 
-        
         #print(Rotation([quat[0,1],quat[0,2],quat[0,3],quat[0,0]]).as_euler('xyz'))
         quat = quat.flatten()
         eul = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_euler('xyz')
@@ -341,28 +355,8 @@ class FisheyeCalibrator:
         combined_rotation = np.eye(4)
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
         combined_rotation[0:3,0:3] = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
-        #eul = Rotation(quat).as_euler('xyz')[0]
-
-        #rot1 = np.eye(4)
-        #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
-
-        #rot2 = np.eye(4)
-        #rot2[0:3,0:3] = Rotation.from_euler('xyz', [eul[2], 0, 0], degrees=False).as_matrix()
-
-        #rot3 = np.eye(4)
-        #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
-        
-        #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
-        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quat)
 
         rot_mat = combined_rotation
-
-        #rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
-        
-        #rot_mat[0,1] = 0
-        #rot_mat[1,2] = 0
-        #rot_mat[2,2] = 1
-
         img_dim = img.shape[:2][::-1]
 
         # Scaled 3x4 camera matrix
@@ -370,41 +364,22 @@ class FisheyeCalibrator:
         K[:3,:3] = self.K
 
         # should make the rotation match fov change
-        # Might not work, idk
         K[0,0] = self.new_K[0,0]
         K[1,1] = self.new_K[1,1]
 
-        #print(K)
-
-        
         K *= img_dim[0] / self.calib_dimension[0]
 
         K[2][2] = 1.0
-
 
         # compute inverse camera matrix using scaled K
         Kinv = np.zeros((4,3))
         Kinv[0:3,0:3] = inverse_cam_mtx(K[:3,:3])
         Kinv[3,:] = [0, 0, 1]
 
-        distX = 0
-        distY = 0
-        distZ = 0
-        
-        translation = np.array([[1,0,0,distX],
-                                [0,1,0,distY],
-                                [0,0,1,distZ],
-                                [0,0,0,1]])
-
-        
         H = np.linalg.multi_dot([K, rot_mat, Kinv])
 
-        #trans = rot_mat * translation
-        #trans[2,2] += self.calib_dimension[1]/2
-        
         #transform = self.K * trans
         outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
-
         return outimg
 
 
@@ -419,7 +394,7 @@ class FisheyeCalibrator:
         """
 
         self.compute_calibration()
-        
+
         calibration_data = {
             "name": calib_name,
             "note": note,
@@ -430,7 +405,7 @@ class FisheyeCalibrator:
             "camera_setting": camera_setting,
             "calibrator_version": __version__,
             "date": str(date.today()),
-            
+
             "calib_dimension": {
                 "w": self.calib_dimension[0],
                 "h": self.calib_dimension[1]
@@ -577,15 +552,15 @@ class StandardCalibrator:
         self.chessboard_size = chessboard_size
 
         # termination criteria
-        self.subpix_criteria = (cv2.TERM_CRITERIA_EPS + 
+        self.subpix_criteria = (cv2.TERM_CRITERIA_EPS +
                                 cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
         self.calib_criteria = (cv2.TERM_CRITERIA_EPS +
                                cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
 
         self.calibration_flags = (cv2.CALIB_SAME_FOCAL_LENGTH +
-                                  cv2.CALIB_RATIONAL_MODEL + 
-                                  cv2.CALIB_FIX_PRINCIPAL_POINT + 
+                                  cv2.CALIB_RATIONAL_MODEL +
+                                  cv2.CALIB_FIX_PRINCIPAL_POINT +
                                   cv2.CALIB_USE_INTRINSIC_GUESS +
                                   cv2.CALIB_TILTED_MODEL)
 
@@ -822,7 +797,7 @@ class StandardCalibrator:
         Returns:
             (np.ndarray,np.ndarray): Undistortion maps
         """
-        
+
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
 
         scaled_K = self.K * img_dim[0] / self.calib_dimension[0]
@@ -834,7 +809,7 @@ class StandardCalibrator:
 
         self.new_K = new_K
         print(new_K)
-        
+
 
         map1, map2 = cv2.initUndistortRectifyMap(scaled_K, self.D, np.eye(3), new_K, img_dim, cv2.CV_16SC2)
 
@@ -867,13 +842,13 @@ class StandardCalibrator:
 
         E, mask = cv2.findEssentialMat(pts1, pts2, scaled_K, cv2.RANSAC, 0.999, 0.1) # cv2.LMEDS or cv2.RANSAC
         #retval, R, t, mask = cv2.recoverPose(E, pts1, pts2, scaled_K)
-        R1, R2, t = cv2.decomposeEssentialMat(E) 
+        R1, R2, t = cv2.decomposeEssentialMat(E)
 
         return R1, R2, t
 
     def get_rotation_map(self, img, quat):
         """Get maps for doing perspective rotations
-        
+
             WORK IN PROGRESS. Currently for testing
         """
 
@@ -897,23 +872,9 @@ class StandardCalibrator:
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
         combined_rotation[0:3,0:3] = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
         #eul = Rotation(quat).as_euler('xyz')[0]
-
-        #rot1 = np.eye(4)
-        #rot1[0:3,0:3] = Rotation.from_euler('xyz', [0, -eul[1], 0], degrees=False).as_matrix() #
-
-        #rot2 = np.eye(4)
-        #rot2[0:3,0:3] = Rotation.from_euler('xyz', [eul[2], 0, 0], degrees=False).as_matrix()
-
-        #rot3 = np.eye(4)
-        #rot3[0:3,0:3] = Rotation.from_euler('xyz', [0, 0, eul[0]], degrees=False).as_matrix()
-        
-        #combined_rotation = np.linalg.multi_dot([rot1, rot2, rot3])
-        #combined_rotation = Rotation.from_euler('xyz', [-90, -90, -90], degrees=True) * Rotation(quat)
-
         rot_mat = combined_rotation
-
         #rot_mat[0:3,0:3], jac = cv2.Rodrigues(np.array([rotX,rotY,rotZ], dtype=np.float32))
-        
+
         #rot_mat[0,1] = 0
         #rot_mat[1,2] = 0
         #rot_mat[2,2] = 1
@@ -930,7 +891,7 @@ class StandardCalibrator:
 
         #print(K)
 
-        
+
         K *= img_dim[0] / self.calib_dimension[0]
 
         K[2][2] = 1.0
@@ -944,18 +905,18 @@ class StandardCalibrator:
         distX = 0
         distY = 0
         distZ = 0
-        
+
         translation = np.array([[1,0,0,distX],
                                 [0,1,0,distY],
                                 [0,0,1,distZ],
                                 [0,0,0,1]])
 
-        
+
         H = np.linalg.multi_dot([K, rot_mat, Kinv])
 
         #trans = rot_mat * translation
         #trans[2,2] += self.calib_dimension[1]/2
-        
+
         #transform = self.K * trans
         outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
 
@@ -973,7 +934,7 @@ class StandardCalibrator:
         """
 
         self.compute_calibration()
-        
+
         calibration_data = {
             "name": calib_name,
             "note": note,
@@ -984,7 +945,7 @@ class StandardCalibrator:
             "camera_setting": camera_setting,
             "calibrator_version": __version__,
             "date": str(date.today()),
-            
+
             "calib_dimension": {
                 "w": self.calib_dimension[0],
                 "h": self.calib_dimension[1]
@@ -1037,7 +998,7 @@ class StandardCalibrator:
                                 presets["date"]))
 
                 if presets["calibrator_version"] != __version__:
-                    print("Warning: Versions don't match. Calibrator: {}, Preset: {}"
+                    print("Warning: Versions don't match. Calibrator: {}, Preset: {}. (Usually not a problem)"
                         .format(__version__, presets["calibrator_version"]))
 
                 width = presets["calib_dimension"]["w"]
@@ -1107,8 +1068,7 @@ if __name__ == "__main__":
     #import glob
     #chessboard_size = (9,6)
     #images = glob.glob('calibrationImg/*.jpg')
-
-    
+     
     CAMERA_DIST_COEFS = [
         0.01945104325838463,
         0.1093842438193295,

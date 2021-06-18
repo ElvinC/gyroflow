@@ -21,9 +21,13 @@ class GyroIntegrator:
             acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
         """
 
-
-    
         self.data = np.copy(input_data)
+        # Check for corrupted/out of order timestamps
+        time_order_check = self.data[:-1,0] > self.data[1:,0]
+        if np.any(time_order_check):
+            print("Truncated bad gyro data")
+            self.data = self.data[0:np.argmax(time_order_check)+1,:]
+
         # scale input data
         self.data[:,0] *= time_scaling
         self.data[:,1:4] *= gyro_scaling
@@ -192,7 +196,7 @@ class GyroIntegrator:
 
 
         for i in range(len(time_list)-1):
-            if time_list[i] <= time < time_list[i+1]:
+            while time_list[i] <= time < time_list[i+1]:
 
                 # interpolate between two quaternions
                 weight = (time - time_list[i])/(time_list[i+1]-time_list[i])
@@ -201,9 +205,10 @@ class GyroIntegrator:
 
                 time += interval
 
-            elif time < time_list[i]:
+            if time < time_list[i]:
                 # continue even if missing gyro data
                 slerped_rotations.append(smoothed_orientation[i])
+                out_times.append(time)
                 time += interval
 
         return (out_times, slerped_rotations)
