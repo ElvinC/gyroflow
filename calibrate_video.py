@@ -2,6 +2,7 @@ import json
 from datetime import date
 import numpy as np
 import cv2
+import glob
 from _version import __version__
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
@@ -1060,10 +1061,13 @@ class StandardCalibrator:
             cv2.imshow('OpenCV image viewer',scaled)
             cv2.waitKey(500)
 
-
+def search_profiles(preset_folder = "camera_presets"):
+    files = glob.glob(preset_folder + '/[!Legacy]*/*.json', recursive=True)
+    print(files)
 
 if __name__ == "__main__":
-
+    search_profiles()
+    exit()
     # test undistort code using images
     #import glob
     #chessboard_size = (9,6)

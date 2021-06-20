@@ -84,6 +84,8 @@ class Stabilizer:
         self.map1 = None
         self.map2 = None
 
+        self.map_func_scale = 0.9
+
         self.integrator = None #GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
         self.times = None
         self.stab_transform = None
@@ -606,11 +608,14 @@ class Stabilizer:
             frame_num = len(self.stab_transform)-1
             print("No more stabilization data. Using last frame")
         
-        return self.undistort.get_maps(1.1,
+        return self.undistort.get_maps(self.map_func_scale,
             new_img_dim=(self.width,self.height),
             output_dim=out_size,
             update_new_K = False, quat = self.stab_transform[frame_num],
             focalCenter = None)
+
+    def set_map_func_scale(self, map_scale = 0.9):
+        self.map_func_scale = map_scale
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
@@ -1245,7 +1250,45 @@ class BBLStabilizer(Stabilizer):
                 #self.gyro_data = np.column_stack((t,x))
                 self.gyro_data = np.array(data_list)
                 print(self.gyro_data)
+        elif logtype == "runcam":
+            with open(bblpath) as csvfile:
+                next(csvfile)
 
+                lines = csvfile.readlines()
+
+                data_list = []
+                #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
+                gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
+                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
+
+                for line in lines:
+                    splitdata = [float(x) for x in line.split(",")]
+                    t = splitdata[0]/1000
+                    #gx = splitdata[1] * gyroscale
+                    #gy = splitdata[2] * gyroscale
+                    #gz = splitdata[3] * gyroscale
+
+                    # RC/IF test
+                    gx = -splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = -splitdata[2] * gyroscale
+
+                    # RC test
+                    #gx = splitdata[3] * gyroscale
+                    #gy = splitdata[1] * gyroscale
+                    #gz = splitdata[2] * gyroscale
+
+                    # Z: roll
+                    # X: yaw
+                    # y: pitch
+
+                    data_list.append([t, gx, gy, gz])
+                #from scipy.signal import resample
+                #gyro_arr = np.array(data_list)
+                #x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
+                #self.gyro_data = np.column_stack((t,x))
+                self.gyro_data = np.array(data_list)
+                print(self.gyro_data)
         else:
             try:
                 self.bbe = BlackboxExtractor(bblpath)

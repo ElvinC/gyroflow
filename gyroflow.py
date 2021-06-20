@@ -1202,7 +1202,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.input_video_rotate_select)
         
 
-        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("csvrc", "RC CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
+        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("csvruncam", "RC CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
@@ -1799,8 +1799,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.gyro_log_format_select.setVisible(True)
 
         selected_log_type = self.gyro_log_format_select.currentData()
-
-        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow"] # display more settings if external source is used
+        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow", "csvruncam"] # display more settings if external source is used
 
         videofile_selected = bool(self.infile_path)
         gyrofile_selected = bool(self.gyro_log_path)
@@ -1822,7 +1821,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
             self.open_gyro_button.setStyleSheet("font-weight: normal;")
 
-
         if external:
             suffix = os.path.splitext(self.gyro_log_path)[1].lower()
             # Guess log type
@@ -1830,10 +1828,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             idx = 0
             if suffix == ".bbl" or suffix == ".bfl":
                 idx = self.gyro_log_format_select.findData("rawblackbox")
-            elif suffix == ".csv":
+            elif suffix == ".csv" and (selected_log_type not in ["csvblackbox", "csvgyroflow", "csvruncam"]):
                 idx = self.gyro_log_format_select.findData("csvblackbox")
+            elif selected_log_type in ["csvblackbox", "csvgyroflow", "csvruncam"]:
+                idx = -1
             if idx != -1:
+                self.gyro_log_format_select.blockSignals(True)
                 self.gyro_log_format_select.setCurrentIndex(idx)
+                self.gyro_log_format_select.blockSignals(False)
 
         elif internal:
             if selected_log_type == "gpmf":
@@ -1995,6 +1997,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 pass
             elif log_type_id == "csvgyroflow":
                 logtype = "gyroflow"
+            elif log_type_id == "csvruncam":
+                logtype = "runcam"
             else:
                 print("Unknown log type selected")
                 return
@@ -2024,6 +2028,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_correction_button.setEnabled(True)
         self.d1_control.setValue(self.stab.d1)
         self.d2_control.setValue(self.stab.d2)
+
+        self.stab.set_map_func_scale(self.preview_fov_scale)
 
         self.analyzed = True
 
@@ -2249,22 +2255,22 @@ class StabUtility(StabUtilityBarebone):
         self.trim_end_button.clicked.connect(self.trimend)
         self.calib_controls_layout.addWidget(self.trim_end_button)
 
-        self.fov_scale = 1.4
+        self.preview_fov_scale = 1.4
 
         # slider for adjusting FOV
-        self.fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.fov_scale))
-        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.fov_slider.setMinimum(8)
-        self.fov_slider.setValue(14)
-        self.fov_slider.setMaximum(30)
-        self.fov_slider.setMaximumWidth(300)
-        self.fov_slider.setSingleStep(1)
-        self.fov_slider.setTickInterval(1)
-        self.fov_slider.valueChanged.connect(self.fov_changed)
-        self.fov_slider.sliderReleased.connect(self.update_preview)
+        self.preview_fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.preview_fov_scale))
+        self.preview_fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.preview_fov_slider.setMinimum(8)
+        self.preview_fov_slider.setValue(14)
+        self.preview_fov_slider.setMaximum(30)
+        self.preview_fov_slider.setMaximumWidth(300)
+        self.preview_fov_slider.setSingleStep(1)
+        self.preview_fov_slider.setTickInterval(1)
+        self.preview_fov_slider.valueChanged.connect(self.fov_changed)
+        self.preview_fov_slider.sliderReleased.connect(self.update_preview)
 
-        self.calib_controls_layout.addWidget(self.fov_text)
-        self.calib_controls_layout.addWidget(self.fov_slider)
+        self.calib_controls_layout.addWidget(self.preview_fov_text)
+        self.calib_controls_layout.addWidget(self.preview_fov_slider)
 
         # checkbox to preview lens distortion correction
         self.preview_toggle_btn = QtWidgets.QCheckBox("Toggle lens correction: ")
@@ -2357,8 +2363,9 @@ class StabUtility(StabUtilityBarebone):
         event.accept()
 
     def fov_changed(self):
-        self.fov_scale = self.fov_slider.value()/10
-        self.fov_text.setText("FOV scale ({}):".format(self.fov_scale))
+        self.preview_fov_scale = self.preview_fov_slider.value()/10
+        #print(self.preview_fov_scale)
+        self.preview_fov_text.setText("FOV scale ({}):".format(self.preview_fov_scale))
 
 
     def save_preset_file(self):
@@ -2487,16 +2494,18 @@ class StabUtility(StabUtilityBarebone):
 
 
     def update_preview(self):
-        self.video_viewer.reset_maps()
-        if self.preview_toggle_btn.isChecked():
-            img_dim = (int(self.video_viewer.frame_width), int(self.video_viewer.frame_height))
-            map1, map2 = self.calibrator.get_maps(fov_scale=self.fov_scale, new_img_dim=img_dim)
-            self.video_viewer.add_maps(map1, map2)
+        if self.stab:
+            self.stab.set_map_func_scale(self.preview_fov_scale)
+        #self.video_viewer.reset_maps()
+        #if self.preview_toggle_btn.isChecked():
+        #    img_dim = (int(self.video_viewer.frame_width), int(self.video_viewer.frame_height))
+        #    map1, map2 = self.calibrator.get_maps(fov_scale=self.fov_scale, new_img_dim=img_dim)
+        #    self.video_viewer.add_maps(map1, map2)
 
             #map1, map2 = self.calibrator.get_rotation_map()
             #self.video_viewer.add_maps(map1, map2)
 
-        self.video_viewer.update_frame()
+        #self.video_viewer.update_frame()
 
 
     def open_video_func(self):
@@ -2608,63 +2617,6 @@ class StabUtility(StabUtilityBarebone):
                 self.aspect_warning_text.setText(f"<h3>Seems like the aspect ratios don't quite match. Video: {v_aspect:.3f}, preset: {p_aspect:.3f}</h3>")
             else:
                 self.aspect_warning_text.setText("")
-
-
-
-
-
-    def update_gyro_input_settings(self):
-        # display/hide relevant gyro log settings
-
-        self.gyro_log_format_text.setVisible(True)
-        self.gyro_log_format_select.setVisible(True)
-
-        selected_log_type = self.gyro_log_format_select.currentData()
-
-        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow"] # display more settings if external source is used
-
-        videofile_selected = bool(self.infile_path)
-        gyrofile_selected = bool(self.gyro_log_path)
-        internal = not external
-
-        self.fpv_tilt_text.setVisible(external)
-        self.fpv_tilt_control.setVisible(external)
-
-        self.camera_type_control.setVisible(internal)
-        self.camera_type_text.setVisible(internal)
-
-        if gyrofile_selected:
-            self.open_gyro_button.setText("Gyro data: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
-            self.open_gyro_button.setStyleSheet("font-weight:bold;")
-        else:
-            self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
-            self.open_gyro_button.setStyleSheet("font-weight: normal;")
-
-
-        if external:
-            suffix = os.path.splitext(self.gyro_log_path)[1].lower()
-            # Guess log type
-            gyro_type_id = "rawblackbox"
-            idx = 0
-            if suffix == ".bbl" or suffix == ".bfl":
-                idx = self.gyro_log_format_select.findData("rawblackbox")
-            elif suffix == ".csv":
-                idx = self.gyro_log_format_select.findData("csvblackbox")
-            if idx != -1:
-                self.gyro_log_format_select.setCurrentIndex(idx)
-
-        elif internal:
-            if selected_log_type == "gpmf":
-                self.camera_type_control.clear()
-                self.camera_type_control.addItem("hero5")
-                self.camera_type_control.addItem("hero6")
-                self.camera_type_control.addItem("hero7")
-                self.camera_type_control.addItem("hero8")
-                self.camera_type_control.addItem("hero9")
-            elif selected_log_type == "insta360":
-                self.camera_type_control.clear()
-                self.camera_type_control.addItem("smo4k")
-                self.camera_type_control.addItem("Insta360 OneR")
 
 
     def open_gyro_func(self):
