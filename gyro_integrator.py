@@ -124,6 +124,7 @@ class GyroIntegrator:
         return None
 
 
+
     def get_smoothed_orientation(self, smooth = 0.94):
         # https://en.wikipedia.org/wiki/Exponential_smoothing
         # the smooth value corresponds to the time constant
@@ -581,6 +582,8 @@ class EulerIntegrator:
 
         else:
             return quat.quaternion(1,0,0,0)
+
+
 
 if __name__ == "__main__":
     from scipy.spatial.transform import Rotation
