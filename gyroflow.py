@@ -24,7 +24,7 @@ import stabilizer
 # area for environment variables
 try:
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
-except KeyError:
+except:
     pass
 
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
