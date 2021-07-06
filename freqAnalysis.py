@@ -15,7 +15,7 @@ class FreqAnalysis:
     def __init__(self, gyroInt):
         self.gyroInt = gyroInt
 
-    def sampleFrequencyAnalysis(self):
+    def sampleFrequencyAnalysis(self, show_plots = False):
         timestamps = self.gyroInt.get_raw_data("t")
         gyro_data = self.gyroInt.get_raw_data("xyz")
         interarrival = np.diff(timestamps, n=1)
@@ -36,17 +36,20 @@ class FreqAnalysis:
         print('MAD (normal) of freqs is {}'.format(mad_normal))
         print('Max inter sample delay is {}'.format(np.max(interarrival)))
 
-        thresh = mad_normal if mad_normal > std else std
-        thresh = 6*thresh #corresponds to 100% of observations when following normal distribution
-        outlierMask = median - freqs > thresh
-        plt.plot(timestamps, gyro_data)
-        plt.plot(timestamps[:-1-(w-1)], outlierMask*2)
-        plt.show()
 
-        plt.hist(freqs, bins=300)
-        plt.yscale("log")
-        plt.axvline(x=median+thresh, color="red")
-        plt.axvline(x=median-thresh, color="red")
-        plt.axvline(x=median, color='green')
-        plt.axvline(x=np.mean(freqs), color='orange')
-        plt.show()
+
+        if show_plots:
+            thresh = mad_normal if mad_normal > std else std
+            thresh = 6*thresh #corresponds to 100% of observations when following normal distribution
+            outlierMask = median - freqs > thresh
+            plt.plot(timestamps, gyro_data)
+            plt.plot(timestamps[:-1-(w-1)], outlierMask*2)
+            plt.show()
+
+            plt.hist(freqs, bins=300)
+            plt.yscale("log")
+            plt.axvline(x=median+thresh, color="red")
+            plt.axvline(x=median-thresh, color="red")
+            plt.axvline(x=median, color='green')
+            plt.axvline(x=np.mean(freqs), color='orange')
+            plt.show()

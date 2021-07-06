@@ -1649,6 +1649,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.custom_ffmpeg_pipeline.setPlaceholderText(example_ffmpeg_pipeline)
         self.export_controls_layout.addWidget(self.custom_ffmpeg_pipeline)
 
+
+        self.hyperlapse_text = QtWidgets.QLabel("Hyperlapse speed multipler (TODO)")
+        self.export_controls_layout.addWidget(self.hyperlapse_text)
+        self.hyperlapse_multiplier = QtWidgets.QSpinBox(self)
+        self.hyperlapse_multiplier.setMinimum(1)
+        self.hyperlapse_multiplier.setMaximum(64)
+        self.hyperlapse_multiplier.setValue(1)
+        self.hyperlapse_multiplier.setVisible(True)
+        self.export_controls_layout.addWidget(self.hyperlapse_multiplier)
+        self.update_bitrate_visibility()
+
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
         self.export_button.setMinimumHeight(30)
@@ -1673,9 +1684,28 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # add control bar to main layout
         #self.layout.addWidget(self.input_controls)
         #self.layout.addWidget(self.sync_controls)
-        self.main_setting_widget.addTab(self.input_controls, "Input")
-        self.main_setting_widget.addTab(self.sync_controls, "Sync/stabilization")
-        self.main_setting_widget.addTab(self.export_controls, "Export")
+
+        self.input_controls_scroll = QtWidgets.QScrollArea()
+        self.input_controls_scroll_layout = QtWidgets.QVBoxLayout(self.input_controls_scroll.widget())
+        self.input_controls_scroll.setLayout(self.input_controls_scroll_layout)
+        self.input_controls_scroll.setWidget(self.input_controls)
+        self.input_controls_scroll.setWidgetResizable(True)
+
+        self.sync_controls_scroll = QtWidgets.QScrollArea()
+        self.sync_controls_scroll_layout = QtWidgets.QVBoxLayout(self.sync_controls_scroll.widget())
+        self.sync_controls_scroll.setLayout(self.sync_controls_scroll_layout)
+        self.sync_controls_scroll.setWidget(self.sync_controls)
+        self.sync_controls_scroll.setWidgetResizable(True)
+
+        self.export_controls_scroll = QtWidgets.QScrollArea()
+        self.export_controls_scroll_layout = QtWidgets.QVBoxLayout(self.export_controls_scroll.widget())
+        self.export_controls_scroll.setLayout(self.export_controls_scroll_layout)
+        self.export_controls_scroll.setWidget(self.export_controls)
+        self.export_controls_scroll.setWidgetResizable(True)
+
+        self.main_setting_widget.addTab(self.input_controls_scroll, "Input")
+        self.main_setting_widget.addTab(self.sync_controls_scroll, "Sync/stabilization")
+        self.main_setting_widget.addTab(self.export_controls_scroll, "Export")
 
         self.infile_path = ""
         self.preset_path = ""
