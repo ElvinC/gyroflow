@@ -115,8 +115,8 @@ class Stabilizer:
         if (gyro_sample_rate / 2) <= self.gyro_lpf_cutoff:
             self.gyro_lpf_cutoff = gyro_sample_rate / 2 - 1
 
-
-        sosgyro = signal.butter(10, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
+        # Tweak with filter order
+        sosgyro = signal.butter(3, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
 
         self.gyro_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
 
@@ -385,6 +385,9 @@ class Stabilizer:
         dt = self.rough_sync_search_interval # Search +/- 3 seconds
         N = int(dt * 100) # 1/100 of a second in rough sync
 
+        #dt = self.better_sync_search_interval
+        #N = int(dt * 5000)
+
         for i in range(N):
             offset = dt/2 - i * (dt/N) + self.initial_offset
             cost = self.fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data) #fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
@@ -433,6 +436,7 @@ class Stabilizer:
 
         for i in range(N):
             offset = dt/2 - i * (dt/N) + rough_offset
+            #cost = self.fast_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             cost = self.better_gyro_cost_func(OF_times, OF_transforms, gyro_times + offset, gyro_data)
             offsets.append(offset)
             costs.append(cost)
@@ -476,10 +480,15 @@ class Stabilizer:
 
     def better_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
-        if OF_times[0] < gyro_times[0]:
+        new_OF_times = np.array(OF_times)
+
+        # Shift by one frame to patch timing
+        #new_OF_times += np.mean(new_OF_times[1:] - new_OF_times[:-1]) # / 2
+
+        if new_OF_times[0] < gyro_times[0]:
             return 100
 
-        if OF_times[-1] > gyro_times[-1]:
+        if new_OF_times[-1] > gyro_times[-1]:
             return 100
 
         new_OF_transforms = np.copy(OF_transforms) * self.fps
@@ -496,18 +505,18 @@ class Stabilizer:
         next_cumulative_time = 0
 
         # Start close to match
-        mask = gyro_times > (OF_times[0] - 0.5)
+        mask = gyro_times > (new_OF_times[0] - 0.5)
         first_idx = np.argmax(mask)
-        if gyro_times[first_idx] > (OF_times[0] - 0.5):
+        if gyro_times[first_idx] > (new_OF_times[0] - 0.5):
             gyro_idx = first_idx
         else:
             return 100
 
-        while gyro_times[gyro_idx + 1] < OF_times[0] and gyro_idx + 2 < len(gyro_times):
+        while gyro_times[gyro_idx + 1] < new_OF_times[0] and gyro_idx + 2 < len(gyro_times):
             gyro_idx += 1
 
 
-        for OF_idx in range(len(OF_times)):
+        for OF_idx in range(len(new_OF_times)):
             cumulative = next_gyro_snip
             cumulative_time =  next_cumulative_time
 
@@ -516,19 +525,19 @@ class Stabilizer:
                 #print("Outside of gyro range")
                 return 100
 
-            while gyro_times[gyro_idx] < OF_times[OF_idx]:
+            while gyro_times[gyro_idx] < new_OF_times[OF_idx]:
                 delta_time = gyro_times[gyro_idx] - gyro_times[gyro_idx-1]
                 cumulative_time += delta_time
 
                 cumulative += gyro_data[gyro_idx,:] * delta_time
                 gyro_idx += 1
 
-            time_delta = OF_times[OF_idx] - gyro_times[gyro_idx-2]
+            time_delta = new_OF_times[OF_idx] - gyro_times[gyro_idx-2]
             time_weight = time_delta / (gyro_times[gyro_idx] - gyro_times[gyro_idx-1])
             cumulative += gyro_data[gyro_idx-1,:] * time_delta
             cumulative_time  += time_delta
 
-            time_delta = gyro_times[gyro_idx-1] - OF_times[OF_idx]
+            time_delta = gyro_times[gyro_idx-1] - new_OF_times[OF_idx]
             next_gyro_snip = gyro_data[gyro_idx-1,:] * time_delta
             next_cumulative_time = time_delta
 
@@ -730,6 +739,7 @@ class Stabilizer:
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read()
+            
             if self.do_video_rotation:
                 frame = cv2.rotate(frame, self.video_rotation_code)
             # Getting frame_num _before_ cap.read gives index of the read frame.

@@ -226,6 +226,7 @@ class VideoThread(QtCore.QThread):
         while True:
             if self.playing or self.next_frame:
                 self.next_frame = False
+                self.this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
                 ret, self.frame = self.cap.read()
                 if ret:
                     time.sleep(1/24)
@@ -249,7 +250,7 @@ class VideoThread(QtCore.QThread):
 
         # https://stackoverflow.com/a/55468544/6622587
         rgbImage = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
-        this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        
 
         for i in range(len(self.map1s)):
             # apply the maps using linear interpolation for now
@@ -258,7 +259,7 @@ class VideoThread(QtCore.QThread):
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
 
         if self.map_function:
-            tmap1, tmap2 = self.map_function(this_frame_num)
+            tmap1, tmap2 = self.map_function(self.this_frame_num)
             rgbImage = cv2.remap(rgbImage, tmap1, tmap2, cv2.INTER_LINEAR)
 
 
@@ -272,8 +273,8 @@ class VideoThread(QtCore.QThread):
         self.changePixmap.emit(convertToQtFormat.copy())
 
         
-        if this_frame_num % 5 == 0 and self.frame_pos_update:
-            self.frame_pos_update(this_frame_num)
+        if self.this_frame_num % 5 == 0 and self.frame_pos_update:
+            self.frame_pos_update(self.this_frame_num)
 
 
 
