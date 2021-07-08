@@ -2268,7 +2268,7 @@ class StabUtility(StabUtilityBarebone):
         self.calib_msg = ""
 
         # info text box
-        self.info_text = QtWidgets.QLabel("No frames loaded")
+        self.info_text = QtWidgets.QLabel("[info]")
         self.calib_controls_layout.addWidget(self.info_text)
 
         # button for recomputing image stretching maps

@@ -116,7 +116,7 @@ class Stabilizer:
             self.gyro_lpf_cutoff = gyro_sample_rate / 2 - 1
 
         # Tweak with filter order
-        sosgyro = signal.butter(3, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
+        sosgyro = signal.butter(1, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
 
         self.gyro_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
 
