@@ -93,6 +93,11 @@ class Stabilizer:
         # self.raw_gyro_data = None
         self.gyro_data = None # self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
 
+        # time lapse features
+        self.hyperlapse_multiplier = 1
+        self.hyperlapse_num_blended_frames = 1 # must be equal or less than hyperlapse_multiplier
+        self.hyperlapse_skipped_frames = 0
+
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
 
@@ -119,6 +124,18 @@ class Stabilizer:
         sosgyro = signal.butter(1, self.gyro_lpf_cutoff, "lowpass", fs=gyro_sample_rate, output="sos")
 
         self.gyro_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
+
+
+    def set_hyperlapse(self, hyperlapse_multiplier = 1, hyperlapse_num_blended_frames = 1):
+
+        # Orig frames:
+        # |0|1|2|3|4|5|6|7|8|9|10|11|12|13
+        # mult=4, num_blend=2
+        # |0+1|4+5|8+9|12+13|
+
+        self.hyperlapse_multiplier = hyperlapse_multiplier
+        self.hyperlapse_num_blended_frames = min(hyperlapse_multiplier, hyperlapse_num_blended_frames) # Ensure no overlapping frames
+        self.hyperlapse_skipped_frames = self.hyperlapse_multiplier - self.hyperlapse_num_blended_frames
 
 
     def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
@@ -632,7 +649,7 @@ class Stabilizer:
 
         (out_width, out_height) = out_size
 
-        export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
+        #export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
         
         borderMode = 0
         borderValue = 0
@@ -720,7 +737,7 @@ class Stabilizer:
                                                         smoothingFocus=smoothingFocus, debug_plots=(smoothingFocus != -1))
         print("Done computing optimal Fov")
 
-        new_img_dim=(int(self.width * scale),int(self.height*scale))
+        #new_img_dim=(int(self.width * scale),int(self.height*scale))
         
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
         time.sleep(0.1)
@@ -729,7 +746,10 @@ class Stabilizer:
         success, frame = self.cap.read()
         if self.do_video_rotation:
             frame = cv2.rotate(frame, self.video_rotation_code)
-        frame_out = cv2.resize(frame, new_img_dim, interpolation=cv2.INTER_LINEAR) * 0.0
+        frame_out = cv2.resize(frame, out_size, interpolation=cv2.INTER_LINEAR) * 0.0
+
+        # temporary float frame
+        frame_temp = (cv2.resize(frame, out_size, interpolation=cv2.INTER_LINEAR) * 0.0).astype(np.float64)
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
         time.sleep(0.1)
@@ -775,16 +795,35 @@ class Stabilizer:
 
                 #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
 
+                if (i-1) % self.hyperlapse_multiplier == 0 and self.hyperlapse_num_blended_frames > 1:
+                    # Reset frame at beginning of hyperlapse range
+                    #print("reset")
+                    frame_temp = frame_temp * 0.0
+
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, dst=frame_out, # INTER_CUBIC
-                                              borderMode=borderMode, borderValue=borderValue)
+                if (i-1) % self.hyperlapse_multiplier < self.hyperlapse_num_blended_frames:
+                    #print(f"adding frame {i}")
 
-                if debug_text:
+                    # Process using integers for speed
+                    frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                                                borderMode=borderMode, borderValue=borderValue)
+                    
+                    if self.hyperlapse_num_blended_frames > 1:
+                        # process using floats
+                        frame_temp += 1/(self.hyperlapse_num_blended_frames) * frame_out.astype(np.float64)
+                    
+                    
+                if debug_text and ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
+                    # Add debug text to last frame only
                     topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
                     bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
                     frame_out = cv2.rectangle(frame_out, topleft,
                                                          bottomright, (255,0,0), 3)
+
+                    frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                                            (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
+
 
                 #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
                 #cv2.imshow("Before and After", frame_undistort)
@@ -801,35 +840,41 @@ class Stabilizer:
 
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
-                # temp debug text
-                if debug_text:
-                    frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
-                                            (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
+
 
                 size = np.array(frame_out.shape)
 
-                if split_screen:
+                # if last frame
+                if (i - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
 
-                    # Fix border artifacts
-                    frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1]* scale, crop[0]:crop[0]+out_size[0]* scale]
-                    frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
-                    concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (int(out_size[0]*2*scale),int(out_size[1]*scale)))
+                    # Convert to int
+                    if self.hyperlapse_num_blended_frames > 1:
+                        frame_out = frame_temp.astype(np.uint8)
 
-                    out.write(concatted)
-                    if display_preview:
-                        # Resize if preview is huge
-                        if concatted.shape[1] > 1280:
-                            concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_LINEAR)
-                        cv2.imshow("Before and After", concatted)
-                        cv2.waitKey(2)
-                else:
+                    if split_screen and False: # Disable for now
 
-                    out.write(frame_out)
-                    if display_preview:
-                        if frame_out.shape[1] > 1280:
-                            frame_out = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
-                        cv2.imshow("Stabilized?", frame_out)
-                        cv2.waitKey(2)
+                        # Fix border artifacts
+                        frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1]* scale, crop[0]:crop[0]+out_size[0]* scale]
+                        frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
+                        concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (int(out_size[0]*2*scale),int(out_size[1]*scale)))
+
+                        out.write(concatted)
+                        if display_preview:
+                            # Resize if preview is huge
+                            if concatted.shape[1] > 1280:
+                                concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_LINEAR)
+                            cv2.imshow("Before and After", concatted)
+                            cv2.waitKey(2)
+                    else:
+
+                        out.write(frame_out)
+                        if display_preview:
+                            if frame_out.shape[1] > 1280:
+                                frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
+                                cv2.imshow("Stabilized?", frame_preview)
+                            else:
+                                cv2.imshow("Stabilized?", frame_out)
+                            cv2.waitKey(1)
 
         # When everything done, release the capture
         #out.release()

@@ -20,6 +20,7 @@ import subprocess
 import bundled_images
 import insta360_utility as insta360_util
 import stabilizer
+import smoothing_algos
 
 # area for environment variables
 try:
@@ -1392,8 +1393,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
         self.stabilization_algo_select = QtWidgets.QComboBox()
         self.stabilization_algo_select.addItem("SLERP-based IIR (standard)")
-        self.stabilization_algo_select.addItem("(More methods under development)")
+        self.stabilization_algo_select.addItem("Placeholders:")
+
+        self.smoothing_algo_names = smoothing_algos.get_stab_algo_names()
+        for name in self.smoothing_algo_names:
+            self.stabilization_algo_select.addItem(name)
+
         self.sync_controls_layout.addWidget(self.stabilization_algo_select)
+
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
         self.smooth_max_period = 30 # seconds
@@ -1533,12 +1540,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.enableAdaptiveZoom.clicked.connect(self.enableAdaptiveZoomClicked)
         self.export_controls_layout.addWidget(self.enableAdaptiveZoom)
 
-        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 1.0")
+        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 4.0")
         self.export_controls_layout.addWidget(self.fov_smoothing_text)
         self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.fov_smoothing.setMinimum(0)
-        self.fov_smoothing.setValue(10)
-        self.fov_smoothing.setMaximum(40)
+        self.fov_smoothing.setValue(40)
+        self.fov_smoothing.setMaximum(150)
         self.fov_smoothing.setSingleStep(1)
         self.fov_smoothing.setTickInterval(1)
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
@@ -1603,7 +1610,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.encoder_profile_select)
 
 
-        self.split_screen_select = QtWidgets.QCheckBox("Export split screen")
+        self.split_screen_select = QtWidgets.QCheckBox("Export split screen (temporarily disabled)")
         self.split_screen_select.setChecked(False)
         self.export_controls_layout.addWidget(self.split_screen_select)
 
@@ -1650,7 +1657,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.custom_ffmpeg_pipeline)
 
 
-        self.hyperlapse_text = QtWidgets.QLabel("Hyperlapse speed multipler (TODO)")
+        self.hyperlapse_text = QtWidgets.QLabel("Hyperlapse speed multipler")
         self.export_controls_layout.addWidget(self.hyperlapse_text)
         self.hyperlapse_multiplier = QtWidgets.QSpinBox(self)
         self.hyperlapse_multiplier.setMinimum(1)
@@ -1658,7 +1665,15 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.hyperlapse_multiplier.setValue(1)
         self.hyperlapse_multiplier.setVisible(True)
         self.export_controls_layout.addWidget(self.hyperlapse_multiplier)
-        self.update_bitrate_visibility()
+
+        self.hyperlapse_blend_text = QtWidgets.QLabel("Hyperlapse number of blended frames")
+        self.export_controls_layout.addWidget(self.hyperlapse_blend_text)
+        self.hyperlapse_blend = QtWidgets.QSpinBox(self)
+        self.hyperlapse_blend.setMinimum(1)
+        self.hyperlapse_blend.setMaximum(64)
+        self.hyperlapse_blend.setValue(1)
+        self.hyperlapse_blend.setVisible(True)
+        self.export_controls_layout.addWidget(self.hyperlapse_blend)
 
         # button for exporting video
         self.export_button = QtWidgets.QPushButton("Export (hopefully) stabilized video")
@@ -2159,6 +2174,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         zoomVal = self.zoom.value() /10
 
         bg_color = self.bg_color_select.text()
+
+        
+        self.stab.set_hyperlapse(hyperlapse_multiplier = self.hyperlapse_multiplier.value(), hyperlapse_num_blended_frames = self.hyperlapse_blend.value())
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
