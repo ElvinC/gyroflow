@@ -15,7 +15,6 @@ import nonlinear_stretch
 import urllib.request
 import json
 import re
-import calibrate_video
 import subprocess
 import bundled_images
 import insta360_utility as insta360_util
@@ -1180,7 +1179,21 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.open_vid_button)
 
         # lens preset
-        self.open_preset_button = QtWidgets.QPushButton("Open lens preset")
+        #self.input_controls_layout.addWidget(QtWidgets.QLabel("Search preset"))
+
+        preset_full_paths = calibrate_video.get_all_preset_paths()
+        self.preset_trunc_paths = [pathname.lstrip("camera_presets/") for pathname in preset_full_paths]
+        #print(preset_trunc_paths)
+        completer = QtWidgets.QCompleter(self.preset_trunc_paths)
+        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        self.preset_search_input = QtWidgets.QLineEdit()
+        self.preset_search_input.setPlaceholderText("Search preset")
+        self.preset_search_input.setCompleter(completer)
+        self.preset_search_input.textChanged.connect(self.preset_search_handler)
+        self.input_controls_layout.addWidget(self.preset_search_input)
+        
+
+        self.open_preset_button = QtWidgets.QPushButton("Browse lens preset")
         self.open_preset_button.setMinimumHeight(30)
         self.open_preset_button.clicked.connect(self.open_preset_func)
         self.input_controls_layout.addWidget(self.open_preset_button)
@@ -1233,7 +1246,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.fpv_tilt_text = QtWidgets.QLabel("Camera to gyro angle:")
+        
         self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
+        self.fpv_tilt_control.setToolTip('FPV drones typically have the HD camera tilted from the flight controller. Positive=upwards')
         self.fpv_tilt_control.setMinimum(-90)
         self.fpv_tilt_control.setMaximum(180)
         self.fpv_tilt_control.setValue(0)
@@ -1274,6 +1289,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_lpf_control.setMinimum(-1)
         self.input_lpf_control.setMaximum(1000)
         self.input_lpf_control.setValue(-1)
+        self.input_lpf_control.setToolTip('Enable the filter if excessive noise is seen in the gyro data. Frequencies below the cutoff are kept, so lower value means more filtering. 50 Hz is a good starting point.')
         self.input_controls_layout.addWidget(self.input_lpf_control)
 
 
@@ -1379,6 +1395,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.num_frames_skipped_control.setMinimum(1)
         self.num_frames_skipped_control.setMaximum(50)
         self.num_frames_skipped_control.setValue(1)
+        self.num_frames_skipped_control.setToolTip("High fps means less movement between frames. This option allows for faster and more reliable sync of high speed footage. A value of 5 works fine for 300 fps")
 
         self.sync_controls_layout.addWidget(self.num_frames_skipped_control)
 
@@ -1787,6 +1804,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.update_gyro_input_settings()
 
+    def preset_search_handler(self):
+        selected_text = self.preset_search_input.text()
+        if selected_text in self.preset_trunc_paths:
+            preset_path = "camera_presets/" + selected_text
+            self.preset_path = preset_path
+            self.display_preset_info()
+
     def display_video_info(self):
 
 
@@ -1815,14 +1839,18 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
         #print(path)
         self.preset_path = path[0]
+
+        self.display_preset_info()
+
+
+
+    def display_preset_info(self):
+
         self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
         self.open_preset_button.setStyleSheet("font-weight:bold;")
 
         self.preset_info_dict = calibrate_video.FisheyeCalibrator().load_calibration_json(self.preset_path)
         #print(self.preset_info_dict)
-        self.display_preset_info()
-
-    def display_preset_info(self):
 
         info = self.preset_info_template.format(**self.preset_info_dict)
         self.preset_info_text.setText(info)
@@ -2648,14 +2676,15 @@ class StabUtility(StabUtilityBarebone):
             return
         #print(path)
         self.preset_path = path[0]
+        self.display_preset_info()
+
+    def display_preset_info(self):
+        self.preset_path = self.preset_path.replace("\\", "/")
         self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
         self.open_preset_button.setStyleSheet("font-weight:bold;")
 
         self.preset_info_dict = calibrate_video.FisheyeCalibrator().load_calibration_json(self.preset_path)
         #print(self.preset_info_dict)
-        self.display_preset_info()
-
-    def display_preset_info(self):
 
         info = self.preset_info_template.format(**self.preset_info_dict)
         self.preset_info_text.setText(info)

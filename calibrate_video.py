@@ -1061,12 +1061,13 @@ class StandardCalibrator:
             cv2.imshow('OpenCV image viewer',scaled)
             cv2.waitKey(500)
 
-def search_profiles(preset_folder = "camera_presets"):
-    files = glob.glob(preset_folder + '/[!Legacy]*/*.json', recursive=True)
-    print(files)
+def get_all_preset_paths(preset_folder = "camera_presets"):
+    files = glob.glob(preset_folder + '/**/*.json', recursive=True)
+    #print(files)
+    return [f.replace("\\", "/") for f in files]
 
 if __name__ == "__main__":
-    search_profiles()
+    get_all_preset_paths()
     exit()
     # test undistort code using images
     #import glob
