@@ -1064,7 +1064,7 @@ class StandardCalibrator:
 def get_all_preset_paths(preset_folder = "camera_presets"):
     files = glob.glob(preset_folder + '/**/*.json', recursive=True)
     #print(files)
-    return [f.replace("\\", "/") for f in files]
+    return [f.replace("\\", "/") for f in files if not f.startswith("Legacy")]
 
 if __name__ == "__main__":
     get_all_preset_paths()

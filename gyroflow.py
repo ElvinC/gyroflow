@@ -1192,6 +1192,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #print(preset_trunc_paths)
         completer = QtWidgets.QCompleter(self.preset_trunc_paths)
         completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        completer.setFilterMode(QtCore.Qt.MatchContains)  
+
         self.preset_search_input = QtWidgets.QLineEdit()
         self.preset_search_input.setPlaceholderText("Search preset")
         self.preset_search_input.setCompleter(completer)
