@@ -755,6 +755,10 @@ class Stabilizer:
         time.sleep(0.1)
 
         i = 0
+
+        # Double press q to stop render
+        quit_button = False
+
         while(True):
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -797,13 +801,13 @@ class Stabilizer:
 
                 if (i-1) % self.hyperlapse_multiplier == 0 and self.hyperlapse_num_blended_frames > 1:
                     # Reset frame at beginning of hyperlapse range
-                    #print("reset")
+                    print("reset")
                     frame_temp = frame_temp * 0.0
 
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 if (i-1) % self.hyperlapse_multiplier < self.hyperlapse_num_blended_frames:
-                    #print(f"adding frame {i}")
+                    print(f"adding frame {i}")
 
                     # Process using integers for speed
                     frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
@@ -841,11 +845,10 @@ class Stabilizer:
                 #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
 
 
-
                 size = np.array(frame_out.shape)
 
                 # if last frame
-                if (i - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
+                if ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
 
                     # Convert to int
                     if self.hyperlapse_num_blended_frames > 1:
@@ -871,10 +874,19 @@ class Stabilizer:
                         if display_preview:
                             if frame_out.shape[1] > 1280:
                                 frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
-                                cv2.imshow("Stabilized?", frame_preview)
+                                cv2.imshow("Stabilized? Double press Q to stop render?", frame_preview)
                             else:
-                                cv2.imshow("Stabilized?", frame_out)
-                            cv2.waitKey(1)
+                                cv2.imshow("Stabilized? Double press Q to stop render", frame_out)
+                            key = cv2.waitKey(1)
+
+                            # Double press Q to exit
+                            if key == 113 and quit_button:
+                                break
+                            elif key == 113:
+                                time.sleep(0.3)
+                                quit_button = True
+                            else:
+                                quit_button = False
 
         # When everything done, release the capture
         #out.release()

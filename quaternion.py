@@ -58,3 +58,8 @@ def slerp(v0, v1, t_array):
     s0 = np.cos(theta) - dot * sin_theta / sin_theta_0
     s1 = sin_theta / sin_theta_0
     return (s0[:,np.newaxis] * v0[np.newaxis,:]) + (s1[:,np.newaxis] * v1[np.newaxis,:])
+
+def angle_between(q1, q2):
+    z = quaternion_multiply(inverse(q1), q2)
+    angle = 2 * np.arccos(z[0])
+    return angle
