@@ -206,6 +206,9 @@ class VideoThread(QtCore.QThread):
         self.map2s = []
 
         self.map_function = None
+        self.map_function_enable = True
+
+        self.map_preview_res = (1280, 720)
 
         # Draw vertical lines at given coords
         self.vert_line_coords = []
@@ -258,8 +261,8 @@ class VideoThread(QtCore.QThread):
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
 
-        if self.map_function:
-            tmap1, tmap2 = self.map_function(self.this_frame_num)
+        if self.map_function and self.map_function_enable:
+            tmap1, tmap2 = self.map_function(self.this_frame_num, out_size = self.map_preview_res)
             rgbImage = cv2.remap(rgbImage, tmap1, tmap2, cv2.INTER_LINEAR)
 
 
@@ -399,6 +402,9 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
     def reset_map_function(self):
         self.thread.map_function = None
+
+    def enable_map_function(self, enabled = True):
+        self.thread.map_function_enable = enabled
 
     def reset_lines(self):
         self.thread.vert_line_coords = []
@@ -2344,8 +2350,8 @@ class StabUtility(StabUtilityBarebone):
         self.preview_fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.preview_fov_scale))
         self.preview_fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.preview_fov_slider.setMinimum(8)
-        self.preview_fov_slider.setValue(14)
-        self.preview_fov_slider.setMaximum(30)
+        self.preview_fov_slider.setValue(18)
+        self.preview_fov_slider.setMaximum(40)
         self.preview_fov_slider.setMaximumWidth(300)
         self.preview_fov_slider.setSingleStep(1)
         self.preview_fov_slider.setTickInterval(1)
@@ -2356,12 +2362,11 @@ class StabUtility(StabUtilityBarebone):
         self.calib_controls_layout.addWidget(self.preview_fov_slider)
 
         # checkbox to preview lens distortion correction
-        self.preview_toggle_btn = QtWidgets.QCheckBox("Toggle lens correction: ")
-        self.preview_toggle_btn.setLayoutDirection(QtCore.Qt.RightToLeft)
-        self.preview_toggle_btn.stateChanged.connect(self.update_preview)
-        self.preview_toggle_btn.setEnabled(False)
+        self.preview_stab_toggle_btn = QtWidgets.QCheckBox("Toggle stabilization: ")
+        self.preview_stab_toggle_btn.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.preview_stab_toggle_btn.stateChanged.connect(self.update_preview)
 
-        self.calib_controls_layout.addWidget(self.preview_toggle_btn)
+        self.calib_controls_layout.addWidget(self.preview_stab_toggle_btn)
 
         # add control bar to main layout
         self.left_layout.addWidget(self.calib_controls)
@@ -2579,6 +2584,8 @@ class StabUtility(StabUtilityBarebone):
     def update_preview(self):
         if self.stab:
             self.stab.set_map_func_scale(self.preview_fov_scale)
+        
+        self.video_viewer.enable_map_function(self.preview_stab_toggle_btn.isChecked())
         #self.video_viewer.reset_maps()
         #if self.preview_toggle_btn.isChecked():
         #    img_dim = (int(self.video_viewer.frame_width), int(self.video_viewer.frame_height))
@@ -2588,7 +2595,7 @@ class StabUtility(StabUtilityBarebone):
             #map1, map2 = self.calibrator.get_rotation_map()
             #self.video_viewer.add_maps(map1, map2)
 
-        #self.video_viewer.update_frame()
+        self.video_viewer.update_frame()
 
 
     def open_video_func(self):
