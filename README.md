@@ -27,13 +27,18 @@ Note: Try the dev branch for the newest features.
 * [FPV Stabilization Tools Facebook group](https://www.facebook.com/groups/fpvtools) maintained by Attilafustos.
 
 
+## General recording tips
+* Use the settings that give the widest possible field of view (more data to work with). For a lot of cameras, this is in the 4:3 aspect ratio.
+* If using the main drone flight controller for logging, the camera should be hardmounted.
+* If using a secondary logger on the camera or internal camera logging, some soft mounting is preferred to isolate vibrations.
+
+
 ## Status
 
 **Sample clips:**
-* [Handheld Hero 6 + internal gyro](https://youtu.be/ZhVVRnuuMFc) (Clip by Nicecrash)
-* [FPV DJI air unit + blackbox data using BlackboxToGPMF](https://youtu.be/veolYMpaNgQ) (Clip by Vitaliy Zaburnuk)
-* [FPV Hero 8 + internal gyro](https://youtu.be/MUwERfNBK6U) (Clip by Kyle Li)
-* [FPV Session 5 + blackbox data using BlackboxToGPMF](https://youtu.be/5PkTHkl2GsI) (Clip by [iLLjoy Presents](https://www.youtube.com/channel/UCaIqfSaXAFSGEdW1PNbrIjA))
+* [0.2.x-alpha results](https://youtu.be/xkVtbYQnH04)
+* [In-depth video guide](https://youtu.be/NFsTb_f7y8s)
+
 
 **Working:**
 * Videoplayer based on OpenCV and Pyside2
@@ -49,21 +54,22 @@ Note: Try the dev branch for the newest features.
 * Blackbox orientation handling and wide interval sync.
 * Stabilization UI without video player
 * (Basic) gyro orientation presets for GoPro cameras
-
+* Frame blending timelapse/hyperlapse
+* Automatic determination of required crop
+* Native support for insta360 gyro
+* Support for high speed video
+* GoPro/Insta360 as gyro logger for cinema cameras.
+* Basic prores import/export through ffmpeg
 
 **Work in progress:**
-* Documentation
-* Improved low-pass filter and more stabilization modes (Time-lapse, separate pitch/yaw/roll smoothness control etc.)
+* Modular/improved smoothing methods
+* Support for non-square pixel aspect ratios
 
 
 **Not working (yet) and _potential_ future additions and ideas:**
 * Incorporate acceleration data in orientation estimation for horizon lock (Probably just a complementary filter. Kalman is overkill but could be fun to learn).
 * Automatic camera alignment identification with respect to gyro
 * Try different calibration pattern? Asymmetric circles/ChArUco?
-* Streamlining/optimizing the image processing pipeline (more hardware acceleration etc.)
 * Rolling shutter correction (and determination?) + RS-aware gyro sync.
-* Automatic determination of required crop
-* Integration with external logger hardware
-* Native support for other cameras with internal gyro (insta360, sony A7 series?)
-* Support for reading and writing professional video formats (video editor plugin?)
+* other cameras with internal gyro (freefly wave? sony A7 series?)
 * Audio handling

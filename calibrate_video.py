@@ -65,6 +65,8 @@ class FisheyeCalibrator:
         self.num_images_used = 0
 
         self.first_image_processed = False
+        # Equal if no stretching is applied
+        self.orig_dimension = np.array([0, 0])
         self.calib_dimension = np.array([0, 0])
 
         # K & D (camera matrix and and distortion coefficients)
@@ -74,8 +76,47 @@ class FisheyeCalibrator:
         # RMS error in pixels. Should be <1 after successful calibration
         self.RMS_error = 100
 
+        # Horizontal stretching factor
+        self.input_horizontal_stretch = 1
+
         self.data_from_preset_file = False
 
+    def set_horizontal_stretch(self, new_stretch = 1):
+        # For handling anamorphic or squeezed footage.
+        self.input_horizontal_stretch = new_stretch
+
+    def image_is_stretched(self):
+        return self.input_horizontal_stretch != 1
+
+    def get_stretched_size(self, img):
+        h, w = img.shape[:2]
+
+        if self.input_horizontal_stretch < 0:
+            new_h = round(h / self.input_horizontal_stretch)
+            new_w = w
+        else:
+            new_w = round(w * self.input_horizontal_stretch)
+            new_h = h
+
+        return (new_w, new_h)
+
+    def stretch_image(self, img):
+        if self.input_horizontal_stretch == 1:
+            return img
+
+        # 16:9 to 4:3 gives input_horizontal_stretch of
+        # (4/3)/(16/9) = 0.75
+
+        h, w = img.shape[:2]
+
+        if self.input_horizontal_stretch < 0:
+            new_h = round(h / self.input_horizontal_stretch)
+            new_w = w
+        else:
+            new_w = round(w * self.input_horizontal_stretch)
+            new_h = h
+
+        return cv2.resize(img, (new_w, new_h))
 
 
     def add_calib_image(self, img):
@@ -92,17 +133,19 @@ class FisheyeCalibrator:
             raise Exception("Preset already loaded from file")
 
 
-        if not self.first_image_processed:
+        if self.num_images == 0:
             # save the dimensions of the first image [width, height]
-            self.calib_dimension = img.shape[:2][::-1]
+            self.orig_dimension = img.shape[:2][::-1]
+            self.calib_dimension = self.get_stretched_size(img)
 
 
         # check image dimension
-        if img.shape[:2][::-1] != self.calib_dimension:
+        if img.shape[:2][::-1] != self.orig_dimension:
             return (False, "Image dimension doesn't match previous samples", None)
 
 
-        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
+        gray = cv2.cvtColor(self.stretch_image(img),cv2.COLOR_BGR2GRAY)
 
         # Find the chess board corners
         ret, corners = cv2.findChessboardCorners(gray, self.chessboard_size, None)
@@ -116,6 +159,12 @@ class FisheyeCalibrator:
         self.objpoints.append(self.objp)
 
         corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),self.subpix_criteria)
+        print(corners2)
+        
+        print(corners2)
+
+        # horizontal scaling
+
         self.imgpoints.append(corners2)
 
         # Draw and display the corners
@@ -124,7 +173,14 @@ class FisheyeCalibrator:
         #cv2.imshow('img',scaled)
         #cv2.waitKey(500)
 
-        return (True, "Image processed and added", corners2)
+        corners_orig = np.copy(corners2)
+
+        if self.image_is_stretched():
+            # Transform back to original image format
+            corners_orig[:,:,0] *= self.orig_dimension[0] / self.calib_dimension[0] # x axis
+            corners_orig[:,:,1] *= self.orig_dimension[1] / self.calib_dimension[1] # y axis
+
+        return (True, "Image processed and added", corners_orig)
 
     def remove_calib_image(self):
         """Remove last added calibration image
@@ -165,15 +221,19 @@ class FisheyeCalibrator:
         rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(self.num_images)]
         tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(self.num_images)]
 
-        retval, self.K, self.D, rvecs, tvecs = cv2.fisheye.calibrate(temp_objpoints,
-                temp_imgpoints,
-                self.calib_dimension,
-                self.K,
-                self.D,
-                rvecs,
-                tvecs,
-                self.calibration_flags,
-                self.calib_criteria)
+        try:
+            retval, self.K, self.D, rvecs, tvecs = cv2.fisheye.calibrate(temp_objpoints,
+                    temp_imgpoints,
+                    self.calib_dimension,
+                    self.K,
+                    self.D,
+                    rvecs,
+                    tvecs,
+                    self.calibration_flags,
+                    self.calib_criteria)
+        except:
+            print("Error computing calibration, remove a frame and try again")
+            return 100
 
         if center_camera:
             self.K[0,2] = self.calib_dimension[0]/2
@@ -196,7 +256,7 @@ class FisheyeCalibrator:
         return self.K
 
     def get_inverse_camera_matrix(self):
-        self.compute_calibration
+        self.compute_calibration()
 
         return inverse_cam_mtx(self.K)
 
@@ -253,7 +313,7 @@ class FisheyeCalibrator:
 
         return undistorted_image
 
-    def get_maps(self, fov_scale = 1.0, output_dim = None, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None):
+    def get_maps(self, fov_scale = 1.0, output_dim = None, new_img_dim = None, update_new_K = True, quat = None, focalCenter = None, original_stretched = True):
         """Get undistortion maps
 
         Args:
@@ -263,6 +323,9 @@ class FisheyeCalibrator:
         Returns:
             (np.ndarray,np.ndarray): Undistortion maps
         """
+
+        if new_img_dim and self.image_is_stretched():
+            new_img_dim = (round(new_img_dim[0] * self.calib_dimension[0] / self.orig_dimension[0]), round(new_img_dim[1] * self.calib_dimension[1] / self.orig_dimension[1]))
 
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
         out_dim = output_dim if output_dim else self.calib_dimension
@@ -287,9 +350,17 @@ class FisheyeCalibrator:
 
         if update_new_K:
             self.new_K = new_K
-        map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, out_dim, cv2.CV_16SC2)
+        
+        if original_stretched and self.image_is_stretched():
+            map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, out_dim, cv2.CV_32FC1)
+            # Rescale input and convert to int for speed
+            map1, map2 = cv2.convertMaps(map1 * self.orig_dimension[0] / self.calib_dimension[0], map2 * self.orig_dimension[1] / self.calib_dimension[1], cv2.CV_16SC2)
+            
+            return map1, map2
 
-        return map1, map2
+        else:
+            map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, out_dim, cv2.CV_16SC2)
+            return map1, map2
 
 
     def undistort_points(self, distorted_points,new_img_dim = None):
@@ -411,7 +482,11 @@ class FisheyeCalibrator:
                 "w": self.calib_dimension[0],
                 "h": self.calib_dimension[1]
             },
-
+            "orig_dimension": {
+                "w": self.orig_dimension[0],
+                "h": self.orig_dimension[1]
+            },
+            "input_horizontal_stretch": self.input_horizontal_stretch, # to de-stretch anamorphic/linearly stretched video.
             "num_images": self.num_images_used,
 
             "use_opencv_fisheye": True,
@@ -459,13 +534,24 @@ class FisheyeCalibrator:
                                 presets["date"]))
 
                 if presets["calibrator_version"] != __version__:
-                    print("Warning: Versions don't match. Calibrator: {}, Preset: {}"
+                    print("Note: Versions don't match. Calibrator: {}, Preset: {}. Should be fine though."
                         .format(__version__, presets["calibrator_version"]))
 
-                width = presets["calib_dimension"]["w"]
-                height = presets["calib_dimension"]["h"]
+                cal_width = presets["calib_dimension"]["w"]
+                cal_height = presets["calib_dimension"]["h"]
 
-                self.calib_dimension = (width, height)
+                self.calib_dimension = (cal_width, cal_height)
+
+                # Added in 0.3.0
+                if "orig_dimension" in presets:
+                    orig_w = presets["orig_dimension"]["w"]
+                    orig_h = presets["orig_dimension"]["h"]
+                    self.input_horizontal_stretch = presets["input_horizontal_stretch"]
+                    self.orig_dimension = (orig_w, orig_h)
+                else:
+                    self.input_horizontal_stretch = 1
+                    self.orig_dimension = self.calib_dimension
+
 
                 self.num_images = self.num_images_used = presets["num_images"]
 
@@ -484,9 +570,9 @@ class FisheyeCalibrator:
                     "lens_model": presets.get("lens_model", "N/A"),
                     "calibrator_version": presets.get("calibrator_version"),
                     "date": presets.get("date"),
-                    "width": width,
-                    "height": height,
-                    "aspect": width/height,
+                    "width": self.orig_dimension[0],
+                    "height": self.orig_dimension[1],
+                    "aspect": self.orig_dimension[0]/self.orig_dimension[1],
                     "num_images": self.num_images
                 }
 

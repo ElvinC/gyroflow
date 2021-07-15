@@ -219,6 +219,9 @@ class VideoThread(QtCore.QThread):
         # used for scaling
         self.max_width = 1280
 
+        self.stretch_enable = False
+        self.horizontal_stretch = 1
+
     def run(self):
         """
         Run the videoplayer using the thread
@@ -261,14 +264,24 @@ class VideoThread(QtCore.QThread):
         for line_pos in self.vert_line_coords:
             cv2.line(rgbImage,(int(line_pos), 0),(int(line_pos),rgbImage.shape[0]),(255,255,0),2)
 
+        # Resize to match pixel aspect
+
         if self.map_function and self.map_function_enable:
             tmap1, tmap2 = self.map_function(self.this_frame_num, out_size = self.map_preview_res)
             rgbImage = cv2.remap(rgbImage, tmap1, tmap2, cv2.INTER_LINEAR)
 
 
         if rgbImage.shape[1] > self.max_width:
-            new_height = int(self.max_width/rgbImage.shape[1] * rgbImage.shape[0])
-            rgbImage = cv2.resize(rgbImage, (self.max_width, new_height))
+            new_height = self.max_width/rgbImage.shape[1] * rgbImage.shape[0]
+
+            if self.stretch_enable:
+                new_height = new_height /  self.horizontal_stretch
+
+            rgbImage = cv2.resize(rgbImage, (self.max_width, round(new_height)))
+
+        elif self.stretch_enable:
+            new_height = round(rgbImage.shape[0] / self.horizontal_stretch)
+            rgbImage = cv2.resize(rgbImage, (rgbImage.shape[1], new_height))
 
         h, w, ch = rgbImage.shape
         bytesPerLine = ch * w
@@ -406,6 +419,12 @@ class VideoPlayerWidget(QtWidgets.QWidget):
     def enable_map_function(self, enabled = True):
         self.thread.map_function_enable = enabled
 
+    def set_horizontal_stretch(self, stretch=1):
+        self.thread.horizontal_stretch = stretch
+
+    def enable_stretch(self, enabled = True):
+        self.thread.stretch_enable = enabled
+
     def reset_lines(self):
         self.thread.vert_line_coords = []
 
@@ -539,6 +558,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         # video player with controls
         self.video_viewer = VideoPlayerWidget()
+        self.video_viewer.enable_stretch()
         self.left_layout.addWidget(self.video_viewer)
 
         self.setCentralWidget(self.main_widget)
@@ -576,6 +596,23 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         # info text box
         self.info_text = QtWidgets.QLabel("No frames loaded")
         self.calib_controls_layout.addWidget(self.info_text)
+
+
+
+        # horizontal destretching
+        self.destretch_text = QtWidgets.QLabel("Horizontal desqueeze:")
+        self.calib_controls_layout.addWidget(self.destretch_text)
+
+        self.destretch_control = QtWidgets.QDoubleSpinBox(self)
+        self.destretch_control.setMinimum(0.01)
+        self.destretch_control.setMaximum(4)
+        self.destretch_control.setValue(1)
+        self.destretch_control.setDecimals(5)
+        self.destretch_control.setSingleStep(0.05)
+        self.destretch_control.setToolTip("For processing stretched footage with non-square pixel aspect ratio. 0.75 corresponds to converting 16:9 to 4:3")
+        self.destretch_control.valueChanged.connect(self.update_destretch)
+
+        self.calib_controls_layout.addWidget(self.destretch_control)
 
         self.fov_scale = 1.4
 
@@ -698,6 +735,12 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=self.chessboard_size)
 
 
+    def update_destretch(self):
+        print(f"Update destretch to {self.destretch_control.value()}")
+        self.calibrator.set_horizontal_stretch(self.destretch_control.value())
+        self.video_viewer.set_horizontal_stretch(self.destretch_control.value())
+        self.video_viewer.update_frame()
+
     def open_file_func(self):
         """Open file using Qt filedialog
         """
@@ -781,7 +824,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def fov_changed(self):
         self.fov_scale = self.fov_slider.value()/10
         self.fov_text.setText("FOV scale ({}):".format(self.fov_scale))
-
+        self.video_viewer.update_frame()
 
     def save_preset_file(self):
         """save camera preset file
@@ -876,8 +919,11 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         # enable/disable buttons
         if self.calibrator.num_images > 0:
             self.process_frames_btn.setEnabled(True)
+            self.destretch_control.setEnabled(False)
         else:
             self.process_frames_btn.setEnabled(False)
+            self.destretch_control.setEnabled(True)
+
         if self.calibrator.num_images_used > 0:
             self.preview_toggle_btn.setEnabled(True)
             self.export_button.setEnabled(True)
@@ -900,9 +946,13 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             img_dim = (int(self.video_viewer.frame_width), int(self.video_viewer.frame_height))
             map1, map2 = self.calibrator.get_maps(fov_scale=self.fov_scale, new_img_dim=img_dim)
             self.video_viewer.add_maps(map1, map2)
+            self.video_viewer.enable_stretch(False)
 
             #map1, map2 = self.calibrator.get_rotation_map()
             #self.video_viewer.add_maps(map1, map2)
+
+        else:
+            self.video_viewer.enable_stretch(True)
 
         self.video_viewer.update_frame()
 

@@ -638,7 +638,8 @@ class Stabilizer:
             new_img_dim=(self.width,self.height),
             output_dim=out_size,
             update_new_K = False, quat = self.stab_transform[frame_num],
-            focalCenter = None)
+            focalCenter = None,
+            original_stretched = True)
 
     def set_map_func_scale(self, map_scale = 0.9):
         self.map_func_scale = map_scale
