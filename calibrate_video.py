@@ -85,6 +85,9 @@ class FisheyeCalibrator:
         # For handling anamorphic or squeezed footage.
         self.input_horizontal_stretch = new_stretch
 
+    def get_stretched_size_from_dimension(self, new_img_dim):
+        return (round(new_img_dim[0] * self.calib_dimension[0] / self.orig_dimension[0]), round(new_img_dim[1] * self.calib_dimension[1] / self.orig_dimension[1]))
+
     def image_is_stretched(self):
         return self.input_horizontal_stretch != 1
 
@@ -324,7 +327,8 @@ class FisheyeCalibrator:
             (np.ndarray,np.ndarray): Undistortion maps
         """
 
-        if new_img_dim and self.image_is_stretched():
+        if new_img_dim and self.image_is_stretched() and original_stretched:
+            # new_img_dim is dimension of unstretched image
             new_img_dim = (round(new_img_dim[0] * self.calib_dimension[0] / self.orig_dimension[0]), round(new_img_dim[1] * self.calib_dimension[1] / self.orig_dimension[1]))
 
         img_dim = new_img_dim if new_img_dim else self.calib_dimension
@@ -361,6 +365,7 @@ class FisheyeCalibrator:
         else:
             map1, map2 = cv2.fisheye.initUndistortRectifyMap(scaled_K, self.D, R, new_K, out_dim, cv2.CV_16SC2)
             return map1, map2
+
 
 
     def undistort_points(self, distorted_points,new_img_dim = None):
@@ -993,10 +998,10 @@ class StandardCalibrator:
         distY = 0
         distZ = 0
 
-        translation = np.array([[1,0,0,distX],
-                                [0,1,0,distY],
-                                [0,0,1,distZ],
-                                [0,0,0,1]])
+        #translation = np.array([[1,0,0,distX],
+        #                        [0,1,0,distY],
+        #                        [0,0,1,distZ],
+        #                        [0,0,0,1]])
 
 
         H = np.linalg.multi_dot([K, rot_mat, Kinv])

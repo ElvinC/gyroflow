@@ -587,25 +587,29 @@ class EulerIntegrator:
 
 if __name__ == "__main__":
     from scipy.spatial.transform import Rotation
-
-    fake_gyro_data = np.random.random((1000,4))
-    fake_gyro_data[:,0] = np.arange(1000)/10
+    np.random.seed(1234)
+    fake_gyro_data = np.random.random((100,4))
+    fake_gyro_data[:,0] = np.arange(100)/10
     print(fake_gyro_data)
 
     integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None)
     integrator.integrate_all()
     stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
-    orig = stabtransforms[50]
- 
-    # Hero 6 as reference
-    fake_gyro_data[:,2] = -fake_gyro_data[:,2]
-    integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None)
-    integrator.integrate_all()
-    stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
-    weird = stabtransforms[50]
+    print("\n".join([str(q) for q in stabtransforms]))
     
-    print(weird)    
-    print(orig)
+    q = stabtransforms[-1].flatten()
 
+    rotmat = np.array([[1,0,0],
+                       [0,0,0],
+                       [0,0,0]])
+    rot = Rotation([q[1],q[2],q[3],q[0]]).as_matrix()
+    print(rot)
 
-    combined_rotation[0:3,0:3] = Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
+    # X *
+    #[[ 0.94925715  0.18321667  0.25562182]
+    #[ 0.23469608 -0.95372169 -0.18796992]
+    #[ 0.20935285  0.23842523 -0.94832737]]
+
+    #[[ 0.94913057  0.1822425  -0.25678557]
+    #[-0.23380831  0.95411913 -0.1870571 ]
+    #[ 0.21091427  0.23758021  0.94819345]]

@@ -2108,7 +2108,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         elif selected_log_type == "insta360":
             gyro_orientation_text = self.camera_type_control.currentText().lower().strip()
             if gyro_orientation_text == "smo4k" or gyro_orientation_text == "insta360 oner":
-                self.stab = stabilizer.InstaStabilizer(self.infile_path, self.preset_path, None, gyro_lpf_cutoff=gyro_lpf, InstaType=gyro_orientation_text)
+                self.stab = stabilizer.InstaStabilizer(self.infile_path, self.preset_path, gyro_path=self.gyro_log_path, gyro_lpf_cutoff=gyro_lpf, InstaType=gyro_orientation_text)
             else:
                 self.show_error("Invalid orientation")
 

@@ -58,18 +58,16 @@ def impute_gyro_data(input_data):
     return np.concatenate(arrays_to_concat)
 
 class Stabilizer:
-    def __init__(self):
+    def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = 200, video_rotation = -1):
+
+        ### Define all important variables
 
         self.initial_offset = 0
-
         self.rough_sync_search_interval = 10
         self.better_sync_search_interval = 0.2
         self.gyro_lpf_cutoff = -1
-
         self.do_video_rotation = False
-
         self.num_frames_skipped = 1
-
 
         # General video stuff
         self.cap = 0
@@ -77,7 +75,6 @@ class Stabilizer:
         self.height = 0
         self.fps = 0
         self.num_frames = 0
-
 
         # Camera undistortion stuff
         self.undistort = None #FisheyeCalibrator()
@@ -98,6 +95,34 @@ class Stabilizer:
         self.hyperlapse_num_blended_frames = 1 # must be equal or less than hyperlapse_multiplier
         self.hyperlapse_skipped_frames = 0
 
+        ## Combined from individual classes
+
+        # Save info
+        self.videopath = videopath
+        self.calibrationfile = calibrationfile
+        self.gyro_path = gyro_path
+
+        # General video stuff
+        self.undistort_fov_scale = fov_scale
+        self.cap = cv2.VideoCapture(videopath)
+        orig_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        self.video_rotate_code = video_rotation
+        self.do_video_rotation = self.video_rotate_code != -1
+        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+            orig_w, orig_h = orig_w, orig_h
+
+        # Camera undistortion stuff
+        self.undistort = FisheyeCalibrator()
+        self.undistort.load_calibration_json(calibrationfile, True)
+        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(orig_w,orig_h))
+
+        self.orig_dimension = (orig_w,orig_h) #Dimension of input file
+        self.process_dimension = self.undistort.get_stretched_size_from_dimension(self.orig_dimension) # Dimension after any stretch corrections
+        self.width, self.height = self.process_dimension
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
 
@@ -290,6 +315,8 @@ class Stabilizer:
         if self.do_video_rotation:
             prev = cv2.rotate(prev, self.video_rotation_code)
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
+        if self.undistort.image_is_stretched():
+            prev_gray = cv2.resize(prev_gray, self.process_dimension)
 
         for i in range(analyze_length):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
@@ -313,6 +340,8 @@ class Stabilizer:
 
 
                 curr_gray = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
+                if self.undistort.image_is_stretched():
+                    curr_gray = cv2.resize(curr_gray, self.process_dimension)
                 # Estimate transform using optical flow
                 curr_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_gray, curr_gray, prev_pts, None)
 
@@ -635,7 +664,7 @@ class Stabilizer:
             print("No more stabilization data. Using last frame")
         
         return self.undistort.get_maps(self.map_func_scale,
-            new_img_dim=(self.width,self.height),
+            new_img_dim=(self.orig_dimension[0], self.orig_dimension[1]),
             output_dim=out_size,
             update_new_K = False, quat = self.stab_transform[frame_num],
             focalCenter = None,
@@ -793,7 +822,7 @@ class Stabilizer:
                 fac = zoom
 
                 tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
-                                                        new_img_dim=(self.width,self.height),
+                                                        new_img_dim=(self.orig_dimension[0], self.orig_dimension[1]),
                                                         output_dim=out_size,
                                                         update_new_K = False, quat = self.stab_transform[frame_num],
                                                         focalCenter = focalCenter[frame_num])
@@ -1028,25 +1057,7 @@ class OnlyUndistort:
 class GPMFStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, gyro_path, hero = 8, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
 
-        super().__init__()
-
-        # General video stuff
-        self.undistort_fov_scale = fov_scale
-        self.cap = cv2.VideoCapture(videopath)
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        self.video_rotate_code = video_rotation
-        self.do_video_rotation = self.video_rotate_code != -1
-        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
-            self.width, self.height = self.height, self.width
-
-        # Camera undistortion stuff
-        self.undistort = FisheyeCalibrator()
-        self.undistort.load_calibration_json(calibrationfile, True)
-        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
+        super().__init__(videopath, calibrationfile, gyro_path, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
 
         # Get gyro data
         self.gpmf = Extractor(gyro_path)
@@ -1117,24 +1128,9 @@ class GPMFStabilizer(Stabilizer):
 
 
 class InstaStabilizer(Stabilizer):
-    def __init__(self, videopath, calibrationfile, gyrocsv, fov_scale = 1.6, gyro_lpf_cutoff = -1, InstaType=""):
+    def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1, InstaType=""):
 
-        super().__init__()
-
-        # General video stuff
-        self.undistort_fov_scale = fov_scale
-        self.cap = cv2.VideoCapture(videopath)
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        self.do_video_rotation = False
-
-        # Camera undistortion stuff
-        self.undistort = FisheyeCalibrator()
-        self.undistort.load_calibration_json(calibrationfile, True)
-        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
+        super().__init__(videopath, calibrationfile, gyro_path, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
 
         # Get gyro data
         if InstaType=="smo4k":
@@ -1211,26 +1207,8 @@ class InstaStabilizer(Stabilizer):
 
 class BBLStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1, use_raw_gyro_data=False):
-
-        super().__init__()
-
-        # General video stuff
-        self.undistort_fov_scale = fov_scale
-        self.cap = cv2.VideoCapture(videopath)
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        self.video_rotate_code = video_rotation
-        self.do_video_rotation = self.video_rotate_code != -1
-        if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
-            self.width, self.height = self.height, self.width
-
-        # Camera undistortion stuff
-        self.undistort = FisheyeCalibrator()
-        self.undistort.load_calibration_json(calibrationfile, True)
-        self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(self.width,self.height))
+        
+        super().__init__(videopath, calibrationfile, bblpath, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
 
         # Get gyro data
         print(bblpath)
@@ -1302,7 +1280,7 @@ class BBLStabilizer(Stabilizer):
                     gy = splitdata[2] * gyroscale
                     gz = splitdata[3] * gyroscale
 
-                    # RC test
+                    # RC 5 orange
                     #gx = -splitdata[2] * gyroscale
                     #gy = -splitdata[1] * gyroscale
                     #gz = -splitdata[3] * gyroscale
@@ -1341,10 +1319,12 @@ class BBLStabilizer(Stabilizer):
                     gy = -splitdata[1] * gyroscale
                     gz = -splitdata[2] * gyroscale
 
-                    # RC test
-                    #gx = splitdata[3] * gyroscale
-                    #gy = splitdata[1] * gyroscale
-                    #gz = splitdata[2] * gyroscale
+
+
+                    # RC5
+                    gx = splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = splitdata[2] * gyroscale
 
                     # Z: roll
                     # X: yaw
