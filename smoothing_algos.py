@@ -2,6 +2,7 @@ import numpy as np
 import quaternion as quat
 import matplotlib.pyplot as plt
 import sys, inspect
+from PySide2 import QtCore, QtWidgets, QtGui
 
 class SmoothingAlgo:
     def __init__(self, name="nothing"):
@@ -13,7 +14,108 @@ class SmoothingAlgo:
 
         self.num_data_points = 0
         self.gyro_sample_rate = 1
+
+        self.ui_widget = None
+        self.ui_widget_layout = None
+        self.ui_input_widgets = {}
         
+    def get_ui_widget(self):
+
+        self.ui_widget = QtWidgets.QWidget()
+        self.ui_widget_layout = QtWidgets.QVBoxLayout()
+        self.ui_widget.setLayout(self.ui_widget_layout)
+        self.ui_widget_layout.setAlignment(QtCore.Qt.AlignTop)
+
+        options = self.get_user_option_all()
+        for option in options:
+            input_type = option["input_type"]
+            optionname = option["name"]
+            value = option["value"]
+            if input_type == "slider":
+                ui_input = QtWidgets.QSlider(QtCore.Qt.Horizontal, self.ui_widget)
+                steps = 100
+                conv_func = self.get_slider_conv_func(option["min"], option["max"], steps, option["slider_expo"])
+
+                initial = 20
+                ui_input.setMinimum(0)
+                ui_input.setMaximum(steps)
+                ui_input.setValue(initial)
+
+                ui_input.setSingleStep(1)
+                ui_input.setTickInterval(1)
+
+                initial_string = option["ui_label"].format(conv_func(initial))
+                ui_label = QtWidgets.QLabel(initial_string)
+                
+                ui_input.valueChanged.connect(self.widget_input_update(optionname))
+
+
+            elif input_type == "int":
+                ui_input = QtWidgets.QSpinBox(self.ui_widget)
+
+                conv_func = lambda val: val
+
+                ui_input.setMinimum(option["min"])
+                ui_input.setMaximum(option["max"])
+                ui_input.setValue(value)
+
+                initial_string = option["ui_label"].format(conv_func(initial))
+                ui_label = QtWidgets.QLabel(initial_string)
+                
+                ui_input.valueChanged.connect(self.widget_input_update(optionname))
+
+
+            elif input_type == "float":
+                ui_input = QtWidgets.QDoubleSpinBox(self.ui_widget)
+
+                conv_func = lambda val: val
+
+                ui_input.setMinimum(option["min"])
+                ui_input.setMaximum(option["max"])
+                ui_input.setValue(value)
+
+                initial_string = option["ui_label"].format(conv_func(initial))
+                ui_label = QtWidgets.QLabel(initial_string)
+                
+                ui_input.valueChanged.connect(self.widget_input_update(optionname))
+
+            ui_input.setToolTip(option["explanation"])
+
+            self.ui_input_widgets[optionname] = [ui_input, ui_label, conv_func]
+
+            self.ui_widget_layout.addWidget(ui_label)
+            self.ui_widget_layout.addWidget(ui_input)
+
+        return self.ui_widget
+
+    def get_slider_conv_func(self, minval, maxval, steps, expo):
+        return lambda val: (val/steps)**expo * (maxval - minval)+minval
+
+
+
+
+    def widget_input_update(self, optionname = ""):
+        print("Update option")
+        _self = self
+        def innerfunc():
+            val = _self.ui_input_widgets[optionname][0].value()
+            label = _self.ui_input_widgets[optionname][1]
+            conv_func = _self.ui_input_widgets[optionname][2]
+
+            new_text = _self.get_user_option(optionname)["ui_label"].format(conv_func(val))
+            label.setText(new_text)
+
+        return innerfunc
+
+    def preview_widget(self):
+        QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
+        app = QtWidgets.QApplication([])
+        widget = self.get_ui_widget()
+        widget.resize(500, 500)
+
+        widget.show()
+        
+        sys.exit(app.exec_())
 
     def set_user_option(self, optionname, value):
         if optionname in self.user_options:
@@ -27,16 +129,18 @@ class SmoothingAlgo:
         # to be overloaded
         pass
 
-    def add_user_option(self, optionname, value, minval, maxval, explanation="", input_type="slider", sort_index = None):
+    def add_user_option(self, optionname, value, minval, maxval, ui_label = "Option {0}", explanation="", input_type="slider", input_expo = 1, sort_index = None):
         if sort_index == None:
             sort_index = len(self.user_options)
         self.user_options[optionname] = {
-            "name": optionname,
-            "value": value,
-            "min": minval,
+            "name": optionname, # also main ID
+            "ui_label": ui_label, # Label template
+            "value": value, # Default value
+            "min": minval, # set to -1 to disable limit
             "max": maxval,
-            "explanation": explanation,
-            "input_type": input_type,
+            "explanation": explanation, # Tooltip
+            "input_type": input_type, # "slider" or "float" or "int"
+            "slider_expo": input_expo,
             "sort_index": sort_index
         }
 
@@ -76,7 +180,17 @@ class PlainSlerp(SmoothingAlgo):
     def __init__(self):
         super().__init__("Plain quaternion slerp")
 
-        self.add_user_option("smoothness", 0.2, 0, 30, explanation="Smoothness time constant in seconds", input_type="slider")
+        self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+
+        self.add_user_option("other", value=3, minval=0, maxval=30, ui_label = "Random option:",
+                             explanation="Tooltip goes here", input_expo = 3, input_type="int")
+
+        self.add_user_option("whatever", value=0.43, minval=-3, maxval=30, ui_label = "floating point:",
+                             explanation="Tooltip goes here", input_expo = 3, input_type="float")
+        
+        self.add_user_option("expo slider", 0.2, 0, 30, ui_label = "Rotation limit (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 5, input_type="slider")
 
     def smooth_orientations_internal(self, times, orientation_list):
         # To be overloaded
@@ -146,6 +260,8 @@ if __name__ == "__main__":
     testalgo = PlainSlerp()
     testquats = np.random.random((100, 4))
     testimes = np.arange(0,10,0.1)
+    testalgo.preview_widget()
+    exit()
     times, quats = testalgo.get_smooth_orientations(testimes, testquats)
     print(testquats)
     print(quats)
