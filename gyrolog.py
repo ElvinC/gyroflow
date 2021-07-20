@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
+import re
 
 # Generate 24 different (right handed) orientations using cross products
 def generate_rotmats():
@@ -118,8 +119,6 @@ ORIENTATIONS = [[[1, 0, 0], # 0 = identity
 
 ORIENTATIONS = [np.array(mat) for mat in ORIENTATIONS]
 
-print(ORIENTATIONS)
-
 def show_orientation(rotmat):
     orig_lw = 4
     sensor_lw = 2
@@ -172,9 +171,19 @@ class GyrologReader:
         self.orientation_presets = []
         self.current_orientation_preset = ""
 
+        self.filename_pattern = ""
+
+    def filename_matches(self, filename):
+        pattern = re.compile(self.filename_pattern)
+        if pattern.match(filename):
+            return True
+        return False
+
     def add_orientation_preset(self, orientation_name, correction_mat):
         self.orientation_presets.append([len(self.orientation_presets),orientation_name, correction_mat])
 
+    def guess_log_from_videofile(self, videofile):
+        return videofile
 
     def check_log_type(self, filename):
         # method to check if a data or video file is a certain log type
@@ -219,6 +228,94 @@ class GyrologReader:
         plt.ylabel("omega z [rad/s]")
 
         plt.show()
+
+class BlackboxCSVData(GyrologReader):
+    def __init__(self):
+        super().__init__()
+        self.filename_pattern = "(?i).*\.(?:bbl|bfl)\.csv"
+
+    def check_log_type(self, filename):
+        fname = os.path.split(filename)[-1]
+        if self.filename_matches(fname):
+            # open and check first line
+            with open(filename, "r") as f:
+                firstline = f.readline().strip()
+                if firstline == '"Product","Blackbox flight data recorder by Nicholas Sherlock"':
+                    return True
+
+        return False
+
+
+class RuncamData(GyrologReader):
+    def __init__(self):
+        super().__init__()
+        self.filename_pattern = "gyroDate\d{4}.csv"
+
+
+    def check_log_type(self, filename):
+        fname = os.path.split(filename)[-1]
+        if self.filename_matches(fname):
+            # open and check first line
+            with open(filename, "r") as f:
+                firstline = f.readline().strip()
+                if firstline == "time,x,y,z,ax,ay,az":
+                    return True
+
+        return False
+
+    def guess_log_from_videofile(self, videofile):
+        path, fname = os.path.split(videofile)
+
+        # Runcam 5 Orange
+        rc5pattern = re.compile("RC_(\d{4})_\d{12}\..*") # example: RC_0030_210719221659.MP4
+        gocampattern = re.compile("IF-RC01_(\d{4})\..*") # example: IF-RC01_0011.MP4
+        
+        if rc5pattern.match(fname): 
+            counter = int(rc5pattern.match(fname).group(1))
+        
+        # Gocam
+        elif gocampattern.match(fname):
+            counter = int(gocampattern.match(fname).group(1))
+
+        logname = f"gyroDate{counter:04d}.csv"
+        logpath = videofile.rstrip(fname) + logname
+
+        return logpath
+
+    def extract_log(self, filename):
+
+        if filename == "rollpitchyaw":
+
+            N = 1000
+
+            self.gyro = np.zeros((N,4))
+            self.gyro[:,0] = np.arange(N)/100 # 100 Hz data
+
+            # t=2 to 3: positive roll
+            self.gyro[200:300,3] = 1 # rad/s
+
+            # t=4 to 5: positive pitch
+            self.gyro[400:500,1] = 1
+
+            # t=6 to 7
+            self.gyro[600:700,2] = 1
+
+            self.acc = np.zeros((N,4))
+            self.acc[:,0] = np.arange(N)/100 # 100 Hz data
+
+        else:
+            np.random.seed(sum([ord(c) for c in filename]))
+
+            N = 1000
+
+            self.gyro = np.random.random((N,4))
+            self.gyro[:,0] = np.arange(N)/100 # 100 Hz data
+
+            self.acc = np.random.random((N,4))
+            self.acc[:,0] = np.arange(N)/100 # 100 Hz data
+
+
+        return self.gyro, self.acc
 
 class FakeData(GyrologReader):
     def __init__(self):
@@ -268,10 +365,9 @@ class FakeData(GyrologReader):
 
 
 if __name__ == "__main__":
-    show_orientation(ORIENTATIONS[15])
+    reader = BlackboxCSVData()
+    check = reader.check_log_type("test_clips/btfl_005.bbl.csv")
+
+    print(reader.guess_log_from_videofile("kkkkdkd/test/RC_0019_210715191610.MP4"))
     exit()
-    reader = FakeData()
-    g, a = reader.extract_log("rollpitchyaw")
     reader.plot_gyro()
-    print(g)
-    print(a)
