@@ -1281,7 +1281,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.input_video_rotate_select)
         
 
-        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (ignore me)"), ("csvruncam", "RC CSV log (ignore me)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
+        data = [("rawblackbox", "Raw Betaflight Blackbox"), ("csvblackbox", "Betaflight Blackbox CSV"), ("csvgyroflow", "Gyroflow CSV log (in dev)"), ("csvruncam", "RC CSV log (in dev)"), ("csvgocam", "RC GOCAM CSV log (in dev)"), ("gpmf", "GoPro metadata"), ("insta360", "Insta360 metadata")]
 
         self.gyro_log_format_text = QtWidgets.QLabel("Gyro log type:")
         self.gyro_log_format_select = QtWidgets.QComboBox()
@@ -1937,7 +1937,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.gyro_log_format_select.setVisible(True)
 
         selected_log_type = self.gyro_log_format_select.currentData()
-        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow", "csvruncam"] # display more settings if external source is used
+        external = selected_log_type in ["rawblackbox", "csvblackbox", "csvgyroflow", "csvruncam", "csvgocam"] # display more settings if external source is used
 
         videofile_selected = bool(self.infile_path)
         gyrofile_selected = bool(self.gyro_log_path)
@@ -1966,9 +1966,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             idx = 0
             if suffix == ".bbl" or suffix == ".bfl":
                 idx = self.gyro_log_format_select.findData("rawblackbox")
-            elif suffix == ".csv" and (selected_log_type not in ["csvblackbox", "csvgyroflow", "csvruncam"]):
+            elif suffix == ".csv" and (selected_log_type not in ["csvblackbox", "csvgyroflow", "csvruncam", "csvgocam"]):
                 idx = self.gyro_log_format_select.findData("csvblackbox")
-            elif selected_log_type in ["csvblackbox", "csvgyroflow", "csvruncam"]:
+            elif selected_log_type in ["csvblackbox", "csvgyroflow", "csvruncam", "csvgocam"]:
                 idx = -1
             if idx != -1:
                 self.gyro_log_format_select.blockSignals(True)
@@ -2137,6 +2137,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 logtype = "gyroflow"
             elif log_type_id == "csvruncam":
                 logtype = "runcam"
+            elif log_type_id == "csvgocam":
+                logtype = "gocam"
             else:
                 print("Unknown log type selected")
                 return

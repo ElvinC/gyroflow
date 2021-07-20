@@ -837,7 +837,7 @@ class Stabilizer:
 
                 #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
                 if (i-1) % self.hyperlapse_multiplier < self.hyperlapse_num_blended_frames:
-                    print(f"adding frame {i}")
+                    #print(f"adding frame {i}")
 
                     # Process using integers for speed
                     frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
@@ -904,7 +904,7 @@ class Stabilizer:
                         if display_preview:
                             if frame_out.shape[1] > 1280:
                                 frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
-                                cv2.imshow("Stabilized? Double press Q to stop render?", frame_preview)
+                                cv2.imshow("Stabilized? Double press Q to stop render", frame_preview)
                             else:
                                 cv2.imshow("Stabilized? Double press Q to stop render", frame_out)
                             key = cv2.waitKey(1)
@@ -1216,6 +1216,8 @@ class BBLStabilizer(Stabilizer):
         # quick fix
         cam_angle_degrees = -cam_angle_degrees
 
+        # TODO: integrate with gyrolog.py for modularity
+
         if use_csv:
             with open(bblpath) as bblcsv:
                 gyro_index = None
@@ -1259,14 +1261,10 @@ class BBLStabilizer(Stabilizer):
 
                 self.gyro_data = np.array(data_list)
 
-
         elif logtype == "gyroflow":
             with open(bblpath) as csvfile:
                 next(csvfile)
-
                 lines = csvfile.readlines()
-
-
 
                 data_list = []
                 gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
@@ -1279,12 +1277,6 @@ class BBLStabilizer(Stabilizer):
                     gx = splitdata[1] * gyroscale
                     gy = splitdata[2] * gyroscale
                     gz = splitdata[3] * gyroscale
-
-                    # RC 5 orange
-                    #gx = -splitdata[2] * gyroscale
-                    #gy = -splitdata[1] * gyroscale
-                    #gz = -splitdata[3] * gyroscale
-
                     # Z: roll
                     # X: yaw
                     # y: pitch
@@ -1310,16 +1302,6 @@ class BBLStabilizer(Stabilizer):
                 for line in lines:
                     splitdata = [float(x) for x in line.split(",")]
                     t = splitdata[0]/1000
-                    #gx = splitdata[1] * gyroscale
-                    #gy = splitdata[2] * gyroscale
-                    #gz = splitdata[3] * gyroscale
-
-                    # RC/IF test
-                    gx = -splitdata[3] * gyroscale
-                    gy = -splitdata[1] * gyroscale
-                    gz = -splitdata[2] * gyroscale
-
-
 
                     # RC5
                     gx = splitdata[3] * gyroscale
@@ -1335,6 +1317,28 @@ class BBLStabilizer(Stabilizer):
                 #gyro_arr = np.array(data_list)
                 #x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
                 #self.gyro_data = np.column_stack((t,x))
+                self.gyro_data = np.array(data_list)
+                print(self.gyro_data)
+
+        elif logtype == "gocam":
+            with open(bblpath) as csvfile:
+                next(csvfile)
+                lines = csvfile.readlines()
+                data_list = []
+                #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
+                gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
+                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
+
+                for line in lines:
+                    splitdata = [float(x) for x in line.split(",")]
+                    t = splitdata[0]/1000
+                    # RC/IF test
+                    gx = -splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = -splitdata[2] * gyroscale
+
+                    data_list.append([t, gx, gy, gz])
+
                 self.gyro_data = np.array(data_list)
                 print(self.gyro_data)
         else:
