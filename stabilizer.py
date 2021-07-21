@@ -20,8 +20,9 @@ from _version import __version__
 from scipy import signal, interpolate
 
 import time
-
 import insta360_utility as insta360_util
+import smoothing_algos
+
 
 def impute_gyro_data(input_data):
     frame_durations = input_data[1:,0] - input_data[:-1,0]
@@ -123,6 +124,10 @@ class Stabilizer:
         self.orig_dimension = (orig_w,orig_h) #Dimension of input file
         self.process_dimension = self.undistort.get_stretched_size_from_dimension(self.orig_dimension) # Dimension after any stretch corrections
         self.width, self.height = self.process_dimension
+
+        self.smoothing_algo = None
+
+
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
 
@@ -162,8 +167,15 @@ class Stabilizer:
         self.hyperlapse_num_blended_frames = min(hyperlapse_multiplier, hyperlapse_num_blended_frames) # Ensure no overlapping frames
         self.hyperlapse_skipped_frames = self.hyperlapse_multiplier - self.hyperlapse_num_blended_frames
 
+    def set_smoothing_algo(self, algo = None):
+        if not algo:
+            algo = smoothing_algos.PlainSlerp() # Default
+        else:
+            self.smoothing_algo = algo
+        
 
-    def auto_sync_stab(self, smooth=0.8, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
+
+    def auto_sync_stab(self, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         if debug_plots:
             FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
             
@@ -236,12 +248,17 @@ class Stabilizer:
 
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
-        self.last_smooth = smooth
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+        #self.last_smooth = smooth
+
+        if not self.smoothing_algo:
+            self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+        new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
-    def manual_sync_correction(self, d1, d2, smooth=0.8):
+    def manual_sync_correction(self, d1, d2):
         v1 = self.v1
         v2 = self.v2
 
@@ -292,10 +309,13 @@ class Stabilizer:
 
         new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
         new_integrator.integrate_all()
-        self.last_smooth = smooth
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(smooth=smooth,start=0,interval = 1/self.fps)
+        #self.last_smooth = smooth
 
-        #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+        if not self.smoothing_algo:
+            self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+        new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
 
 
@@ -1121,7 +1141,7 @@ class GPMFStabilizer(Stabilizer):
 
         print("Interval {}, slope {}".format(interval, correction_slope))
 
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
 
@@ -1200,7 +1220,7 @@ class InstaStabilizer(Stabilizer):
 
         print("Interval {}, slope {}".format(interval, correction_slope))
 
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
 
@@ -1393,7 +1413,7 @@ class BBLStabilizer(Stabilizer):
 
         print("Interval {}, slope {}".format(interval, correction_slope))
 
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=0.985,start=2.56+0.07,interval = 1/59.94)
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=2.56+0.07,interval = 1/59.94)
 
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
@@ -1441,7 +1461,7 @@ class OpticalStabilizer:
         self.integrator = FrameRotationIntegrator(stacked_data,initial_orientation=initial_orientation)
         self.integrator.integrate_all()
 
-        self.times, self.stab_transform = self.integrator.get_stabilize_transform(smooth=smooth)
+        self.times, self.stab_transform = self.integrator.get_stabilize_transform()
 
 
         self.stab_transform_array = np.zeros((self.num_frames, 4))

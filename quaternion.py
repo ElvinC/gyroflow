@@ -61,5 +61,5 @@ def slerp(v0, v1, t_array):
 
 def angle_between(q1, q2):
     z = quaternion_multiply(inverse(q1), q2)
-    angle = 2 * np.arccos(z[0])
+    angle = 2 * np.arccos(min(z[0], 1))
     return angle

@@ -7,6 +7,7 @@ This module uses gyroscope data to compute quaternion orientations over time
 
 import numpy as np
 import quaternion as quat
+import smoothing_algos
 
 class GyroIntegrator:
     def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None):
@@ -60,6 +61,8 @@ class GyroIntegrator:
         self.imuRefY = quat.vector(0,0,1)
 
         self.already_integrated = False
+
+        self.smoothing_algo = None
 
 
     def integrate_all(self):
@@ -123,11 +126,22 @@ class GyroIntegrator:
 
         return None
 
+    def set_smoothing_algo(self, algo):
+        if not algo:
+            algo = smoothing_algos.PlainSlerp() # Default
+        else:
+            self.smoothing_algo = algo
 
-
-    def get_smoothed_orientation(self, smooth = 0.94):
+    def get_smoothed_orientation(self):
         # https://en.wikipedia.org/wiki/Exponential_smoothing
         # the smooth value corresponds to the time constant
+
+        if not self.smoothing_algo:
+            self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+        return self.smoothing_algo.get_smooth_orientations(self.time_list, self.orientation_list)
+
+        # Old code:
 
         alpha = 1
         if smooth > 0:
@@ -163,8 +177,8 @@ class GyroIntegrator:
         return (self.time_list, smoothed_orientation2)
 
 
-    def get_stabilize_transform(self,smooth=0.94):
-        time_list, smoothed_orientation = self.get_smoothed_orientation(smooth)
+    def get_stabilize_transform(self):
+        time_list, smoothed_orientation = self.get_smoothed_orientation()
 
 
         # rotations that'll stabilize the camera
@@ -177,8 +191,8 @@ class GyroIntegrator:
         return (self.time_list, stab_rotations) 
 
         
-    def get_interpolated_stab_transform(self,smooth, start=0, interval=1/29.97):
-        time_list, smoothed_orientation = self.get_stabilize_transform(smooth)
+    def get_interpolated_stab_transform(self, start=0, interval=1/29.97):
+        time_list, smoothed_orientation = self.get_stabilize_transform()
 
         time = start
 

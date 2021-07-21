@@ -1467,30 +1467,43 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # Select method for doing low-pass filtering
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
         self.stabilization_algo_select = QtWidgets.QComboBox()
-        self.stabilization_algo_select.addItem("SLERP-based IIR (standard)")
-        self.stabilization_algo_select.addItem("Placeholders:")
 
-        self.smoothing_algo_names = smoothing_algos.get_stab_algo_names()
-        for name in self.smoothing_algo_names:
+        self.stab_algo_names = smoothing_algos.get_stab_algo_names()
+        self.stab_algo_instances = smoothing_algos.get_all_stab_algo_instances()
+        self.stab_algo_instance_current = self.stab_algo_instances[0]
+        for name in self.stab_algo_names:
             self.stabilization_algo_select.addItem(name)
+            
+        self.stabilization_algo_select.currentIndexChanged.connect(self.stab_algo_change)
 
         self.sync_controls_layout.addWidget(self.stabilization_algo_select)
 
+        self.stab_algo_settings_widget = QtWidgets.QWidget()
+        self.stab_algo_settings_widget_layout = QtWidgets.QVBoxLayout()
+        self.stab_algo_settings_widget.setLayout(self.stab_algo_settings_widget_layout)
+        self.stab_algo_settings_widget_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.sync_controls_layout.addWidget(self.stab_algo_settings_widget)
+
+        for inst in self.stab_algo_instances:
+            self.stab_algo_settings_widget_layout.addWidget(inst.get_ui_widget())
+            inst.get_ui_widget().setVisible(False)
+
+        self.stab_algo_change()
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
-        self.smooth_max_period = 30 # seconds
-        self.smooth_text_template = "Smoothness (time constant: {:.3f} s, {}%):"
-        self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**3 * self.smooth_max_period  ,20))
-        self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.smooth_slider.setMinimum(0)
-        self.smooth_slider.setValue(20)
-        self.smooth_slider.setMaximum(100)
-        self.smooth_slider.setSingleStep(1)
-        self.smooth_slider.setTickInterval(1)
-        self.smooth_slider.valueChanged.connect(self.smooth_changed)
+        #self.smooth_max_period = 30 # seconds
+        #self.smooth_text_template = "Smoothness (time constant: {:.3f} s, {}%):"
+        #self.smooth_text = QtWidgets.QLabel(self.smooth_text_template.format((20/100)**3 * self.smooth_max_period  ,20))
+        #self.smooth_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        #self.smooth_slider.setMinimum(0)
+        #self.smooth_slider.setValue(20)
+        #self.smooth_slider.setMaximum(100)
+        #self.smooth_slider.setSingleStep(1)
+        #self.smooth_slider.setTickInterval(1)
+        #self.smooth_slider.valueChanged.connect(self.smooth_changed)
 
-        self.sync_controls_layout.addWidget(self.smooth_text)
-        self.sync_controls_layout.addWidget(self.smooth_slider)
+        #self.sync_controls_layout.addWidget(self.smooth_text)
+        #self.sync_controls_layout.addWidget(self.smooth_slider)
 
         #explaintext = QtWidgets.QLabel("<b>Note:</b> 0% corresponds to no smoothing and 100% corresponds to a locked camera. " \
         #"intermediate values are non-linear and depend on gyro sample rate in current implementation.")
@@ -1804,6 +1817,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.analyzed = False
         self.update_gyro_input_settings()
 
+    def stab_algo_change(self):
+        idx = self.stabilization_algo_select.currentIndex()
+        self.stab_algo_instance_current.get_ui_widget().setVisible(False)
+        self.stab_algo_instance_current = self.stab_algo_instances[idx]
+        self.stab_algo_instance_current.get_ui_widget().setVisible(True)
+        
 
     def open_video_func(self):
         """Open file using Qt filedialog
@@ -2018,14 +2037,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def smooth_changed(self):
         """Smoothness has changed
         """
-        raw_val = self.smooth_slider.value()
-        smooth_val = (raw_val/100)**3 * self.smooth_max_period
-        self.smooth_text.setText(self.smooth_text_template.format(smooth_val, raw_val))
+        return
+        #raw_val = self.smooth_slider.value()
+        #smooth_val = (raw_val/100)**3 * self.smooth_max_period
+        #self.smooth_text.setText(self.smooth_text_template.format(smooth_val, raw_val))
 
     def get_smoothness_timeconstant(self):
         """ Nonlinear smoothness slider
         """
-        return (self.smooth_slider.value()/100)**3 * self.smooth_max_period
+        return
+        #return (self.smooth_slider.value()/100)**3 * self.smooth_max_period
 
     def fov_scale_changed(self):
         """Undistort FOV scale changed
@@ -2068,7 +2089,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.show_error("No gyro log given. If you want to use the internal gyro data, there's a convenient button for using the input video as the gyro log.")
 
         fov_val = self.fov_slider.value() / 10
-        smoothness_time_constant = self.get_smoothness_timeconstant()
+        #smoothness_time_constant = self.get_smoothness_timeconstant()
         OF_slice_length = self.OF_frames_control.value()
 
 
@@ -2151,12 +2172,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.set_rough_search(self.sync_search_size.value())
         self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
 
-        print("Starting sync. Smoothness_time_constant: {}, sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
-                smoothness_time_constant, self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
+        print("Starting sync. sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
+                self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
 
 
-
-        self.stab.auto_sync_stab(smoothness_time_constant, sync1_frame, sync2_frame,
+        self.stab.set_smoothing_algo(self.stab_algo_instance_current)
+        self.stab.auto_sync_stab(sync1_frame, sync2_frame,
                                  OF_slice_length, debug_plots=self.sync_debug_select.isChecked())
 
         self.recompute_stab_button.setText("Recompute sync")
@@ -2178,8 +2199,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         d1 = self.d1_control.value()
         d2 = self.d2_control.value()
         #smoothness = self.smooth_slider.value() / 100
-        smoothness_time_constant = self.get_smoothness_timeconstant()
-        self.stab.manual_sync_correction(d1, d2, smoothness_time_constant)
+        self.stab.set_smoothing_algo(self.stab_algo_instance_current)
+        self.stab.manual_sync_correction(d1, d2)
 
 
     def export_keyframes(self):
@@ -2418,6 +2439,7 @@ class StabUtility(StabUtilityBarebone):
         # checkbox to preview lens distortion correction
         self.preview_stab_toggle_btn = QtWidgets.QCheckBox("Toggle stabilization: ")
         self.preview_stab_toggle_btn.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.preview_stab_toggle_btn.setChecked(True)
         self.preview_stab_toggle_btn.stateChanged.connect(self.update_preview)
 
         self.calib_controls_layout.addWidget(self.preview_stab_toggle_btn)
@@ -2787,7 +2809,8 @@ class StabUtility(StabUtilityBarebone):
     def closeEvent(self, event):
         print("Closing now")
         #self.video_viewer.destroy_thread()
-        self.stab.release()
+        if self.stab:
+            self.stab.release()
         event.accept()
 
 

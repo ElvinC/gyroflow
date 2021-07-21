@@ -20,6 +20,8 @@ class SmoothingAlgo:
         self.ui_input_widgets = {}
         
     def get_ui_widget(self):
+        if self.ui_widget:
+            return self.ui_widget
 
         self.ui_widget = QtWidgets.QWidget()
         self.ui_widget_layout = QtWidgets.QVBoxLayout()
@@ -95,15 +97,20 @@ class SmoothingAlgo:
 
 
     def widget_input_update(self, optionname = ""):
-        print("Update option")
+        #print("Update option")
         _self = self
         def innerfunc():
             val = _self.ui_input_widgets[optionname][0].value()
             label = _self.ui_input_widgets[optionname][1]
             conv_func = _self.ui_input_widgets[optionname][2]
 
-            new_text = _self.get_user_option(optionname)["ui_label"].format(conv_func(val))
+            conv_val = conv_func(val)
+
+            new_text = _self.get_user_option(optionname)["ui_label"].format(conv_val)
             label.setText(new_text)
+
+            _self.set_user_option(optionname, conv_val)
+            #print(self.user_options[optionname])
 
         return innerfunc
 
@@ -111,6 +118,9 @@ class SmoothingAlgo:
         QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
         app = QtWidgets.QApplication([])
         widget = self.get_ui_widget()
+
+
+
         widget.resize(500, 500)
 
         widget.show()
@@ -119,7 +129,7 @@ class SmoothingAlgo:
 
     def set_user_option(self, optionname, value):
         if optionname in self.user_options:
-            self.user_options[optionname][0] = value
+            self.user_options[optionname]["value"] = value
         else:
             print(f"{optionname} is not a valid option")
 
@@ -174,6 +184,8 @@ class SmoothingAlgo:
         return times, orientation_quats
 
 
+
+
 class PlainSlerp(SmoothingAlgo):
     """Default symmetrical quaternion slerp without limits
     """
@@ -182,15 +194,7 @@ class PlainSlerp(SmoothingAlgo):
 
         self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
-
-        self.add_user_option("other", value=3, minval=0, maxval=30, ui_label = "Random option:",
-                             explanation="Tooltip goes here", input_expo = 3, input_type="int")
-
-        self.add_user_option("whatever", value=0.43, minval=-3, maxval=30, ui_label = "floating point:",
-                             explanation="Tooltip goes here", input_expo = 3, input_type="float")
         
-        self.add_user_option("expo slider", 0.2, 0, 30, ui_label = "Rotation limit (time constant: {0:.3f} s):",
-                             explanation="Smoothness time constant in seconds", input_expo = 5, input_type="slider")
 
     def smooth_orientations_internal(self, times, orientation_list):
         # To be overloaded
@@ -233,6 +237,84 @@ class PlainSlerp(SmoothingAlgo):
 
         return times, smoothed_orientation2
 
+class LimitedSlerp(SmoothingAlgo):
+    """Default symmetrical quaternion slerp with limits
+    """
+    def __init__(self):
+        super().__init__("Quaternion slerp with hard angle limit")
+
+        self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+
+        self.add_user_option("rotlimit", 15, 0, 180, ui_label = "Rotation limit (degrees):",
+                             explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
+
+        self.add_user_option("limitslope", 10, 0, 180, ui_label = "Limit slope. time constant per radian:",
+                             explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
+
+    def smooth_orientations_internal(self, times, orientation_list):
+        # To be overloaded
+
+
+        # https://en.wikipedia.org/wiki/Exponential_smoothing
+        # the smooth value corresponds to the time constant
+
+        alpha = 1
+        smooth = self.get_user_option_value("smoothness")
+        print(f"Smoothing orientation with smoothness={smooth}")
+        smooth2 = min(smooth * 0.1, 0.1)  # When outside zone 
+        alpha2 = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth2)
+        
+        if smooth > 0:
+            alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth)
+        
+
+        smoothed_orientation = np.zeros(orientation_list.shape)
+
+        value = orientation_list[0,:]
+
+        rotlimit = self.get_user_option_value("rotlimit") * np.pi / 180
+
+        begin_curve = rotlimit * 0.6
+
+        # Forward pass
+        for i in range(self.num_data_points):
+            temp_value = quat.slerp(value, orientation_list[i,:],[alpha])[0]
+            anglebetween = abs(quat.angle_between(temp_value, orientation_list[i,:]))
+            if begin_curve < anglebetween <= rotlimit:
+                smoothinterp = smooth + (anglebetween - begin_curve) * (smooth2 - smooth) / (rotlimit - begin_curve)
+                
+                alphainterp = 1 - np.exp(-(1 / self.gyro_sample_rate) /smoothinterp)
+                temp_value = quat.slerp(value, orientation_list[i,:],[alphainterp])[0]
+            
+            elif anglebetween > rotlimit: # new smoothed orientation over angle limit
+                temp_value = quat.slerp(value, orientation_list[i,:],[alpha2])[0]
+
+            value = temp_value
+            smoothed_orientation[i] = value
+
+        # reverse pass
+        smoothed_orientation2 = np.zeros(orientation_list.shape)
+
+        value2 = smoothed_orientation[-1,:]
+
+        for i in range(self.num_data_points-1, -1, -1):
+            temp_value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha])[0]
+            anglebetween = abs(quat.angle_between(temp_value2, orientation_list[i,:]))
+            #print(anglebetween, rotlimit)
+            if begin_curve < anglebetween <= rotlimit:
+                smoothinterp = smooth + (anglebetween - begin_curve) * (smooth2 - smooth) / (rotlimit - begin_curve)
+                alphainterp = 1 - np.exp(-(1 / self.gyro_sample_rate) /smoothinterp)
+                temp_value2 = quat.slerp(value2, smoothed_orientation[i,:],[alphainterp])[0]
+            
+            elif anglebetween > rotlimit: # new smoothed orientation over angle limit
+                temp_value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha2])[0]
+            
+            value2 = temp_value2
+            smoothed_orientation2[i] = value2
+
+        return times, smoothed_orientation2
+
 
 smooth_algo_classes = []
 
@@ -247,6 +329,9 @@ def get_stab_algo_names():
     """
     return smooth_algo_names
 
+def get_all_stab_algo_instances():
+    return [alg() for alg in smooth_algo_classes]
+
 def get_stab_algo_by_name(name="nothing"):
     """Get an instance of a smoothing algorithm class from name
     """
@@ -257,14 +342,17 @@ def get_stab_algo_by_name(name="nothing"):
 
 
 if __name__ == "__main__":
-    testalgo = PlainSlerp()
+    testalgo = LimitedSlerp()
+    testalgo.set_user_option("smoothness", 5)
+    np.random.seed(22323)
     testquats = np.random.random((100, 4))
+    for i in range(testquats.shape[0]):
+        testquats[i,:] /= np.linalg.norm(testquats[i,:])
+
     testimes = np.arange(0,10,0.1)
-    testalgo.preview_widget()
-    exit()
     times, quats = testalgo.get_smooth_orientations(testimes, testquats)
-    print(testquats)
-    print(quats)
+    #print(testquats)
+    #print(quats)
     plt.plot(testquats[:,0])
     plt.plot(quats[:,0])
     plt.show()
