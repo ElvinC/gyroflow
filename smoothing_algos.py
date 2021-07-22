@@ -241,7 +241,7 @@ class LimitedSlerp(SmoothingAlgo):
     """Default symmetrical quaternion slerp with limits
     """
     def __init__(self):
-        super().__init__("Quaternion slerp with hard angle limit")
+        super().__init__("Quaternion slerp with experimental angle limit")
 
         self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
@@ -249,8 +249,8 @@ class LimitedSlerp(SmoothingAlgo):
         self.add_user_option("rotlimit", 15, 0, 180, ui_label = "Rotation limit (degrees):",
                              explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
 
-        self.add_user_option("limitslope", 10, 0, 180, ui_label = "Limit slope. time constant per radian:",
-                             explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
+        #self.add_user_option("limitslope", 10, 0, 180, ui_label = "Limit slope. time constant per radian:",
+        #                     explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
 
     def smooth_orientations_internal(self, times, orientation_list):
         # To be overloaded
@@ -315,6 +315,19 @@ class LimitedSlerp(SmoothingAlgo):
 
         return times, smoothed_orientation2
 
+
+#class HorizonLock(SmoothingAlgo):
+#    """Keep horizon level
+#    """
+#    def __init__(self):
+#        super().__init__("Lock horizon (TODO)")
+
+#        self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
+#                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+#
+#
+#    def smooth_orientations_internal(self, times, orientation_list):
+#        pass
 
 smooth_algo_classes = []
 
