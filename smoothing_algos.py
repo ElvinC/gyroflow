@@ -324,7 +324,7 @@ class SmoothLimitedSlerp(SmoothingAlgo):
         self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
         
-        self.add_user_option("rotlimit", 5, 0, 180, ui_label = "Rotation limit (degrees):",
+        self.add_user_option("rotlimit", 10, 0, 180, ui_label = "Rotation limit (degrees):",
                              explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
 
     def smooth_orientations_internal(self, times, orientation_list):
@@ -388,6 +388,8 @@ class SmoothLimitedSlerp(SmoothingAlgo):
 
         # get rot limit
         rot_limit = self.get_user_option_value("rotlimit") * np.pi / 180
+        # divided by 2 so the limit is closer to the inputed value
+        rot_limit /= 2
 
         # limit rotation
         interp_factor = 1 - (rot_limit / (distance + rot_limit / 2))
