@@ -1527,7 +1527,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(self.fov_slider)
 
         self.sync_debug_select = QtWidgets.QCheckBox("Display sync plots")
-        self.sync_debug_select.setChecked(True)
+        self.sync_debug_select.setChecked(False)
         self.sync_controls_layout.addWidget(self.sync_debug_select)
 
         # button for (re)computing sync
@@ -2263,6 +2263,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
 
+        if filename[0] == self.infile_path:
+            self.show_error("You can't overwride the input file")
+            return
+
         if len(filename[0]) == 0:
             self.show_error("No output file given")
             return
@@ -2834,5 +2838,5 @@ if __name__ == "__main__":
     # pyinstaller gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll
     # in my case:
     # pyside2-rcc images.qrc -o bundled_images.py
-    # poetry run pyinstaller --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
+    # poetry run pyinstaller -F --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
     # -F == one file, -w == no command window

@@ -23,6 +23,7 @@ import time
 import insta360_utility as insta360_util
 import smoothing_algos
 
+VIDGEAR_LOGGING = True
 
 def impute_gyro_data(input_data):
     frame_durations = input_data[1:,0] - input_data[:-1,0]
@@ -767,12 +768,18 @@ class Stabilizer:
         if platform.system() == "Windows":
             ffmpeg_exe_path = os.popen("WHERE ffmpeg").read()
             if ffmpeg_exe_path:
-                ffmpeg_local_path = os.path.dirname(ffmpeg_exe_path)
+                # Only first line
+                ffmpeg_local_path = os.path.dirname(ffmpeg_exe_path).split("\n")[0]
                 output_params["custom_ffmpeg"] = ffmpeg_local_path
+                print(f"Using ffmpeg path {ffmpeg_local_path}")
             else:
                 print("No FFmpeg detected in the windows PATH")
 
-        out = WriteGear(output_filename=outpath, **output_params)
+        # non compression fallback fps
+        #output_params["-fps"] = self.fps
+
+
+        out = WriteGear(output_filename=outpath, logging=VIDGEAR_LOGGING, **output_params)
 
         num_frames = int((stoptime - starttime) * self.fps)
 
@@ -944,6 +951,13 @@ class Stabilizer:
         cv2.destroyAllWindows()
         out.close()
 
+    def export_gyroflow_file(self, filename=None):
+        if not filename:
+            filename = self.videopath + ".gyroflow"
+        with open(filename, "r") as f:
+            f.writeline("Hello world")
+
+
     def release(self):
         self.cap.release()
 
@@ -1016,6 +1030,9 @@ class OnlyUndistort:
         if custom_ffmpeg:
             output_params = eval(custom_ffmpeg)
             output_params["-input_framerate"] = self.fps
+
+        # non compression fallback fps
+        output_params["-fps"] = self.fps
 
         out = WriteGear(output_filename=outpath, **output_params)
         output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
