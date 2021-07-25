@@ -403,9 +403,9 @@ class Stabilizer:
                     rot2 = Rotation.from_matrix(R2)
 
                     if rot1.magnitude() < rot2.magnitude():
-                        roteul = rot1.as_euler("xyz")
+                        roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
                     else:
-                        roteul = rot2.as_euler("xyz")
+                        roteul = rot2.as_rotvec() # as_euler("xyz")
 
 
                 #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
