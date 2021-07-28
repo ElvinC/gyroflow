@@ -23,9 +23,18 @@ import time
 import insta360_utility as insta360_util
 import smoothing_algos
 
-VIDGEAR_LOGGING = True
+VIDGEAR_LOGGING = False
 
 def impute_gyro_data(input_data):
+
+
+    input_data = np.copy(input_data)
+    # Check for corrupted/out of order timestamps
+    time_order_check = input_data[:-1,0] > input_data[1:,0]
+    if np.any(time_order_check):
+        print("Truncated bad gyro data")
+        input_data = input_data[0:np.argmax(time_order_check)+1,:]
+
     frame_durations = input_data[1:,0] - input_data[:-1,0]
     min_frame_duration = frame_durations.min()
     max_frame_duration = np.percentile(frame_durations, 10) * 1.5
@@ -813,6 +822,8 @@ class Stabilizer:
 
         i = 0
 
+        starttime = time.time()
+
         # Double press q to stop render
         quit_button = False
 
@@ -826,7 +837,11 @@ class Stabilizer:
             # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
-                print("frame: {}, {}/{} ({}%)".format(frame_num, i, num_frames, round(100 * i/num_frames,1)))
+                fraction_done = i/num_frames
+                elapsed_time = time.time() - starttime # in seconds
+                est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
+                print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
+                
 
             if success:
                 i +=1
@@ -886,22 +901,6 @@ class Stabilizer:
                                             (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
 
 
-                #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
-                #cv2.imshow("Before and After", frame_undistort)
-                #cv2.waitKey(100)
-                #cv2.imshow("Before and After", frame_undistort2)
-
-                #cv2.waitKey(100)
-                #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
-                #                              borderMode=cv2.BORDER_CONSTANT)
-                #cv2.imshow("Stabilized?", frame_undistort)
-
-                #print(self.stab_transform[frame_num])
-                #frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
-
-                #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
-
-
                 size = np.array(frame_out.shape)
 
                 # if last frame
@@ -922,15 +921,16 @@ class Stabilizer:
                         if display_preview:
                             # Resize if preview is huge
                             if concatted.shape[1] > 1280:
-                                concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_LINEAR)
+                                concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_NEAREST)
                             cv2.imshow("Before and After", concatted)
                             cv2.waitKey(2)
                     else:
 
                         out.write(frame_out)
+                        
                         if display_preview:
                             if frame_out.shape[1] > 1280:
-                                frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
+                                frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
                                 cv2.imshow("Stabilized? Double press Q to stop render", frame_preview)
                             else:
                                 cv2.imshow("Stabilized? Double press Q to stop render", frame_out)

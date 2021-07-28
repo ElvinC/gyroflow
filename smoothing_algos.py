@@ -214,7 +214,7 @@ class PlainSlerp(SmoothingAlgo):
 
 
         for i in range(self.num_data_points):
-            value = quat.slerp(value, orientation_list[i,:],[alpha])[0]
+            value = quat.single_slerp(value, orientation_list[i,:],alpha)
             smoothed_orientation[i] = value
 
         # reverse pass
@@ -223,7 +223,7 @@ class PlainSlerp(SmoothingAlgo):
         value2 = smoothed_orientation[-1,:]
 
         for i in range(self.num_data_points-1, -1, -1):
-            value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha])[0]
+            value2 = quat.single_slerp(value2, smoothed_orientation[i,:],alpha)
             smoothed_orientation2[i] = value2
 
         # Test rotation lock (doesn't work)
@@ -279,16 +279,16 @@ class LimitedSlerp(SmoothingAlgo):
 
         # Forward pass
         for i in range(self.num_data_points):
-            temp_value = quat.slerp(value, orientation_list[i,:],[alpha])[0]
+            temp_value = quat.single_slerp(value, orientation_list[i,:],alpha)
             anglebetween = abs(quat.angle_between(temp_value, orientation_list[i,:]))
             if begin_curve < anglebetween <= rotlimit:
                 smoothinterp = smooth + (anglebetween - begin_curve) * (smooth2 - smooth) / (rotlimit - begin_curve)
                 
                 alphainterp = 1 - np.exp(-(1 / self.gyro_sample_rate) /smoothinterp)
-                temp_value = quat.slerp(value, orientation_list[i,:],[alphainterp])[0]
+                temp_value = quat.single_slerp(value, orientation_list[i,:],alphainterp)
             
             elif anglebetween > rotlimit: # new smoothed orientation over angle limit
-                temp_value = quat.slerp(value, orientation_list[i,:],[alpha2])[0]
+                temp_value = quat.single_slerp(value, orientation_list[i,:],alpha2)
 
             value = temp_value
             smoothed_orientation[i] = value
@@ -299,16 +299,16 @@ class LimitedSlerp(SmoothingAlgo):
         value2 = smoothed_orientation[-1,:]
 
         for i in range(self.num_data_points-1, -1, -1):
-            temp_value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha])[0]
+            temp_value2 = quat.single_slerp(value2, smoothed_orientation[i,:],alpha)
             anglebetween = abs(quat.angle_between(temp_value2, orientation_list[i,:]))
             #print(anglebetween, rotlimit)
             if begin_curve < anglebetween <= rotlimit:
                 smoothinterp = smooth + (anglebetween - begin_curve) * (smooth2 - smooth) / (rotlimit - begin_curve)
                 alphainterp = 1 - np.exp(-(1 / self.gyro_sample_rate) /smoothinterp)
-                temp_value2 = quat.slerp(value2, smoothed_orientation[i,:],[alphainterp])[0]
+                temp_value2 = quat.single_slerp(value2, smoothed_orientation[i,:],alphainterp)
             
             elif anglebetween > rotlimit: # new smoothed orientation over angle limit
-                temp_value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha2])[0]
+                temp_value2 = quat.single_slerp(value2, smoothed_orientation[i,:],alpha2)
             
             value2 = temp_value2
             smoothed_orientation2[i] = value2
