@@ -742,6 +742,15 @@ class Stabilizer:
                 "-b:v": "%sM" % bitrate_mbits,
                 "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
             }
+        elif vcodec == "h264_amf":
+            output_params = {
+                "-input_framerate": self.fps,
+                "-vcodec": "h264_amf",
+                "-profile:v": vprofile,
+                "-rc:v": "cbr",
+                "-b:v": "%sM" % bitrate_mbits,
+                "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
+            }
         elif vcodec == "h264_vaapi":
             output_params = {
                 "-input_framerate": self.fps,
@@ -792,6 +801,9 @@ class Stabilizer:
 
         num_frames = int((stoptime - starttime) * self.fps)
 
+        tstart = int(starttime * self.fps)
+        tend = tstart + num_frames
+
         #tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
         #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
 
@@ -800,7 +812,9 @@ class Stabilizer:
         print("Starting to compute optimal Fov")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
-                                                        smoothingFocus=smoothingFocus, debug_plots=(smoothingFocus != -1))
+                                                        smoothingFocus=smoothingFocus,
+                                                        tstart = tstart, tend = tend,
+                                                        debug_plots=(smoothingFocus != -1))
         print("Done computing optimal Fov")
 
         #new_img_dim=(int(self.width * scale),int(self.height*scale))
@@ -827,6 +841,9 @@ class Stabilizer:
         # Double press q to stop render
         quit_button = False
 
+        num_not_success = 0
+        num_not_success_lim = 5 # stop after 5 failures to read frame
+
         while(True):
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -845,6 +862,12 @@ class Stabilizer:
 
             if success:
                 i +=1
+                num_not_success = 0
+            elif num_not_success >= num_not_success_lim:
+                # If unable to read multiple frames in a row
+                break
+            else:
+                num_not_success += 1
 
             if i > num_frames:
                 break

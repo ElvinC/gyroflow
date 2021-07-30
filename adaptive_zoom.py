@@ -85,11 +85,14 @@ class AdaptiveZoom:
 
         return 1/fcorr #np.min([xminDist/output_width, yminDist/output_height])
 
-    def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0, debug_plots=False):
+    def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0, tstart = False, tend = False, debug_plots=False):
         #print(locals())
         #smoothingNumFrames = int(smoothingCenter * fps)
         #if smoothingNumFrames % 2 == 0:
         #    smoothingNumFrames = smoothingNumFrames+1
+
+        #tstart = 0 if tstart == False else tstart
+        #tend = -1 if tend == False else tend
 
         smoothingFocusFrames = int(smoothingFocus * fps)
         if smoothingFocusFrames % 2 == 0:
@@ -115,7 +118,18 @@ class AdaptiveZoom:
         #    plt.show()
         #    focusWindows = np.stack((smoothXpos, smoothYpos), axis=-1)
         fovValues = [self.findFov(center,polygon,output_dim) for center, polygon in zip(cropCenterPositions,boundaryPolygons)]
+
+
+
         fovValues = np.array(fovValues)
+        
+
+        if tend != False:
+            # Only within render range.
+            max_fov = np.max(fovValues)
+            fovValues[:max(tstart,0)] = max_fov
+            fovValues[tend:] = max_fov
+
         if smoothingFocus > 0:
             filterCoeffFocus = signal.gaussian(smoothingFocusFrames,smoothingFocusFrames/6)
             filterCoeffFocus = filterCoeffFocus / np.sum(filterCoeffFocus)
