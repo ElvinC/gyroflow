@@ -195,10 +195,8 @@ class Stabilizer:
         #self.initial_offset = d1
         d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
 
-        self.times1 = times1
-        self.times2 = times2
-        self.transforms1 = transforms1
-        self.transforms2 = transforms2
+        self.transform_times = [times1, times2]
+        self.transforms = [transforms1, transforms2]
         self.v1 = v1
         self.v2 = v2
         self.d1 = d1
@@ -215,37 +213,14 @@ class Stabilizer:
 
         g1 = v1 - d1
         g2 = v2 - d2
-        slope =  (v2 - v1) / (g2 - g1)
+        slope = (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
 
         #print("Start {}".format(gyro_start))
 
         print("Gyro correction slope {}".format(slope))
 
-        xplot = plt.subplot(311)
-
-        plt.plot(times1, -transforms1[:,0] * self.fps)
-        plt.plot(times2, -transforms2[:,0] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("x"))
-        plt.ylabel("omega x [rad/s]")
-
-        plt.subplot(312, sharex=xplot)
-
-        plt.plot(times1, -transforms1[:,1] * self.fps)
-        plt.plot(times2, -transforms2[:,1] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("y"))
-        plt.ylabel("omega y [rad/s]")
-
-        plt.subplot(313, sharex=xplot)
-
-        plt.plot(times1, transforms1[:,2] * self.fps)
-        plt.plot(times2, transforms2[:,2] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("z"))
-        #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
-        plt.xlabel("time [s]")
-        plt.ylabel("omega z [rad/s]")
-
-        plt.show()
+        self.plot_sync(corrected_times, slicelength)
 
         # Temp new integrator with corrected time scale
 
@@ -268,45 +243,42 @@ class Stabilizer:
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
+    def plot_sync(self, corrected_times, slicelength):
+        n = len(self.transform_times)
+        fig, axes = plt.subplots(3, n, sharey=True)
+        fig.set_size_inches(4 * n, 6)
+        for j in range(n):
+            mask = ((corrected_times > self.transform_times[j][0] - .2 * slicelength / self.fps) & (corrected_times < self.transform_times[j][-1] + .2 * slicelength / self.fps))
+            axes[0][j].set(title=f"Syncpoint {j + 1}")
+            for i, r in enumerate(['x', 'y', 'z']):
+                axes[i][j].plot(corrected_times[mask], self.integrator.get_raw_data(r)[mask], alpha=.8)
+                if r == 'z':
+                    axes[i][j].plot(self.transform_times[j], self.transforms[j][:, i] * self.fps, alpha=.8)
+                else:
+                    axes[i][j].plot(self.transform_times[j], -self.transforms[j][:, i] * self.fps, alpha=.8)
+
+        axes[0][0].set(ylabel="omega x [rad/s]")
+        axes[1][0].set(ylabel="omega y [rad/s]")
+        axes[2][0].set(ylabel="omega z [rad/s]")
+        for i in range(n):
+            axes[2][i].set(xlabel="time [s]")
+        plt.tight_layout()
+        plt.show()
+        return fig, axes
+
+
     def manual_sync_correction(self, d1, d2):
         v1 = self.v1
         v2 = self.v2
 
-        transforms1 = self.transforms1
-        transforms2 = self.transforms2
-        times1 = self.times1
-        times2 = self.times2
-
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
         g1 = v1 - d1
         g2 = v2 - d2
-        slope =  (v2 - v1) / (g2 - g1)
+        slope = (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
         print("Gyro correction slope {}".format(slope))
 
-        xplot = plt.subplot(311)
-
-        plt.plot(times1, -transforms1[:,0] * self.fps)
-        plt.plot(times2, -transforms2[:,0] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("x"))
-        plt.ylabel("omega x [rad/s]")
-
-        plt.subplot(312, sharex=xplot)
-
-        plt.plot(times1, -transforms1[:,1] * self.fps)
-        plt.plot(times2, -transforms2[:,1] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("y"))
-        plt.ylabel("omega y [rad/s]")
-
-        plt.subplot(313, sharex=xplot)
-
-        plt.plot(times1, transforms1[:,2] * self.fps)
-        plt.plot(times2, transforms2[:,2] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("z"))
-        plt.xlabel("time [s]")
-        plt.ylabel("omega z [rad/s]")
-
-        plt.show()
+        self.plot_sync(corrected_times, slicelength=50)
 
         # Temp new integrator with corrected time scale
 
@@ -523,6 +495,10 @@ class Stabilizer:
 
         if debug_plots:
             plt.plot(offsets, costs)
+            plt.xlabel("Offset [s]")
+            plt.ylabel("Cost")
+            plt.title(f"Syncpoint Offset Estimation\nCosts: {min(costs):.4f}, Offset: {better_offset:.4f}")
+
             plt.show()
 
         return better_offset
