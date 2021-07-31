@@ -1709,6 +1709,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.display_preview.setChecked(True)
         self.export_controls_layout.addWidget(self.display_preview)
 
+        self.export_audio = QtWidgets.QCheckBox("Export audio")
+        self.export_audio.setChecked(True)
+        self.export_controls_layout.addWidget(self.export_audio)
+
         self.export_debug_text = QtWidgets.QCheckBox("Render with debug info")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
@@ -2286,6 +2290,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         vprofile = self.encoder_profile_select.currentText()
         bitrate = self.export_bitrate.value()  # Bitrate in Mbit/s
         preview = self.display_preview.isChecked()
+        audio = self.export_audio.isChecked()
         #output_scale = int(self.out_scale_control.value())
         debug_text = self.export_debug_text.isChecked()
         pix_fmt = self.pixfmt_select.text()
@@ -2304,7 +2309,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                              split_screen = split_screen, bitrate_mbits = bitrate,
                              display_preview=preview, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
-                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color)
+                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color, audio=audio)
 
 
 
@@ -2513,7 +2518,7 @@ class StabUtility(StabUtilityBarebone):
         self.video_viewer.set_video_path(self.infile_path)
         self.video_viewer.next_frame()
 
-    def set_player_video():
+    def set_player_video(self):
         self.video_viewer.set_video_path(self.infile_path)
         self.video_viewer.next_frame()
 
