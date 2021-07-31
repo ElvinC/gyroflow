@@ -920,6 +920,48 @@ class Stabilizer:
         cv2.destroyAllWindows()
         out.close()
 
+        if audio:
+            time.sleep(1)
+            ffmpeg_command = [
+                "-y",
+                "-i",
+                self.videopath,
+                "-ss",
+                str(int(starttime * self.fps) / self.fps),
+                "-to",
+                str((int(starttime * self.fps) + num_frames) / self.fps),
+                "-vn",
+                "-acodec",
+                "copy",
+                "audio.mp4"
+            ]
+            out.execute_ffmpeg_cmd(ffmpeg_command)
+            ffmpeg_command = [
+                "-y",
+                "-i",
+                outpath,
+                "-i",
+                "audio.mp4",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "copy",
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                outpath + "_a.mp4",
+            ]  # `-y` parameter is to overwrite outputfile if exists
+
+            # execute FFmpeg command
+            out.execute_ffmpeg_cmd(ffmpeg_command)
+            os.replace(outpath + "_a.mp4", outpath)
+            os.remove("audio.mp4")
+
+            print("Audio exported")
+
+
+
     def release(self):
         self.cap.release()
 
