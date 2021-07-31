@@ -2276,9 +2276,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
 
-        if filename[0] == self.infile_path:
-            self.show_error("You can't overwride the input file")
-            return
+        # Handled in stabilizer
+        #if filename[0] == self.infile_path:
+        #    self.show_error("You can't overwride the input file")
+        #    return
 
         if len(filename[0]) == 0:
             self.show_error("No output file given")
