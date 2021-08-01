@@ -57,9 +57,77 @@ def slerp(v0, v1, t_array):
     
     s0 = np.cos(theta) - dot * sin_theta / sin_theta_0
     s1 = sin_theta / sin_theta_0
+
     return (s0[:,np.newaxis] * v0[np.newaxis,:]) + (s1[:,np.newaxis] * v1[np.newaxis,:])
+
+def single_slerp(v0, v1, t):
+    v0 = np.array(v0)
+    v1 = np.array(v1)
+    dot = np.sum(v0 * v1)
+
+    if dot < 0.0:
+        v1 = -v1
+        dot = -dot
+    
+    DOT_THRESHOLD = 0.9995
+    if dot > DOT_THRESHOLD:
+        result = v0 + t * (v1 - v0)
+        return result / np.linalg.norm(result)
+    
+    theta_0 = np.arccos(dot)
+    sin_theta_0 = np.sin(theta_0)
+
+    theta = theta_0 * t
+    sin_theta = np.sin(theta)
+    
+    s0 = np.cos(theta) - dot * sin_theta / sin_theta_0
+    s1 = sin_theta / sin_theta_0
+
+    return (s0 * v0) + (s1 * v1)
+
 
 def angle_between(q1, q2):
     z = quaternion_multiply(inverse(q1), q2)
     angle = 2 * np.arccos(min(z[0], 1))
     return angle
+
+
+if __name__ == "__main__":
+    import pyquaternion
+    import time
+
+    a = pyquaternion.Quaternion([1,0,0,0])
+    b = pyquaternion.Quaternion([0,1,0,0])
+    start = time.time()
+    for i in range(10000):
+        c = pyquaternion.Quaternion.slerp(a,b,0.5)
+    stop = time.time()
+
+    print((stop - start) * 1000)
+
+    a = quaternion(1, 0, 0, 0)
+    b = quaternion(0, 1, 0, 0)
+    
+    start = time.time()
+    for i in range(10000):
+        c = slerp(a,b,[0.5])[0]
+    stop = time.time()
+    print((stop - start) * 1000)
+
+    
+    a = quaternion(1, 0, 0, 0)
+    b = quaternion(0, 1, 0, 0)
+    
+    start = time.time()
+    for i in range(10000):
+        c = single_slerp(a,b,0.5)
+    stop = time.time()
+    print((stop - start) * 1000)
+
+    for i in range(1):
+        a = np.random.random(4)
+        b = np.random.random(4)
+
+        c = single_slerp(a,b,0.5)
+        d = slerp(a,b,[0.5])[0]
+        print(d-c)

@@ -23,8 +23,18 @@ import time
 import insta360_utility as insta360_util
 import smoothing_algos
 
+VIDGEAR_LOGGING = False
 
 def impute_gyro_data(input_data):
+
+
+    input_data = np.copy(input_data)
+    # Check for corrupted/out of order timestamps
+    time_order_check = input_data[:-1,0] > input_data[1:,0]
+    if np.any(time_order_check):
+        print("Truncated bad gyro data")
+        input_data = input_data[0:np.argmax(time_order_check)+1,:]
+
     frame_durations = input_data[1:,0] - input_data[:-1,0]
     min_frame_duration = frame_durations.min()
     max_frame_duration = np.percentile(frame_durations, 10) * 1.5
@@ -185,10 +195,8 @@ class Stabilizer:
         #self.initial_offset = d1
         d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
 
-        self.times1 = times1
-        self.times2 = times2
-        self.transforms1 = transforms1
-        self.transforms2 = transforms2
+        self.transform_times = [times1, times2]
+        self.transforms = [transforms1, transforms2]
         self.v1 = v1
         self.v2 = v2
         self.d1 = d1
@@ -205,37 +213,14 @@ class Stabilizer:
 
         g1 = v1 - d1
         g2 = v2 - d2
-        slope =  (v2 - v1) / (g2 - g1)
+        slope = (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
 
         #print("Start {}".format(gyro_start))
 
         print("Gyro correction slope {}".format(slope))
 
-        xplot = plt.subplot(311)
-
-        plt.plot(times1, -transforms1[:,0] * self.fps)
-        plt.plot(times2, -transforms2[:,0] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("x"))
-        plt.ylabel("omega x [rad/s]")
-
-        plt.subplot(312, sharex=xplot)
-
-        plt.plot(times1, -transforms1[:,1] * self.fps)
-        plt.plot(times2, -transforms2[:,1] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("y"))
-        plt.ylabel("omega y [rad/s]")
-
-        plt.subplot(313, sharex=xplot)
-
-        plt.plot(times1, transforms1[:,2] * self.fps)
-        plt.plot(times2, transforms2[:,2] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("z"))
-        #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
-        plt.xlabel("time [s]")
-        plt.ylabel("omega z [rad/s]")
-
-        plt.show()
+        self.plot_sync(corrected_times, slicelength)
 
         # Temp new integrator with corrected time scale
 
@@ -258,45 +243,42 @@ class Stabilizer:
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
+    def plot_sync(self, corrected_times, slicelength):
+        n = len(self.transform_times)
+        fig, axes = plt.subplots(3, n, sharey=True)
+        fig.set_size_inches(4 * n, 6)
+        for j in range(n):
+            mask = ((corrected_times > self.transform_times[j][0] - .2 * slicelength / self.fps) & (corrected_times < self.transform_times[j][-1] + .2 * slicelength / self.fps))
+            axes[0][j].set(title=f"Syncpoint {j + 1}")
+            for i, r in enumerate(['x', 'y', 'z']):
+                axes[i][j].plot(corrected_times[mask], self.integrator.get_raw_data(r)[mask], alpha=.8)
+                if r == 'z':
+                    axes[i][j].plot(self.transform_times[j], self.transforms[j][:, i] * self.fps, alpha=.8)
+                else:
+                    axes[i][j].plot(self.transform_times[j], -self.transforms[j][:, i] * self.fps, alpha=.8)
+
+        axes[0][0].set(ylabel="omega x [rad/s]")
+        axes[1][0].set(ylabel="omega y [rad/s]")
+        axes[2][0].set(ylabel="omega z [rad/s]")
+        for i in range(n):
+            axes[2][i].set(xlabel="time [s]")
+        plt.tight_layout()
+        plt.show()
+        return fig, axes
+
+
     def manual_sync_correction(self, d1, d2):
         v1 = self.v1
         v2 = self.v2
 
-        transforms1 = self.transforms1
-        transforms2 = self.transforms2
-        times1 = self.times1
-        times2 = self.times2
-
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
         g1 = v1 - d1
         g2 = v2 - d2
-        slope =  (v2 - v1) / (g2 - g1)
+        slope = (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
         print("Gyro correction slope {}".format(slope))
 
-        xplot = plt.subplot(311)
-
-        plt.plot(times1, -transforms1[:,0] * self.fps)
-        plt.plot(times2, -transforms2[:,0] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("x"))
-        plt.ylabel("omega x [rad/s]")
-
-        plt.subplot(312, sharex=xplot)
-
-        plt.plot(times1, -transforms1[:,1] * self.fps)
-        plt.plot(times2, -transforms2[:,1] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("y"))
-        plt.ylabel("omega y [rad/s]")
-
-        plt.subplot(313, sharex=xplot)
-
-        plt.plot(times1, transforms1[:,2] * self.fps)
-        plt.plot(times2, transforms2[:,2] * self.fps)
-        plt.plot(corrected_times, self.integrator.get_raw_data("z"))
-        plt.xlabel("time [s]")
-        plt.ylabel("omega z [rad/s]")
-
-        plt.show()
+        self.plot_sync(corrected_times, slicelength=50)
 
         # Temp new integrator with corrected time scale
 
@@ -402,9 +384,9 @@ class Stabilizer:
                     rot2 = Rotation.from_matrix(R2)
 
                     if rot1.magnitude() < rot2.magnitude():
-                        roteul = rot1.as_euler("xyz")
+                        roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
                     else:
-                        roteul = rot2.as_euler("xyz")
+                        roteul = rot2.as_rotvec() # as_euler("xyz")
 
 
                 #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
@@ -513,6 +495,10 @@ class Stabilizer:
 
         if debug_plots:
             plt.plot(offsets, costs)
+            plt.xlabel("Offset [s]")
+            plt.ylabel("Cost")
+            plt.title(f"Syncpoint Offset Estimation\nCosts: {min(costs):.4f}, Offset: {better_offset:.4f}")
+
             plt.show()
 
         return better_offset
@@ -695,8 +681,9 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000"):
-
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000", audio=True):
+        if outpath == self.videopath:
+            outpath = outpath.lower().replace(".mp4", "_gyroflow.mp4", )
         (out_width, out_height) = out_size
 
         #export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
@@ -727,6 +714,15 @@ class Stabilizer:
             output_params = {
                 "-input_framerate": self.fps,
                 "-vcodec": "h264_nvenc",
+                "-profile:v": vprofile,
+                "-rc:v": "cbr",
+                "-b:v": "%sM" % bitrate_mbits,
+                "-bufsize:v": "%sM" % int(bitrate_mbits * 2),
+            }
+        elif vcodec == "h264_amf":
+            output_params = {
+                "-input_framerate": self.fps,
+                "-vcodec": "h264_amf",
                 "-profile:v": vprofile,
                 "-rc:v": "cbr",
                 "-b:v": "%sM" % bitrate_mbits,
@@ -767,14 +763,23 @@ class Stabilizer:
         if platform.system() == "Windows":
             ffmpeg_exe_path = os.popen("WHERE ffmpeg").read()
             if ffmpeg_exe_path:
-                ffmpeg_local_path = os.path.dirname(ffmpeg_exe_path)
+                # Only first line
+                ffmpeg_local_path = os.path.dirname(ffmpeg_exe_path).split("\n")[0]
                 output_params["custom_ffmpeg"] = ffmpeg_local_path
+                print(f"Using ffmpeg path {ffmpeg_local_path}")
             else:
                 print("No FFmpeg detected in the windows PATH")
 
-        out = WriteGear(output_filename=outpath, **output_params)
+        # non compression fallback fps
+        #output_params["-fps"] = self.fps
+
+
+        out = WriteGear(output_filename=outpath, logging=VIDGEAR_LOGGING, **output_params)
 
         num_frames = int((stoptime - starttime) * self.fps)
+
+        tstart = int(starttime * self.fps)
+        tend = tstart + num_frames
 
         #tempmap1 = cv2.resize(self.map1, (int(self.map1.shape[1]*scale), int(self.map1.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
         #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
@@ -784,7 +789,9 @@ class Stabilizer:
         print("Starting to compute optimal Fov")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
-                                                        smoothingFocus=smoothingFocus, debug_plots=(smoothingFocus != -1))
+                                                        smoothingFocus=smoothingFocus,
+                                                        tstart = tstart, tend = tend,
+                                                        debug_plots=(smoothingFocus != -1))
         print("Done computing optimal Fov")
 
         #new_img_dim=(int(self.width * scale),int(self.height*scale))
@@ -806,8 +813,13 @@ class Stabilizer:
 
         i = 0
 
+        starttime = time.time()
+
         # Double press q to stop render
         quit_button = False
+
+        num_not_success = 0
+        num_not_success_lim = 5 # stop after 5 failures to read frame
 
         while(True):
             # Read next frame
@@ -819,10 +831,20 @@ class Stabilizer:
             # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
-                print("frame: {}, {}/{} ({}%)".format(frame_num, i, num_frames, round(100 * i/num_frames,1)))
+                fraction_done = i/num_frames
+                elapsed_time = time.time() - starttime # in seconds
+                est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
+                print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
+                
 
             if success:
                 i +=1
+                num_not_success = 0
+            elif num_not_success >= num_not_success_lim:
+                # If unable to read multiple frames in a row
+                break
+            else:
+                num_not_success += 1
 
             if i > num_frames:
                 break
@@ -879,22 +901,6 @@ class Stabilizer:
                                             (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
 
 
-                #cv2.imshow("Before and After", cv2.hconcat([frame_undistort,frame_undistort2],2))
-                #cv2.imshow("Before and After", frame_undistort)
-                #cv2.waitKey(100)
-                #cv2.imshow("Before and After", frame_undistort2)
-
-                #cv2.waitKey(100)
-                #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
-                #                              borderMode=cv2.BORDER_CONSTANT)
-                #cv2.imshow("Stabilized?", frame_undistort)
-
-                #print(self.stab_transform[frame_num])
-                #frame_out = self.undistort.get_rotation_map(frame_undistort, self.stab_transform[frame_num])
-
-                #frame_out = self.undistort.get_rotation_map(frame, self.stab_transform[frame_num])
-
-
                 size = np.array(frame_out.shape)
 
                 # if last frame
@@ -915,15 +921,16 @@ class Stabilizer:
                         if display_preview:
                             # Resize if preview is huge
                             if concatted.shape[1] > 1280:
-                                concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_LINEAR)
+                                concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_NEAREST)
                             cv2.imshow("Before and After", concatted)
                             cv2.waitKey(2)
                     else:
 
                         out.write(frame_out)
+                        
                         if display_preview:
                             if frame_out.shape[1] > 1280:
-                                frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_LINEAR)
+                                frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
                                 cv2.imshow("Stabilized? Double press Q to stop render", frame_preview)
                             else:
                                 cv2.imshow("Stabilized? Double press Q to stop render", frame_out)
@@ -943,6 +950,54 @@ class Stabilizer:
         print("Render finished")
         cv2.destroyAllWindows()
         out.close()
+
+        if audio:
+            time.sleep(1)
+            ffmpeg_command = [
+                "-y",
+                "-i",
+                self.videopath,
+                "-ss",
+                str(int(starttime * self.fps) / self.fps),
+                "-to",
+                str((int(starttime * self.fps) + num_frames) / self.fps),
+                "-vn",
+                "-acodec",
+                "copy",
+                "audio.mp4"
+            ]
+            out.execute_ffmpeg_cmd(ffmpeg_command)
+            ffmpeg_command = [
+                "-y",
+                "-i",
+                outpath,
+                "-i",
+                "audio.mp4",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "copy",
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                outpath + "_a.mp4",
+            ]  # `-y` parameter is to overwrite outputfile if exists
+
+            # execute FFmpeg command
+            out.execute_ffmpeg_cmd(ffmpeg_command)
+            os.replace(outpath + "_a.mp4", outpath)
+            os.remove("audio.mp4")
+
+            print("Audio exported")
+
+
+    def export_gyroflow_file(self, filename=None):
+        if not filename:
+            filename = self.videopath + ".gyroflow"
+        with open(filename, "r") as f:
+            f.writeline("Hello world")
+
 
     def release(self):
         self.cap.release()
@@ -1016,6 +1071,9 @@ class OnlyUndistort:
         if custom_ffmpeg:
             output_params = eval(custom_ffmpeg)
             output_params["-input_framerate"] = self.fps
+
+        # non compression fallback fps
+        output_params["-fps"] = self.fps
 
         out = WriteGear(output_filename=outpath, **output_params)
         output_params["custom_ffmpeg"] = vidgearHelper.get_valid_ffmpeg_path()
