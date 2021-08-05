@@ -768,7 +768,7 @@ if __name__ == "__main__":
                  [Insta360Log(), "test_clips/PRO_VID_20210111_144304_00_010.mp4"],
                  [GPMFLog(), "test_clips/GX016015.MP4"]]
     
-    for reader, path in testcasesD:
+    for reader, path in testcases:
 
         print(f"Using {reader.name}")
         check = reader.check_log_type(path)

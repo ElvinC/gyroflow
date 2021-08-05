@@ -12,12 +12,12 @@ class Extractor:
     def __init__(self, videopath = "hero5.mp4"):
         self.videopath = videopath
 
-        payloads, parser = get_gpmf_payloads_from_file(videopath)
+        self.payloads, parser = get_gpmf_payloads_from_file(videopath)
 
         self.parsed = []
-        print(payloads)
+        #print(f"GPMF payloads {self.payloads}")
 
-        for gpmf_data, timestamps in payloads:
+        for gpmf_data, timestamps in self.payloads:
             self.parsed.append(gpmf_parse.parse_dict(gpmf_data))
 
 
@@ -115,6 +115,10 @@ class Extractor:
 
     def get_video_length(self):
         return self.video_length
+
+    def has_gpmf(self, filepath):
+        pass
+
 
 
 if __name__ == "__main__":

@@ -205,6 +205,7 @@ class VideoThread(QtCore.QThread):
         self.frame_pos_update = frame_pos_update
         self.map1s = []
         self.map2s = []
+        self.frame_delay = 1/30
 
         self.map_function = None
         self.map_function_enable = True
@@ -236,7 +237,7 @@ class VideoThread(QtCore.QThread):
                 self.this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
                 ret, self.frame = self.cap.read()
                 if ret:
-                    time.sleep(1/24)
+                    time.sleep(self.frame_delay)
                     self.update_frame()
 
 
@@ -357,8 +358,14 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.was_playing_before = False
         self.last_seek_time = time.time()
 
+
+        self.time_stamp_display = QtWidgets.QLabel("0.0 s")
+        self.time_stamp_display.setStyleSheet("font-size:12px;")
+
+
         self.control_layout.addWidget(self.play_button)
         self.control_layout.addWidget(self.time_slider)
+        self.control_layout.addWidget(self.time_stamp_display)
 
         self.layout.addWidget(self.control_bar)
 
@@ -402,6 +409,9 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.frame_width = self.thread.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         self.frame_height = self.thread.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.num_frames = self.thread.cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        self.fps = self.thread.cap.get(cv2.CAP_PROP_FPS)
+
+        self.thread.frame_delay = max(1/self.fps, 0.005)
 
     def reset_maps(self):
         self.thread.map1s = []
@@ -489,9 +499,11 @@ class VideoPlayerWidget(QtWidgets.QWidget):
             return
 
         slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
+        timestamp = frame_pos / self.fps
         # update slider without triggering valueChange
         self.time_slider.blockSignals(True)
         self.time_slider.setValue(slider_val)
+        self.time_stamp_display.setText(f"{timestamp:.2f} s")
         self.time_slider.blockSignals(False)
 
     def destroy_thread(self):
