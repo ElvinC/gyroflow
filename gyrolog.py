@@ -624,15 +624,17 @@ class GPMFLog(GyrologReader):
 
 class GyroflowGyroLog(GyrologReader):
     def __init__(self):
-        super().__init__()
+        super().__init__("Gyroflow IMU log")
         # Eh, gcsv for gyro csv, that works I guess.
         self.filename_pattern = ".*\.gcsv"
 
+        self.firstlines = ["GYROFLOW IMU LOG", "CAMERA IMU LOG"] #["t,gx,gy,gz,ax,ay,az,mx,my,mz"]
+
         # Prelim log format:
         # GYROFLOW IMU LOG
-        # tscale=0.001
-        # gscale=0.0002663161
-        # ascale=0.00059875488
+        # tscale,0.001
+        # gscale,0.0002663161
+        # ascale,0.00059875488
         # t,gx,gy,gz,ax,ay,az
         # 0,39,86,183,-1137,-15689,-2986
         # 1,56,100,202,-1179,-15694,-2887
@@ -642,64 +644,69 @@ class GyroflowGyroLog(GyrologReader):
 
     def check_log_type(self, filename):
         fname = os.path.split(filename)[-1]
-        firstlines = ["GYROFLOW IMU LOG"] #["t,gx,gy,gz,ax,ay,az"] # Different firmware versions
         if self.filename_matches(fname):
             # open and check first line
             with open(filename, "r") as f:
                 firstline = f.readline().strip()
                 print(firstline)
-                if firstline in firstlines:
+                if firstline in self.firstlines:
                     return True
 
         return False
 
     def guess_log_from_videofile(self, videofile):
-        path, fname = os.path.split(videofile)
+        no_suffix = os.path.splitext(videofile)[0]
+        #path, fname = os.path.split(videofile)
 
-        # Runcam 5 Orange
-        rc5pattern = re.compile("RC_(\d{4})_\d{12}\..*") # example: RC_0030_210719221659.MP4
-        gocampattern = re.compile("IF-RC01_(\d{4})\..*") # example: IF-RC01_0011.MP4
-        
-        if rc5pattern.match(fname): 
-            counter = int(rc5pattern.match(fname).group(1))
-        
-        # Gocam
-        elif gocampattern.match(fname):
-            counter = int(gocampattern.match(fname).group(1))
+        if os.path.isfile(no_suffix + ".gcsv"):
+            logpath = no_suffix + suffix
+            print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
 
-        else:
-            return False
-
-        logname = f"RC_GyroData{counter:04d}.csv"
+            if self.check_log_type(logpath):
+                return logpath
+        return False
         
-        logpath = videofile.rstrip(fname) + logname
-        
-
-        if self.check_log_type(logpath):
-            return logpath
-        else:
-            return False
 
 
     def extract_log(self, filename):
 
-        with open(filename) as csvfile:
-            next(csvfile)
+        tscale = 0.001
+        gscale = 1
+        ascale = 1
+        mscale = 1
 
+        with open(filename) as csvfile:
+            firstline = csvfile.readline().strip()
+
+            if firstline not in self.firstlines:
+                return False
+
+            line = ""
+            while not line.startswith("t,"):
+                line = csvfile.readline().strip()
+                print(line)
+                if line.startswith("tscale,"):
+                    tscale = float(line.split(",")[1])
+                elif line.startswith("gscale,"):
+                    gscale = float(line.split(",")[1])
+                elif line.startswith("ascale,"):
+                    ascale = float(line.split(",")[1])
+
+            #print(tscale, gscale, ascale)
+
+            # Get data
             lines = csvfile.readlines()
 
             data_list = []
-            #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
-            gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
 
             for line in lines:
                 splitdata = [float(x) for x in line.split(",")]
-                t = splitdata[0]/1000
+                t = splitdata[0] * tscale
 
                 # RC5
-                gx = splitdata[3] * gyroscale
-                gy = -splitdata[1] * gyroscale
-                gz = splitdata[2] * gyroscale
+                gx = splitdata[1] * gscale
+                gy = splitdata[2] * gscale
+                gz = splitdata[3] * gscale
 
                 # Z: roll
                 # X: yaw
@@ -766,9 +773,10 @@ if __name__ == "__main__":
                  [BlackboxRawData(), "test_clips/nicecrash_hero7.bbl"],
                  [RuncamData(), "test_clips/Runcam/RC_GyroData0038.csv"],
                  [Insta360Log(), "test_clips/PRO_VID_20210111_144304_00_010.mp4"],
-                 [GPMFLog(), "test_clips/GX016015.MP4"]]
+                 [GPMFLog(), "test_clips/GX016015.MP4"],
+                 [GyroflowGyroLog(), "test_clips/gyroflow_format_example.gcsv"]]
     
-    for reader, path in testcases:
+    for reader, path in testcases[3:]:
 
         print(f"Using {reader.name}")
         check = reader.check_log_type(path)
