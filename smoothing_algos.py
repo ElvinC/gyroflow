@@ -442,7 +442,8 @@ def get_stab_algo_by_name(name="nothing"):
 
 
 if __name__ == "__main__":
-    testalgo = SmoothLimitedSlerp()
+    testalgo = LimitedSlerp()
+    testalgo.set_user_option("smoothness", 5)
     np.random.seed(22323)
     testquats = np.random.random((100, 4))
     for i in range(testquats.shape[0]):
