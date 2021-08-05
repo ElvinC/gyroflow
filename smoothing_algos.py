@@ -316,7 +316,7 @@ class LimitedSlerp(SmoothingAlgo):
         return times, smoothed_orientation2
 
 class SmoothLimitedSlerp(SmoothingAlgo):
-    """Default symmetrical quaternion slerp without limits
+    """Limited quaternion slerp
     """
     def __init__(self):
         super().__init__("Limited quaternion slerp (Aphobius)")
@@ -393,10 +393,8 @@ class SmoothLimitedSlerp(SmoothingAlgo):
 
         # limit rotation
         interp_factor = 1 - (rot_limit / (distance + rot_limit / 2))
-        for i in range (self.num_data_points):
-            if interp_factor[i] < 0:
-                interp_factor[i] = 0
-        interp_factor = interp_factor * interp_factor
+        np.maximum(interp_factor, 0)
+        interp_factor *= interp_factor
 
         final_orientation = np.zeros(orientation_list.shape)
 
@@ -444,8 +442,7 @@ def get_stab_algo_by_name(name="nothing"):
 
 
 if __name__ == "__main__":
-    testalgo = LimitedSlerp()
-    testalgo.set_user_option("smoothness", 5)
+    testalgo = SmoothLimitedSlerp()
     np.random.seed(22323)
     testquats = np.random.random((100, 4))
     for i in range(testquats.shape[0]):
