@@ -357,14 +357,19 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.was_playing_before = False
         self.last_seek_time = time.time()
 
+        self.time_label = QtWidgets.QLabel("--:-- / --:--")
+
         self.control_layout.addWidget(self.play_button)
         self.control_layout.addWidget(self.time_slider)
+        self.control_layout.addWidget(self.time_label)
 
         self.layout.addWidget(self.control_bar)
 
         self.frame_width = 1920 # placeholder
         self.frame_height = 1080
         self.num_frames = 0
+        self.fps = 30
+        self.video_length = 0
 
 
         # initialize thread for video player with frame update function
@@ -402,6 +407,8 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.frame_width = self.thread.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         self.frame_height = self.thread.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.num_frames = self.thread.cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        self.fps = self.thread.cap.get(cv2.CAP_PROP_FPS)
+        self.video_length = int(self.thread.cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.fps)
 
     def reset_maps(self):
         self.thread.map1s = []
@@ -489,10 +496,15 @@ class VideoPlayerWidget(QtWidgets.QWidget):
             return
 
         slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
+        frame_time = frame_pos / self.fps
+        self.time_label.setText(f"{self.time_string(frame_time)} / {self.time_string(self.video_length)}")
         # update slider without triggering valueChange
         self.time_slider.blockSignals(True)
         self.time_slider.setValue(slider_val)
         self.time_slider.blockSignals(False)
+
+    def time_string(self, t):
+        return f"{int(t / 60):02d}:{int(t) % 60:02d}"
 
     def destroy_thread(self):
         self.thread.terminate()
