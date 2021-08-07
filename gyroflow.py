@@ -20,6 +20,7 @@ import bundled_images
 import insta360_utility as insta360_util
 import stabilizer
 import smoothing_algos
+from datetime import datetime
 
 # area for environment variables
 try:
@@ -585,26 +586,28 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.calib_msg = ""
 
+
+        self.show_chessboard_btn = QtWidgets.QPushButton("Calibration target")
+        self.show_chessboard_btn. setMinimumHeight(self.button_height)
+        self.show_chessboard_btn.clicked.connect(self.chessboard_func)
+        self.show_chessboard_btn.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_FileDialogListView))
+        self.calib_controls_layout.addWidget(self.show_chessboard_btn)
+
+
+        self.open_file_btn = QtWidgets.QPushButton("Open file")
+        self.open_file_btn.setMinimumHeight(self.button_height)
+        self.open_file_btn.clicked.connect(self.open_file_func)
+        self.open_file_btn.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_FileIcon))
+        self.calib_controls_layout.addWidget(self.open_file_btn)
+
         # button for recomputing image stretching maps
-        self.add_frame_button = QtWidgets.QPushButton("Add current frame")
-        self.add_frame_button.setMinimumHeight(self.button_height)
-        self.add_frame_button.clicked.connect(self.add_current_frame)
+        self.start_lens_calibration_btn = QtWidgets.QPushButton("Start lens calibration")
+        self.start_lens_calibration_btn.setMinimumHeight(self.button_height)
+        self.start_lens_calibration_btn.setEnabled(False)
+        self.start_lens_calibration_btn.clicked.connect(self.start_lens_calibration)
 
-        self.calib_controls_layout.addWidget(self.add_frame_button)
+        self.calib_controls_layout.addWidget(self.start_lens_calibration_btn)
 
-        # button for recomputing image stretching maps
-        self.del_frame_button = QtWidgets.QPushButton("Remove last frame")
-        self.del_frame_button.setMinimumHeight(self.button_height)
-        self.del_frame_button.clicked.connect(self.remove_frame)
-
-        self.calib_controls_layout.addWidget(self.del_frame_button)
-
-        # button for recomputing image stretching maps
-        self.process_frames_btn = QtWidgets.QPushButton("Process loaded frames")
-        self.process_frames_btn.setMinimumHeight(self.button_height)
-        self.process_frames_btn.setEnabled(False)
-        self.process_frames_btn.clicked.connect(self.calibrate_frames)
-        self.calib_controls_layout.addWidget(self.process_frames_btn)
 
         # info text box
         self.info_text = QtWidgets.QLabel("No frames loaded")
@@ -762,10 +765,11 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.video_viewer.set_video_path(path[0])
 
         self.video_viewer.next_frame()
-
+        self.start_lens_calibration_btn.setEnabled(True)
         # reset calibrator and info
         self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=self.chessboard_size)
         self.update_calib_info()
+
 
     def open_preset_func(self):
         """Load in calibration preset
@@ -826,7 +830,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.chess_layout.addWidget(chess_viewer)
 
         self.chess_window.resize(500, 500)
-        self.chess_window.show()
+        self.chess_window.showMaximized()
 
 
     def closeEvent(self, event):
@@ -897,19 +901,51 @@ class CalibratorUtility(QtWidgets.QMainWindow):
     def show_warning(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
 
+    def start_lens_calibration(self):
+        self.calibrator.new_calibration()
+        n_calibration_frames = 50
+        cap = cv2.VideoCapture(self.infile_path)
+        num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        print(f"Starting lens calibration with {num_frames} frames")
+        t = datetime.now()
+        good_frames = []
+        for n in np.linspace(0, num_frames - 1, n_calibration_frames):
+            n = int(n)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, n)
+            ret, frame = cap.read()
+            self.calibrator.num_processed_images += 1
+            if ret:
+                print("\n\nFrame:", n)
+                rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    def add_current_frame(self):
-        print("Adding frame")
+                ret, message, corners = self.calibrator.add_calib_image(frame)
+                print(message)
+                self.update_calib_info()
+                if ret:
+                    cv2.drawChessboardCorners(rgbImage, self.calibrator.chessboard_size, corners, True)
+                    scaled = cv2.resize(rgbImage, (960, 720))
+                    cv2.imshow('Chessboard detection', scaled)
+                    cv2.waitKey(1)
+                    rms = self.calibrator.compute_calibration()
+                    print("RMS:", rms)
+                    if rms > 3:
+                        self.calibrator.remove_calib_image()
+                        if rms != 100:
+                            print("rms too high, removing image")
+                    else:
+                        good_frames.append(n)
+                        self.calibrator.num_images_used += 1
+                else:
+                    self.calibrator.remove_calib_image()
+                    print("corners not detected, removing image")
+                self.update_calib_info()
+        cv2.destroyWindow('Chessboard detection')
+        print(f"Good frames: {len(good_frames)} of {n_calibration_frames} ({len(good_frames) / n_calibration_frames * 100} %)")
+        cap.release()
 
-        ret, self.calib_msg, corners = self.calibrator.add_calib_image(self.video_viewer.thread.frame)
+        print("Time for lens calibration: ", datetime.now() - t)
 
-        if ret:
-            self.video_viewer.set_cv_frame(cv2.drawChessboardCorners(self.video_viewer.thread.frame, self.calibrator.chessboard_size,corners,True) )
 
-        self.update_calib_info()
-
-        if self.calibrator.num_images > 0:
-            self.process_frames_btn.setEnabled(True)
 
     def remove_frame(self):
         """Remove last calibration frame
@@ -923,18 +959,17 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         """ Update the status text in the utility
         """
 
-        txt = "Good frames: {}\nProcessed frames: {}\nRMS error: {}\n{}".format(self.calibrator.num_images,
-                                                                                self.calibrator.num_images_used,
-                                                                                self.calibrator.RMS_error,
-                                                                                self.calib_msg)
+        txt = "Good frames: {}\nProcessed frames: {}\nRMS error: {:.5f}\n{}".format(
+            self.calibrator.num_images_used,
+            self.calibrator.num_processed_images,
+            float(self.calibrator.RMS_error),
+            self.calib_msg)
         self.info_text.setText(txt)
 
         # enable/disable buttons
         if self.calibrator.num_images > 0:
-            self.process_frames_btn.setEnabled(True)
             self.destretch_control.setEnabled(False)
         else:
-            self.process_frames_btn.setEnabled(False)
             self.destretch_control.setEnabled(True)
 
         if self.calibrator.num_images_used > 0:
@@ -1097,6 +1132,7 @@ class StretchUtility(QtWidgets.QMainWindow):
         path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
         self.infile_path = path[0]
         self.video_viewer.set_video_path(path[0])
+
 
 
         # recompute non linear stretch maps
@@ -2562,7 +2598,6 @@ class StabUtility(StabUtilityBarebone):
     def show_warning(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
 
-
     def synchere1(self):
         self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
         #print(self.video_viewer.get_current_timestamp())
@@ -2576,8 +2611,6 @@ class StabUtility(StabUtilityBarebone):
     
     def trimend(self):
         self.export_stoptime.setValue(self.video_viewer.get_current_timestamp())
-
-
 
     def update_preview(self):
         if self.stab:
