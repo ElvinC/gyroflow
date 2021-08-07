@@ -813,7 +813,7 @@ class Stabilizer:
 
         i = 0
 
-        starttime = time.time()
+        starttime_render = time.time()
 
         # Double press q to stop render
         quit_button = False
@@ -832,7 +832,7 @@ class Stabilizer:
 
             if i % 5 == 0:
                 fraction_done = i/num_frames
-                elapsed_time = time.time() - starttime # in seconds
+                elapsed_time = time.time() - starttime_render # in seconds
                 est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
                 print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
                 
@@ -952,15 +952,15 @@ class Stabilizer:
         out.close()
 
         if audio:
-            time.sleep(1)
+            time.sleep(.5)
             ffmpeg_command = [
                 "-y",
                 "-i",
                 self.videopath,
                 "-ss",
-                str(int(starttime * self.fps) / self.fps),
+                str(tstart / self.fps),
                 "-to",
-                str((int(starttime * self.fps) + num_frames) / self.fps),
+                str(tend / self.fps),
                 "-vn",
                 "-acodec",
                 "copy",
