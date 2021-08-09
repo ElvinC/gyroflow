@@ -1,0 +1,45 @@
+{
+    "name": "GoPro_HERO9 Black_Wide_5K 30 Wide",
+    "note": "",
+    "calibrated_by": "KonradIT",
+    "camera_brand": "GoPro",
+    "camera_model": "HERO9 Black",
+    "lens_model": "Wide",
+    "camera_setting": "5K 30 Wide",
+    "calibrator_version": "0.2.1-alpha",
+    "date": "2021-08-10",
+    "calib_dimension": {
+        "w": 5120,
+        "h": 2880
+    },
+    "num_images": 3,
+    "use_opencv_fisheye": true,
+    "fisheye_params": {
+        "RMS_error": 1.195623874917219,
+        "camera_matrix": [
+            [
+                2285.811347259965,
+                0.0,
+                2560.0
+            ],
+            [
+                0.0,
+                2292.1840636822863,
+                1440.0
+            ],
+            [
+                0.0,
+                0.0,
+                1.0
+            ]
+        ],
+        "distortion_coeffs": [
+            0.0882203103464638,
+            -0.09828641838613648,
+            0.24173557493052678,
+            -0.19270648815657568
+        ]
+    },
+    "use_opencv_standard": false,
+    "calib_params": {}
+}
