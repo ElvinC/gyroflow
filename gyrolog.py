@@ -6,7 +6,7 @@ from scipy.spatial.transform import Rotation
 import csv
 import re
 import time
-
+import sys, inspect
 import logging
 
 import insta360_utility as insta360_util
@@ -211,6 +211,7 @@ class GyrologReader:
         self.orientation_presets.append([len(self.orientation_presets),orientation_name, correction_mat])
 
     def guess_log_from_videofile(self, videofile):
+        return ""
         return videofile
 
     def load_log_from_videofile(self, videofile):
@@ -292,7 +293,7 @@ class GyrologReader:
 class BlackboxCSVData(GyrologReader):
     def __init__(self):
         super().__init__("Blackbox CSV file")
-        self.filename_pattern = "(?i).*\.(?:bbl|bfl)\.csv"
+        self.filename_pattern = "(?i).*\.csv"
         self.angle_setting = 0
 
     def check_log_type(self, filename):
@@ -307,16 +308,14 @@ class BlackboxCSVData(GyrologReader):
         return False
         
     def guess_log_from_videofile(self, videofile):
-
         no_suffix = os.path.splitext(videofile)[0]
         #path, fname = os.path.split(videofile)
 
-        log_suffixes = [".bbl.csv", ".bfl.csv"]
+        log_suffixes = [".bbl.csv", ".bfl.csv", ".csv"]
         for suffix in log_suffixes:
             if os.path.isfile(no_suffix + suffix):
                 logpath = no_suffix + suffix
-                print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
-                break
+                #print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
 
                 if self.check_log_type(logpath):
                     return logpath
@@ -403,13 +402,12 @@ class BlackboxRawData(GyrologReader):
         for suffix in log_suffixes:
             if os.path.isfile(no_suffix + suffix):
                 logpath = no_suffix + suffix
-                print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
-                break
+                #print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
 
-        if self.check_log_type(logpath):
-            return logpath
-        else:
-            return False
+                if self.check_log_type(logpath):
+                    return logpath
+
+        return False
 
     def extract_log(self, filename):
 
@@ -465,6 +463,8 @@ class RuncamData(GyrologReader):
         
         logpath = videofile.rstrip(fname) + logname
         
+        if not os.path.isfile(logpath):
+            return False
 
         if self.check_log_type(logpath):
             return logpath
@@ -648,7 +648,7 @@ class GyroflowGyroLog(GyrologReader):
             # open and check first line
             with open(filename, "r") as f:
                 firstline = f.readline().strip()
-                print(firstline)
+                #print(firstline)
                 if firstline in self.firstlines:
                     return True
 
@@ -659,8 +659,8 @@ class GyroflowGyroLog(GyrologReader):
         #path, fname = os.path.split(videofile)
 
         if os.path.isfile(no_suffix + ".gcsv"):
-            logpath = no_suffix + suffix
-            print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
+            logpath = no_suffix + ".gcsv"
+            #print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
 
             if self.check_log_type(logpath):
                 return logpath
@@ -703,14 +703,9 @@ class GyroflowGyroLog(GyrologReader):
                 splitdata = [float(x) for x in line.split(",")]
                 t = splitdata[0] * tscale
 
-                # RC5
                 gx = splitdata[1] * gscale
                 gy = splitdata[2] * gscale
                 gz = splitdata[3] * gscale
-
-                # Z: roll
-                # X: yaw
-                # y: pitch
 
                 data_list.append([t, gx, gy, gz])
 
@@ -763,10 +758,64 @@ class FakeData(GyrologReader):
         return True
 
 
+log_reader_classes = [GyroflowGyroLog,
+                      BlackboxCSVData,
+                      BlackboxRawData,
+                      RuncamData,
+                      Insta360Log,
+                      GPMFLog]
+
+print("Available log types")
+for alg in log_reader_classes:
+    print(alg().name)
+log_reader_names = [alg().name for alg in log_reader_classes]
+
+def get_log_reader_names():
+    """List of available control algorithms in plaintext
+    """
+    return log_reader_names
+
+def get_all_log_reader_instances():
+    return [alg() for alg in log_reader_classes]
+
+log_reader_instances = get_all_log_reader_instances()
+
+def get_log_reader_by_name(name="nothing"):
+    """Get an instance of a smoothing algorithm class from name
+    """
+    if name in log_reader_names:
+        return log_reader_classes[log_reader_names.index(name)]()
+    else:
+        return None
+
+def guess_log_type_from_video(videofile):
+    for reader in log_reader_instances:
+        guess = reader.guess_log_from_videofile(videofile)
+        if guess:
+            print(f"{videofile} has log {guess} with type '{reader.name}'")
+            return reader.name
+
+    print("Couldn't guess log type")
+    return False
+
 
 
 
 if __name__ == "__main__":
+
+    test_video_clips = [
+        "test_clips/PRO_VID_20210111_144304_00_010.mp4",
+        "test_clips/RC_0031_210722220523.MP4",
+        "test_clips/GX016015.MP4",
+        "test_clips/nivim_insta360.mp4",
+        "test_clips/Tiago_Ferreira_5_inch.mp4",
+        "test_clips/MasterTim17_caddx.mp4",
+        "test_clips/starling2.MOV"
+    ]
+    for clip in test_video_clips:
+        guess_log_type_from_video(clip)
+
+    exit()
 
 
     testcases = [[BlackboxCSVData(), "test_clips/btfl_005.bbl.csv"],
