@@ -222,6 +222,35 @@ class Stabilizer:
 
         self.plot_sync(corrected_times, slicelength)
 
+
+
+        oldplot = True
+        if oldplot:
+            xplot = plt.subplot(311)
+
+            plt.plot(times1, -transforms1[:,0] * self.fps)
+            plt.plot(times2, -transforms2[:,0] * self.fps)
+            plt.plot(corrected_times, self.integrator.get_raw_data("x"))
+            plt.ylabel("omega x [rad/s]")
+
+            plt.subplot(312, sharex=xplot)
+            
+            plt.plot(times1, -transforms1[:,1] * self.fps)
+            plt.plot(times2, -transforms2[:,1] * self.fps)
+            plt.plot(corrected_times, self.integrator.get_raw_data("y"))
+            plt.ylabel("omega y [rad/s]")
+
+            plt.subplot(313, sharex=xplot)
+
+            plt.plot(times1, transforms1[:,2] * self.fps)
+            plt.plot(times2, transforms2[:,2] * self.fps)
+            plt.plot(corrected_times, self.integrator.get_raw_data("z"))
+            #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+            plt.xlabel("time [s]")
+            plt.ylabel("omega z [rad/s]")
+
+            plt.show()
+
         # Temp new integrator with corrected time scale
 
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
@@ -242,6 +271,10 @@ class Stabilizer:
         self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
+
+    def full_auto_sync(self, debug_plots = True):
+        # TODO: Adapt logic from multisync.py
+        pass
 
     def plot_sync(self, corrected_times, slicelength):
         n = len(self.transform_times)
@@ -378,16 +411,19 @@ class Stabilizer:
                 self.use_essential_matrix = True
 
                 if self.use_essential_matrix:
-                    R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+                    try:
+                        R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
 
-                    rot1 = Rotation.from_matrix(R1)
-                    rot2 = Rotation.from_matrix(R2)
+                        rot1 = Rotation.from_matrix(R1)
+                        rot2 = Rotation.from_matrix(R2)
 
-                    if rot1.magnitude() < rot2.magnitude():
-                        roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
-                    else:
-                        roteul = rot2.as_rotvec() # as_euler("xyz")
-
+                        if rot1.magnitude() < rot2.magnitude():
+                            roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
+                        else:
+                            roteul = rot2.as_rotvec() # as_euler("xyz")
+                    except:
+                        print("Couldn't recover motion for this frame")
+                        roteul = np.array([0,0,0])
 
                 #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
                 #dx = m[0,2]
@@ -958,9 +994,9 @@ class Stabilizer:
                 "-i",
                 self.videopath,
                 "-ss",
-                str(int(starttime * self.fps) / self.fps),
+                str(tstart / self.fps),
                 "-to",
-                str((int(starttime * self.fps) + num_frames) / self.fps),
+                str(tend / self.fps),
                 "-vn",
                 "-acodec",
                 "copy",
