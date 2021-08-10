@@ -63,8 +63,8 @@ class Launcher(QtWidgets.QWidget):
         self.stabilizer_button.setStyleSheet("font-size: 14px;")
 
         self.stabilizer_barebone_button = QtWidgets.QPushButton("Video Stabilizer (old)")
-        self.stabilizer_barebone_button.setMinimumSize(300,50)
-        self.stabilizer_barebone_button.setStyleSheet("font-size: 14px;")
+        self.stabilizer_barebone_button.setMinimumSize(300,30)
+        self.stabilizer_barebone_button.setStyleSheet("font-size: 13px;")
 
         self.stretch_button = QtWidgets.QPushButton("Non-linear Stretch")
         self.stretch_button.setMinimumSize(300,30)
@@ -85,9 +85,14 @@ class Launcher(QtWidgets.QWidget):
         self.layout.addWidget(self.top_logo)
         self.layout.addWidget(self.text)
         self.layout.addWidget(self.stabilizer_button)
-        self.layout.addWidget(self.stabilizer_barebone_button)
+        
         self.layout.addWidget(self.calibrator_button)
-        #self.layout.addWidget(self.misc_text)
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        line.setMinimumHeight(20)
+        self.layout.addWidget(line)
+        self.layout.addWidget(self.stabilizer_barebone_button)
         self.layout.addWidget(self.stretch_button)
         self.layout.addWidget(self.version_button)
         self.layout.addWidget(self.footer)

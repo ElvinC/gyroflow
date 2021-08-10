@@ -331,7 +331,7 @@ class LimitedSlerp(SmoothingAlgo):
 
 smooth_algo_classes = []
 
-for n, obj in inspect.getmembers(sys.modules[__name__]):
+for n, obj in inspect.getmembers(sys.modules[__name__], lambda member: inspect.isclass(member) and member.__module__ == __name__):
     if inspect.isclass(obj):
         smooth_algo_classes.append(obj)
 

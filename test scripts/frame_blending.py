@@ -1,10 +1,16 @@
 import cv2
 import numpy as np
+import os
    
 # Create a VideoCapture object and read from input file
-#cap = cv2.VideoCapture('../test_clips/DJIG0043wiebe.mp4')
-cap = cv2.VideoCapture('C:/Users/elvin/Downloads/IF-RC01_0000.MP4')
-cap.set(cv2.CAP_PROP_POS_FRAMES, 60 * 10)
+f = '../test_clips/DJIG0043wiebe.mp4'
+if os.path.isfile(f):
+    print("IS FILE")
+else:
+    print("NOT FILE")
+cap = cv2.VideoCapture(f)
+#cap = cv2.VideoCapture('C:/Users/elvin/Downloads/IF-RC01_0000.MP4')
+#cap.set(cv2.CAP_PROP_POS_FRAMES, 60 * 10)
 
 ret, frame_out = cap.read()
 

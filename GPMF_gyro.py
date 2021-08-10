@@ -40,7 +40,7 @@ class Extractor:
         num_frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
         self.fps = video.get(cv2.CAP_PROP_FPS)
         self.video_length =  num_frames / self.fps
-        print("Video length: {} s, framerate: {} FPS".format(self.video_length,self.fps))
+        #print("Video length: {} s, framerate: {} FPS".format(self.video_length,self.fps))
 
         self.size = int(video.get(cv2.CAP_PROP_FRAME_WIDTH)), int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -64,7 +64,7 @@ class Extractor:
 
 
         self.gyro_rate = self.num_gyro_samples / self.video_length 
-        print("Gyro rate: {} Hz, should be close to 200 or 400 Hz".format(self.gyro_rate))
+        #print("Gyro rate: {} Hz, should be close to 200 or 400 Hz".format(self.gyro_rate))
 
 
         self.parsed_gyro = np.zeros((self.num_gyro_samples, 4))
