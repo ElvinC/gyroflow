@@ -315,6 +315,93 @@ class LimitedSlerp(SmoothingAlgo):
 
         return times, smoothed_orientation2
 
+class SmoothLimitedSlerp(SmoothingAlgo):
+    """Limited quaternion slerp
+    """
+    def __init__(self):
+        super().__init__("Limited quaternion slerp (Aphobius)")
+
+        self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+        
+        self.add_user_option("rotlimit", 10, 0, 180, ui_label = "Rotation limit (degrees):",
+                             explanation="Maximum angular rotation for virtual camera", input_expo = 1, input_type="int")
+
+    def smooth_orientations_internal(self, times, orientation_list):
+        # To be overloaded
+
+        # https://en.wikipedia.org/wiki/Exponential_smoothing
+        # the smooth value corresponds to the time constant
+
+        alpha = 1
+        high_alpha = 1
+        smooth = self.get_user_option_value("smoothness")
+        if smooth > 0:
+            alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) / smooth)
+            high_alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) / (smooth * 0.1))
+
+        # forward pass
+        smoothed_orientation = np.zeros(orientation_list.shape)
+
+        value = orientation_list[0,:]
+
+        for i in range(self.num_data_points):
+            value = quat.slerp(value, orientation_list[i,:],[alpha])[0]
+            smoothed_orientation[i] = value
+
+        # reverse pass
+        smoothed_orientation2 = np.zeros(orientation_list.shape)
+
+        value2 = smoothed_orientation[-1,:]
+
+        for i in range(self.num_data_points-1, -1, -1):
+            value2 = quat.slerp(value2, smoothed_orientation[i,:],[alpha])[0]
+            smoothed_orientation2[i] = value2
+
+        high_smooth = smoothed_orientation2
+
+        # forward pass
+        smoothed_orientation = np.zeros(orientation_list.shape)
+
+        value = orientation_list[0,:]
+
+        for i in range(self.num_data_points):
+            value = quat.slerp(value, orientation_list[i,:],[high_alpha])[0]
+            smoothed_orientation[i] = value
+
+        # reverse pass
+        smoothed_orientation2 = np.zeros(orientation_list.shape)
+
+        value2 = smoothed_orientation[-1,:]
+
+        for i in range(self.num_data_points-1, -1, -1):
+            value2 = quat.slerp(value2, smoothed_orientation[i,:],[high_alpha])[0]
+            smoothed_orientation2[i] = value2
+
+        low_smooth = smoothed_orientation2
+
+        # calculate distance between high_smooth and low_smooth
+        distance = np.zeros(self.num_data_points)
+
+        for i in range(self.num_data_points):
+            distance[i] = quat.angle_between(high_smooth[i], low_smooth[i])
+
+        # get rot limit
+        rot_limit = self.get_user_option_value("rotlimit") * np.pi / 180
+        # divided by 2 so the limit is closer to the inputed value
+        rot_limit /= 2
+
+        # limit rotation
+        interp_factor = 1 - (rot_limit / (distance + rot_limit / 2))
+        np.maximum(interp_factor, 0)
+        interp_factor *= interp_factor
+
+        final_orientation = np.zeros(orientation_list.shape)
+
+        for i in range(self.num_data_points):
+            final_orientation[i] = quat.slerp(high_smooth[i], low_smooth[i],[interp_factor[i]])[0]
+
+        return times, final_orientation
 
 #class HorizonLock(SmoothingAlgo):
 #    """Keep horizon level
