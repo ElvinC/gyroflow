@@ -312,6 +312,7 @@ class BlackboxCSVData(GyrologReader):
         #path, fname = os.path.split(videofile)
 
         log_suffixes = [".bbl.csv", ".bfl.csv", ".csv"]
+        log_suffixes += [ex.upper() for ex in log_suffixes]
         for suffix in log_suffixes:
             if os.path.isfile(no_suffix + suffix):
                 logpath = no_suffix + suffix
@@ -373,7 +374,7 @@ class BlackboxCSVData(GyrologReader):
 class BlackboxRawData(GyrologReader):
     def __init__(self):
         super().__init__("Blackbox raw file")
-        self.filename_pattern = "(?i).*\.(?:bbl|bfl)"
+        self.filename_pattern = "(?i).*\.(?:bbl|bfl|txt)"
         self.angle_setting = 0
 
     def check_log_type(self, filename):
@@ -398,7 +399,8 @@ class BlackboxRawData(GyrologReader):
         no_suffix = os.path.splitext(videofile)[0]
         #path, fname = os.path.split(videofile)
 
-        log_suffixes = [".bbl", ".bfl"]
+        log_suffixes = [".bbl", ".bfl", ".txt"] # txt is inav blackbox
+        log_suffixes += [ex.upper() for ex in log_suffixes]
         for suffix in log_suffixes:
             if os.path.isfile(no_suffix + suffix):
                 logpath = no_suffix + suffix
@@ -795,7 +797,7 @@ def guess_log_type_from_video(videofile):
             print(f"{videofile} has log {guess} with type '{reader.name}'")
             return reader.name
 
-    print("Couldn't guess log type")
+    print(f"Couldn't guess log type of {videofile}")
     return False
 
 
@@ -810,7 +812,8 @@ if __name__ == "__main__":
         "test_clips/nivim_insta360.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",
         "test_clips/MasterTim17_caddx.mp4",
-        "test_clips/starling2.MOV"
+        "test_clips/starling2.MOV",
+        "test_clips/raw_inav_log.mp4"
     ]
     for clip in test_video_clips:
         guess_log_type_from_video(clip)

@@ -220,12 +220,13 @@ class Stabilizer:
 
         print("Gyro correction slope {}".format(slope))
 
-        self.plot_sync(corrected_times, slicelength)
+        self.plot_sync(corrected_times, slicelength, show=False)
 
 
 
         oldplot = True
-        if oldplot:
+        if oldplot and debug_plots:
+            plt.figure()
             xplot = plt.subplot(311)
 
             plt.plot(times1, -transforms1[:,0] * self.fps)
@@ -249,7 +250,7 @@ class Stabilizer:
             plt.xlabel("time [s]")
             plt.ylabel("omega z [rad/s]")
 
-            plt.show()
+        plt.show()
 
         # Temp new integrator with corrected time scale
 
@@ -276,7 +277,7 @@ class Stabilizer:
         # TODO: Adapt logic from multisync.py
         pass
 
-    def plot_sync(self, corrected_times, slicelength):
+    def plot_sync(self, corrected_times, slicelength, show=False):
         n = len(self.transform_times)
         fig, axes = plt.subplots(3, n, sharey=True)
         fig.set_size_inches(4 * n, 6)
@@ -296,11 +297,14 @@ class Stabilizer:
         for i in range(n):
             axes[2][i].set(xlabel="time [s]")
         plt.tight_layout()
-        plt.show()
+        if show:
+            plt.show()
         return fig, axes
 
 
     def manual_sync_correction(self, d1, d2):
+
+
         v1 = self.v1
         v2 = self.v2
 
@@ -311,7 +315,7 @@ class Stabilizer:
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
         print("Gyro correction slope {}".format(slope))
 
-        self.plot_sync(corrected_times, slicelength=50)
+        self.plot_sync(corrected_times, slicelength=50, show=True)
 
         # Temp new integrator with corrected time scale
 
@@ -493,6 +497,7 @@ class Stabilizer:
 
 
         if debug_plots:
+            plt.figure()
             plt.plot(offsets, costs)
         #    plt.show()
         costs = []
