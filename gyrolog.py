@@ -129,6 +129,9 @@ ORIENTATIONS = [[[1, 0, 0], # 0 = identity
 
 ORIENTATIONS = [np.array(mat) for mat in ORIENTATIONS]
 
+def get_rotmat_from_id(id):
+    return ORIENTATIONS[id]
+
 def show_orientation(rotmat):
     orig_lw = 4
     sensor_lw = 2
@@ -176,8 +179,14 @@ class GyrologReader:
 
         self.name = name
 
+        # The scaled data read from the file
         self.gyro = None # N*4 array with each column containing [t, gx, gy, gz]
         self.acc = None # N*4 array with each column containing [t, ax, ay, az]
+
+        # The transformed data according to the gyroflow convention
+        self.standard_gyro = None
+        self.standard_acc = None
+
         self.extracted = False
         self.has_acc = False
         # Assume same time reference and orientation used for both
@@ -186,7 +195,10 @@ class GyrologReader:
         self.angle_setting = False
 
         # Slightly different log formats
-        self.variants = []
+        self.variants = {
+            "standard": [0], # dict entry with correction matrix ID from ORIENTATIONS
+            "standard1": [-1, [[1,0,0],[0,1,0],[0,0,1]]], # Alternatively -1 with second entry being a rotation matrix
+        }
         self.variant = None
 
         self.orientation_presets = []
@@ -195,11 +207,18 @@ class GyrologReader:
         self.filename_pattern = ""
 
     def get_variants(self):
-        return self.variants
+        return list(self.variants)
     
     def set_variant(self, variant=None):
         if variant in self.variants:
             self.variant = variant
+
+    def get_variant_rotmat(self):
+        info = self.variants[self.variant]
+        if info[0] == -1 and len(info) == 2:
+            return np.array(info[1])
+        else:
+            return get_rotmat_from_id(info[0])
 
     def filename_matches(self, filename):
         pattern = re.compile(self.filename_pattern)
@@ -238,6 +257,8 @@ class GyrologReader:
         # z axis: points away from lens. positive equals CCW rotation (objects moves CW)
 
         # note that measured gravity vector points upwards when stationary due to equivalence to upwards acceleration
+
+        # These are the "raw, untransformed" values
         self.gyro = None
         self.acc = None
 
@@ -248,6 +269,18 @@ class GyrologReader:
 
         if os.path.isfile(filename) or (not check_file_exist):
             self.extracted = self.extract_log_internal(filename)
+
+            if self.extracted:
+                if type(self.gyro) != type(None):
+                    self.standard_gyro = np.copy(self.gyro)
+
+                    self.apply_variant_rotation_in_place(self.standard_gyro)
+
+                if type(self.acc) != type(None):
+                    self.standard_acc = np.copy(self.acc)
+
+                    self.apply_variant_rotation_in_place(self.standard_acc)
+
             return self.extracted
 
         else:
@@ -262,9 +295,16 @@ class GyrologReader:
         if self.extracted and self.has_acc:
             return self.acc
 
-    def apply_rotation(self, rotmat):
-        if self.extracted:
-            self.gyro[:,1:] = (rotmat * self.gyro[:,1:].transpose()).transpose
+    def apply_rotation(self, rotmat, time_data):
+        # Applies in place
+        time_data[:,1:] = time_data[:,1:].dot(rotmat.T)
+
+    def apply_variant_rotation_in_place(self, time_data):
+        if self.variants[self.variant][0] == 0:
+            return # identity
+        
+        # apply in place
+        self.apply_rotation(self.get_variant_rotmat(), time_data)
 
     def apply_inverse_rotation(self, rotmat):
         mat = np.linalg.inv(rotmat)
@@ -296,6 +336,12 @@ class BlackboxCSVData(GyrologReader):
         self.filename_pattern = "(?i).*\.csv"
         self.angle_setting = 0
 
+        self.variants = {
+            "standard": [12] # dict entry with correction matrix ID from ORIENTATIONS
+        }
+
+        self.variant = "standard"
+
     def check_log_type(self, filename):
         fname = os.path.split(filename)[-1]
         if self.filename_matches(fname):
@@ -323,7 +369,7 @@ class BlackboxCSVData(GyrologReader):
 
         return False
 
-    def extract_log(self, filename):
+    def extract_log_internal(self, filename):
 
         use_raw_gyro_data = False
 
@@ -377,6 +423,12 @@ class BlackboxRawData(GyrologReader):
         self.filename_pattern = "(?i).*\.(?:bbl|bfl|txt)"
         self.angle_setting = 0
 
+        self.variants = {
+            "standard": [12] # dict entry with correction matrix ID from ORIENTATIONS
+        }
+
+        self.variant = "standard"
+
     def check_log_type(self, filename):
         fname = os.path.split(filename)[-1]
         if self.filename_matches(fname):
@@ -411,14 +463,14 @@ class BlackboxRawData(GyrologReader):
 
         return False
 
-    def extract_log(self, filename):
+    def extract_log_internal(self, filename):
 
         try:
             bbe = BlackboxExtractor(filename)
             self.gyro = bbe.get_gyro_data(cam_angle_degrees=self.angle_setting)
 
             return True
-        except ValueError:
+        except ZeroDivisionError:
             print("Error reading raw blackbox file. Try converting to CSV in blackbox explorer")
             return False
 
@@ -427,7 +479,10 @@ class RuncamData(GyrologReader):
         super().__init__("Runcam CSV log")
         self.filename_pattern = "RC_GyroData\d{4}\.csv"
 
-        self.variants = ["Runcam 5 Orange", "iFlight GOCam GR"]
+        self.variants = {
+            "Runcam 5 Orange": [0],
+            "iFlight GOCam GR": [0]
+        }
         self.variant = "Runcam 5 Orange"
 
 
@@ -448,7 +503,7 @@ class RuncamData(GyrologReader):
         path, fname = os.path.split(videofile)
 
         # Runcam 5 Orange
-        rc5pattern = re.compile("RC_(\d{4})_\d{12}\..*") # example: RC_0030_210719221659.MP4
+        rc5pattern = re.compile("RC_(\d{4})_.*\..*") # example: RC_0030_210719221659.MP4
         gocampattern = re.compile("IF-RC01_(\d{4})\..*") # example: IF-RC01_0011.MP4
         
         if rc5pattern.match(fname): 
@@ -474,7 +529,7 @@ class RuncamData(GyrologReader):
             return False
 
 
-    def extract_log(self, filename):
+    def extract_log_internal(self, filename):
 
         with open(filename) as csvfile:
             next(csvfile)
@@ -510,8 +565,10 @@ class Insta360Log(GyrologReader):
         super().__init__("Insta360 IMU metadata")
         self.filename_pattern = "(?i).*\.mp4"
 
-        self.variants = ["smo4k", "insta360 oner"]
-        self.variant = "smo4k"
+        self.variants = {
+            "smo4k": [0],
+            "insta360 oner": [0]
+        }
 
     def check_log_type(self, filename):
         if self.filename_matches(filename):
@@ -527,7 +584,7 @@ class Insta360Log(GyrologReader):
             return False
 
 
-    def extract_log(self, filename):
+    def extract_log_internal(self, filename):
 
         if self.variant=="smo4k":
             gyro_data_input, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
@@ -551,7 +608,14 @@ class GPMFLog(GyrologReader):
         super().__init__("GoPro GPMF metadata")
         self.filename_pattern = "(?i).*\.mp4"
 
-        self.variants = ["hero5", "hero6", "hero7", "hero8", "hero9"]
+        self.variants =  {
+            "hero5": [0], # Zero since this is handled during extraction, not after
+            "hero6": [0],
+            "hero7": [0],
+            "hero8": [0],
+            "hero9": [0]
+        }
+
         self.variant = "hero6"
 
         self.gpmf = None
@@ -579,7 +643,7 @@ class GPMFLog(GyrologReader):
             return False
 
 
-    def extract_log(self, filename):
+    def extract_log_internal(self, filename):
 
         try:
             if self.gpmf:
@@ -670,7 +734,7 @@ class GyroflowGyroLog(GyrologReader):
         
 
 
-    def extract_log(self, filename):
+    def extract_log_internal(self, filename):
 
         tscale = 0.001
         gscale = 1
@@ -686,13 +750,15 @@ class GyroflowGyroLog(GyrologReader):
             line = ""
             while not line.startswith("t,"):
                 line = csvfile.readline().strip()
-                print(line)
+                #print(line)
                 if line.startswith("tscale,"):
                     tscale = float(line.split(",")[1])
                 elif line.startswith("gscale,"):
                     gscale = float(line.split(",")[1])
                 elif line.startswith("ascale,"):
                     ascale = float(line.split(",")[1])
+                elif line.startswith("mscale,"):
+                    mscale = float(line.split(",")[1])
 
             #print(tscale, gscale, ascale)
 
@@ -790,15 +856,24 @@ def get_log_reader_by_name(name="nothing"):
     else:
         return None
 
-def guess_log_type_from_video(videofile):
+def guess_log_type_from_video(videofile, check_data = False):
     for reader in log_reader_instances:
         guess = reader.guess_log_from_videofile(videofile)
         if guess:
             print(f"{videofile} has log {guess} with type '{reader.name}'")
-            return reader.name
+            
+
+            if check_data:
+                if reader.extract_log(guess):
+                    N = reader.gyro.shape[0]
+                    print(f"{N} samples extracted")
+
+                    reader.plot_gyro()
+                
+            return guess, reader.name
 
     print(f"Couldn't guess log type of {videofile}")
-    return False
+    return False, ""
 
 
 
@@ -815,10 +890,10 @@ if __name__ == "__main__":
         "test_clips/starling2.MOV",
         "test_clips/raw_inav_log.mp4"
     ]
-    for clip in test_video_clips:
-        guess_log_type_from_video(clip)
+    #for clip in test_video_clips:
+    #    guess_log_type_from_video(clip,check_data=True)
 
-    exit()
+    #exit()
 
 
     testcases = [[BlackboxCSVData(), "test_clips/btfl_005.bbl.csv"],
@@ -828,7 +903,7 @@ if __name__ == "__main__":
                  [GPMFLog(), "test_clips/GX016015.MP4"],
                  [GyroflowGyroLog(), "test_clips/gyroflow_format_example.gcsv"]]
     
-    for reader, path in testcases[3:]:
+    for reader, path in testcases[:3]:
 
         print(f"Using {reader.name}")
         check = reader.check_log_type(path)
