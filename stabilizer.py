@@ -536,12 +536,13 @@ class Stabilizer:
         print("Better offset: {}".format(better_offset))
 
         if debug_plots:
+            #plt.figure()
             plt.plot(offsets, costs)
             plt.xlabel("Offset [s]")
             plt.ylabel("Cost")
             plt.title(f"Syncpoint Offset Estimation\nCosts: {min(costs):.4f}, Offset: {better_offset:.4f}")
 
-            plt.show()
+            #plt.show()
 
         return better_offset
 
