@@ -1540,6 +1540,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_slider.setSingleStep(1)
         self.fov_slider.setTickInterval(1)
         self.fov_slider.valueChanged.connect(self.fov_scale_changed)
+        self.fov_text.setVisible(False)
+        self.fov_slider.setVisible(False)
 
 
         self.sync_controls_layout.addWidget(self.fov_text)
@@ -1679,7 +1681,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             "h264_amf": ["main", "high", "constrained_baseline", "constrained_high"],
             "h264_vaapi": ["baseline", "main", "high"],
             "h264_videotoolbox": ["baseline", "main", "high", "extended"],
-            "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"]
+            "prores_ks": ["auto", "proxy", "lt", "standard", "hq", "4444", "4444xq"] #,
+            #"v210": ["raw"] # todo
         }
 
         self.encoder_model = QtGui.QStandardItemModel()
