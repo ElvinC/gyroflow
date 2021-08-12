@@ -201,6 +201,8 @@ class GyrologReader:
         self.has_acc = False
         # Assume same time reference and orientation used for both
 
+        self.filename = ""
+
         # Extra settings
         self.angle_setting = 0
 
@@ -285,10 +287,12 @@ class GyrologReader:
 
     def extract_log(self, filename, check_file_exist= True):
 
+
         if os.path.isfile(filename) or (not check_file_exist):
             self.extracted = self.extract_log_internal(filename)
 
             if self.extracted:
+                self.filename = filename
                 if type(self.gyro) != type(None):
                     self.standard_gyro = np.copy(self.gyro)
 
@@ -355,6 +359,46 @@ class GyrologReader:
 
         plt.show()
 
+    def save_gyroflow_format(self, filename=False):
+        if not filename:
+            filename = self.filename + ".gcsv"
+        
+        has_gyro = type(self.gyro) != type(None)
+        has_acc = type(self.acc) != type(None)
+
+        if not has_gyro:
+            return False
+
+        if has_acc:
+            if self.gyro.shape != self.acc.shape:
+                print("Gyro and acc are not the same shape")
+                return False
+
+        with open(filename, "w") as f:
+            # GYROFLOW IMU LOG
+            # tscale,0.001
+            # gscale,0.0002663161
+            # ascale,0.00059875488
+            # t,gx,gy,gz,ax,ay,az
+            # 0,39,86,183,-1137,-15689,-29
+            f.write("GYROFLOW IMU LOG\n")
+            f.write("tscale,1\n") # time in seconds
+            f.write("gscale,1\n") # gyro in rad/s
+            f.write("ascale,1\n") # acceleration in m/s^2
+            f.write("t,gx,gy,gz,ax,ay,az" if has_acc else "t,gx,gy,gz\n")
+
+            for i in range(self.gyro.shape[0]):
+                line = list(self.gyro[i,1:])
+                if has_acc:
+                    line += list(self.acc[i,1:]) # don't add time
+                # round time to tenth of millisecond
+                # 4 significant digits in data
+                line = [str(round(self.gyro[i,0], 4))] + [f"{n:.4g}" for n in line] 
+                f.write(",".join(line) + "\n")
+            
+
+        return True
+        
 class BlackboxCSVData(GyrologReader):
     def __init__(self):
         super().__init__("Blackbox CSV file")
@@ -505,7 +549,7 @@ class BlackboxRawData(GyrologReader):
             self.gyro = bbe.get_gyro_data(cam_angle_degrees=self.angle_setting)
 
             return True
-        except ZeroDivisionError:
+        except:
             print("Error reading raw blackbox file. Try converting to CSV in blackbox explorer")
             return False
 
@@ -920,6 +964,8 @@ def guess_log_type_from_video(videofile, check_data = False):
                     print(f"{N} samples extracted")
 
                     reader.plot_gyro()
+
+                    reader.save_gyroflow_format()
                 
             return guess, reader.name
 
@@ -942,7 +988,8 @@ if __name__ == "__main__":
         "test_clips/raw_inav_log.mp4"
     ]
     for clip in test_video_clips:
-        guess_log_type_from_video(clip,check_data=False)
+        guess_log_type_from_video(clip,check_data=True)
+        
 
     #exit()
 
