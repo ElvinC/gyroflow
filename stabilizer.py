@@ -312,7 +312,10 @@ class Stabilizer:
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
         g1 = v1 - d1
         g2 = v2 - d2
-        slope = (v2 - v1) / (g2 - g1)
+        if g1==g2:
+            slope = 1
+        else:
+            slope = (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
         print("Gyro correction slope {}".format(slope))
 

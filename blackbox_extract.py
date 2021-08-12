@@ -96,6 +96,7 @@ class BlackboxExtractor:
                 if len(frame.data) > gy and ((0 < (frame.data[t] - last_t) < self.max_data_gab) or (last_t == 0)):
                     
                     data_frames.append([frame.data[t], frame.data[gx], frame.data[gy], frame.data[gz]])
+                    last_t = frame.data[t]
 
             if len(data_frames) < 2:
                 return False

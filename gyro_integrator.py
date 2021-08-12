@@ -192,7 +192,15 @@ class GyroIntegrator:
 
         
     def get_interpolated_stab_transform(self, start=0, interval=1/29.97):
-        time_list, smoothed_orientation = self.get_stabilize_transform()
+        
+        if self.smoothing_algo:
+            if self.smoothing_algo.bypass_external_processing:
+                print("USING SMOTOHING ALGO INTEGRATION STEP")
+                time_list, smoothed_orientation = self.smoothing_algo.get_stabilize_transform(self.data)
+            else:
+                time_list, smoothed_orientation = self.get_stabilize_transform()
+        else:
+            time_list, smoothed_orientation = self.get_stabilize_transform()
 
         time = start
 
@@ -602,14 +610,14 @@ class EulerIntegrator:
 if __name__ == "__main__":
     from scipy.spatial.transform import Rotation
     np.random.seed(1234)
-    fake_gyro_data = np.random.random((100,4))
-    fake_gyro_data[:,0] = np.arange(100)/10
-    print(fake_gyro_data)
+    fake_gyro_data = np.random.random((1000,4))
+    fake_gyro_data[:,0] = np.arange(1000)/10
+    #print(fake_gyro_data)
 
-    integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None)
+    integrator = GyroIntegrator(fake_gyro_data, time_scaling=1, gyro_scaling=4, zero_out_time=True, initial_orientation=None, acc_data=None)
     integrator.integrate_all()
     stabtransforms =integrator.get_interpolated_stab_transform(0.5)[1]
-    print("\n".join([str(q) for q in stabtransforms]))
+    #print("\n".join([str(q) for q in stabtransforms]))
     
     q = stabtransforms[-1].flatten()
 
@@ -617,6 +625,12 @@ if __name__ == "__main__":
                        [0,0,0],
                        [0,0,0]])
     rot = Rotation([q[1],q[2],q[3],q[0]]).as_matrix()
+
+    final_rotation = np.eye(3)
+    final_rotation[0,0] = -1
+
+    combined_rotation[0:3,0:3] = np.linalg.multi_dot([final_rotation, np.linalg.inv(combined_rotation[0:3,0:3]), np.linalg.inv(final_rotation)])
+    #rot = Rotation([-q[1],-q[2],q[3],-q[0]]).as_matrix()
     print(rot)
 
     # X *
@@ -627,3 +641,9 @@ if __name__ == "__main__":
     #[[ 0.94913057  0.1822425  -0.25678557]
     #[-0.23380831  0.95411913 -0.1870571 ]
     #[ 0.21091427  0.23758021  0.94819345]]
+
+
+    # What I want
+    #[[ 0.93079128  0.28028112 -0.23467017]
+    #[-0.34033391  0.89874166 -0.27647107]
+    #[ 0.13341824  0.33720308  0.93193007]]

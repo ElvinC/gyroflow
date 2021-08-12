@@ -2,6 +2,8 @@ import numpy as np
 import quaternion as quat
 import matplotlib.pyplot as plt
 import sys, inspect
+from scipy import signal
+from scipy.spatial.transform import Rotation
 from PySide2 import QtCore, QtWidgets, QtGui
 
 class SmoothingAlgo:
@@ -18,6 +20,9 @@ class SmoothingAlgo:
         self.ui_widget = None
         self.ui_widget_layout = None
         self.ui_input_widgets = {}
+
+        # Enable if the smoothing algo should directly return correction quats from raw data
+        self.bypass_external_processing = False
         
     def get_ui_widget(self):
         if self.ui_widget:
@@ -183,6 +188,13 @@ class SmoothingAlgo:
         # To be overloaded
         return times, orientation_quats
 
+    def get_stabilize_transform(self, gyro_time):
+        # Method to bypass external orientation processing and do everything here from the raw gyro data
+        times = gyro_time[:,0]
+        gyro = gyro_time[:,1:]
+
+        # Return timelist, quaternion list
+        return False, False
 
 
 
@@ -314,6 +326,61 @@ class LimitedSlerp(SmoothingAlgo):
             smoothed_orientation2[i] = value2
 
         return times, smoothed_orientation2
+
+class RateSmoothing(SmoothingAlgo):
+    def __init__(self):
+        super().__init__("Yaw pitch roll smoothing")
+
+        self.add_user_option("yaw_smoothness", 0.2, 0, 30, ui_label = "Yaw smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+        
+        self.add_user_option("pitch_smoothness", 0.2, 0, 30, ui_label = "Pitch smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+
+        self.add_user_option("roll_smoothness", 0.4, 0, 30, ui_label = "Roll smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+
+        self.add_user_option("order", 1, 1, 6, ui_label = "Filter order:",
+                             explanation="Smoothness algorithm filter order (higher gives sharper frequency cutoff)", input_expo = 1, input_type="int")
+
+        self.bypass_external_processing = True
+
+    def get_stabilize_transform(self, gyro_time):
+        # Method to bypass external orientation processing and do everything here from the raw gyro data
+        times = gyro_time[:,0]
+        gyro = gyro_time[:,1:]
+
+        self.num_data_points = times.shape[0]
+        self.gyro_sample_rate = self.num_data_points / (times[-1] - times[0])
+
+        dt = 1/self.gyro_sample_rate
+
+        traj = np.cumsum(gyro * dt,0)
+
+        smoothed_traj = np.copy(traj)
+
+        # per convention x is pitch, y is yaw, and z is roll
+        if self.get_user_option_value("pitch_smoothness") > 0:
+            sosgyro = signal.butter(1, 1/self.get_user_option_value("pitch_smoothness"), "lowpass", fs=self.gyro_sample_rate, output="sos")
+            smoothed_traj[:,0] = signal.sosfiltfilt(sosgyro, smoothed_traj[:,0], 0) # Filter along "vertical" time axis
+
+        if self.get_user_option_value("yaw_smoothness") > 0:
+            sosgyro = signal.butter(1, 1/self.get_user_option_value("yaw_smoothness"), "lowpass", fs=self.gyro_sample_rate, output="sos")
+            smoothed_traj[:,1] = signal.sosfiltfilt(sosgyro, smoothed_traj[:,1], 0) # Filter along "vertical" time axis
+
+        if self.get_user_option_value("roll_smoothness") > 0:
+            sosgyro = signal.butter(1, 1/self.get_user_option_value("roll_smoothness"), "lowpass", fs=self.gyro_sample_rate, output="sos")
+            smoothed_traj[:,2] = signal.sosfiltfilt(sosgyro, smoothed_traj[:,2], 0) # Filter along "vertical" time axis
+
+        stab_rotvec = traj - smoothed_traj # from smoothed to non-smoothed
+
+        # convert to quaternion
+        correction_quats = Rotation.from_rotvec(stab_rotvec).as_quat()
+        # scalar in beginning
+        correction_quats[:,[0,1,2,3]] = correction_quats[:,[3,0,1,2]]
+
+        # Return timelist, quaternion list
+        return times, correction_quats
 
 class SmoothLimitedSlerp(SmoothingAlgo):
     """Limited quaternion slerp

@@ -132,6 +132,16 @@ ORIENTATIONS = [np.array(mat) for mat in ORIENTATIONS]
 def get_rotmat_from_id(id):
     return ORIENTATIONS[id]
 
+def generate_uptilt_mat(angle, degrees=False):
+    # Positive angle equals tilting camera up (gyro tilts down)
+    angle = angle * np.pi / 180 if degrees else angle
+    angle = -angle
+
+    rotmat = np.array([[1,0,0],
+                       [0,np.cos(angle),-np.sin(angle)],
+                       [0,np.sin(angle),np.cos(angle)]])
+    return rotmat
+
 def show_orientation(rotmat):
     orig_lw = 4
     sensor_lw = 2
@@ -192,19 +202,27 @@ class GyrologReader:
         # Assume same time reference and orientation used for both
 
         # Extra settings
-        self.angle_setting = False
+        self.angle_setting = 0
 
         # Slightly different log formats
         self.variants = {
             "standard": [0], # dict entry with correction matrix ID from ORIENTATIONS
             "standard1": [-1, [[1,0,0],[0,1,0],[0,0,1]]], # Alternatively -1 with second entry being a rotation matrix
         }
-        self.variant = None
+        self.variant = "standard"
 
         self.orientation_presets = []
         self.current_orientation_preset = ""
 
         self.filename_pattern = ""
+
+    def post_init(self):
+        # Run after init
+        assert self.variant in self.variants
+
+
+    def set_cam_up_angle(self,angle=0,degrees=False):
+        self.angle_setting = angle * np.pi / 180 if degrees else angle
 
     def get_variants(self):
         return list(self.variants)
@@ -300,11 +318,18 @@ class GyrologReader:
         time_data[:,1:] = time_data[:,1:].dot(rotmat.T)
 
     def apply_variant_rotation_in_place(self, time_data):
+
+        # Transform to standard first
+        print(self.name)
         if self.variants[self.variant][0] == 0:
-            return # identity
-        
-        # apply in place
-        self.apply_rotation(self.get_variant_rotmat(), time_data)
+            pass # identity
+        else:
+            # apply in place
+            self.apply_rotation(self.get_variant_rotmat(), time_data)
+
+        # handle tilt
+        if self.angle_setting: # not zero
+            self.apply_rotation(generate_uptilt_mat(self.angle_setting), time_data)
 
     def apply_inverse_rotation(self, rotmat):
         mat = np.linalg.inv(rotmat)
@@ -341,6 +366,8 @@ class BlackboxCSVData(GyrologReader):
         }
 
         self.variant = "standard"
+
+        self.post_init()
 
     def check_log_type(self, filename):
         fname = os.path.split(filename)[-1]
@@ -394,24 +421,30 @@ class BlackboxCSVData(GyrologReader):
             data_list = []
             gyroscale = np.pi/180
             r  = Rotation.from_euler('x', self.angle_setting, degrees=True)
+            last_t = 0
+            self.max_data_gab = 10
             for row in csv_reader:
+                t = float(row[1])
+                if ((0 < (t - last_t) < 1000000 * self.max_data_gab) or (last_t == 0)):
 
-                gx = float(row[gyro_index+1])* gyroscale
-                gy = float(row[gyro_index+2])* gyroscale
-                gz = float(row[gyro_index])* gyroscale
+                    gx = float(row[gyro_index+1])* gyroscale
+                    gy = float(row[gyro_index+2])* gyroscale
+                    gz = float(row[gyro_index])* gyroscale
+                    last_t = t
 
-                to_rotate = [-(gx),
-                                (gy),
-                                -(gz)]
+                    #to_rotate = [-(gx),
+                    #                (gy),
+                    #                -(gz)]
 
-                rotated = r.apply(to_rotate)
+                    #rotated = r.apply(to_rotate)
 
-                f = [float(row[1]) / 1000000,
-                        rotated[0],
-                        rotated[1],
-                        rotated[2]]
+                    #f = [t / 1000000,
+                    #        rotated[0],
+                    #        rotated[1],
+                    #        rotated[2]]
 
-                data_list.append(f)
+                    #data_list.append(f)
+                    data_list.append([t / 1000000, gx, gy, gz])
 
             self.gyro = np.array(data_list)
 
@@ -428,6 +461,8 @@ class BlackboxRawData(GyrologReader):
         }
 
         self.variant = "standard"
+
+        self.post_init()
 
     def check_log_type(self, filename):
         fname = os.path.split(filename)[-1]
@@ -484,6 +519,8 @@ class RuncamData(GyrologReader):
             "iFlight GOCam GR": [0]
         }
         self.variant = "Runcam 5 Orange"
+
+        self.post_init()
 
 
     def check_log_type(self, filename):
@@ -570,6 +607,10 @@ class Insta360Log(GyrologReader):
             "insta360 oner": [0]
         }
 
+        self.variant = "smo4k"
+
+        self.post_init()
+
     def check_log_type(self, filename):
         if self.filename_matches(filename):
             return insta360_util.isInsta360Video(filename)
@@ -619,6 +660,8 @@ class GPMFLog(GyrologReader):
         self.variant = "hero6"
 
         self.gpmf = None
+
+        self.post_init()
 
     def check_log_type(self, filename):
 
@@ -695,6 +738,14 @@ class GyroflowGyroLog(GyrologReader):
         self.filename_pattern = ".*\.gcsv"
 
         self.firstlines = ["GYROFLOW IMU LOG", "CAMERA IMU LOG"] #["t,gx,gy,gz,ax,ay,az,mx,my,mz"]
+
+        self.variants =  {
+            "default": [0]
+        }
+
+        self.variant = "default"
+
+        self.post_init()
 
         # Prelim log format:
         # GYROFLOW IMU LOG
@@ -890,8 +941,8 @@ if __name__ == "__main__":
         "test_clips/starling2.MOV",
         "test_clips/raw_inav_log.mp4"
     ]
-    #for clip in test_video_clips:
-    #    guess_log_type_from_video(clip,check_data=True)
+    for clip in test_video_clips:
+        guess_log_type_from_video(clip,check_data=False)
 
     #exit()
 
@@ -903,7 +954,7 @@ if __name__ == "__main__":
                  [GPMFLog(), "test_clips/GX016015.MP4"],
                  [GyroflowGyroLog(), "test_clips/gyroflow_format_example.gcsv"]]
     
-    for reader, path in testcases[:3]:
+    for reader, path in testcases:
 
         print(f"Using {reader.name}")
         check = reader.check_log_type(path)

@@ -2050,8 +2050,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
 
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open blackbox file",
-                                                     filter="Blackbox log (*.bbl *.bfl *.bbl.csv *.BBL .BFL *.BBL.CSV);; CSV file (*.csv *.CSV);; MP4 file (*.mp4 *.MP4)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open motion data file",
+                                                     filter="Blackbox log (*.bbl *.bfl *.bbl.csv *.BBL .BFL *.BBL.CSV);; CSV file (*.csv *.CSV);; MP4 file (*.mp4 *.MP4);; All files (*)")
 
         if (len(path[0]) == 0):
             print("No file selected")
