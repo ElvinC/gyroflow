@@ -372,7 +372,7 @@ class RateSmoothing(SmoothingAlgo):
             sosgyro = signal.butter(1, 1/self.get_user_option_value("roll_smoothness"), "lowpass", fs=self.gyro_sample_rate, output="sos")
             smoothed_traj[:,2] = signal.sosfiltfilt(sosgyro, smoothed_traj[:,2], 0) # Filter along "vertical" time axis
 
-        stab_rotvec = traj - smoothed_traj # from smoothed to non-smoothed
+        stab_rotvec = traj - smoothed_traj # How to rotate camera. From smoothed to real to counteract 
 
         # convert to quaternion
         correction_quats = Rotation.from_rotvec(stab_rotvec).as_quat()

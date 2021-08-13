@@ -10,7 +10,7 @@ import quaternion as quat
 import smoothing_algos
 
 class GyroIntegrator:
-    def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None):
+    def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None, acc_scaling=1):
         """Initialize instance of gyroIntegrator for getting orientation from gyro data
 
         Args:
@@ -22,7 +22,18 @@ class GyroIntegrator:
             acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
         """
 
+        # data is only the gyro
         self.data = np.copy(input_data)
+        self.acc = np.copy(acc_data) if type(acc_data) != type(None) else None
+
+        if type(acc_data) != type(None):
+            # resample if they don't already match
+            if self.data.shape[0] == self.acc.shape[0]:
+                self.acc_available = True
+            else:
+                print("Gyro and acceleration data don't line up")
+                self.acc_available = False
+
         # Check for corrupted/out of order timestamps
         time_order_check = self.data[:-1,0] > self.data[1:,0]
         if np.any(time_order_check):
@@ -35,7 +46,7 @@ class GyroIntegrator:
 
         # Make sure input data is right handed. Final virtual camera rotation is left-handed
         # while image rotation is right-handed. Improve this later
-        self.data[:,2] *= -1
+        #self.data[:,2] *= -1 # y axis
 
         # zero out timestamps
         if zero_out_time:
@@ -60,12 +71,16 @@ class GyroIntegrator:
         self.imuRefY = quat.vector(0,1,0)
         self.imuRefY = quat.vector(0,0,1)
 
+        # Gravity vector
+        # points upwards, since it's equivalent to an upwards acceleration at rest
+        self.grav_vec = np.array([0,1,0]) # Per convention it's upwards
+
         self.already_integrated = False
 
         self.smoothing_algo = None
 
 
-    def integrate_all(self):
+    def integrate_all(self, use_acc = True):
         """go through each gyro sample and integrate to find orientation
 
         Returns:
@@ -75,6 +90,7 @@ class GyroIntegrator:
         if self.already_integrated:
             return (self.time_list, self.orientation_list)
 
+        apply_complementary = True if self.ac
 
         # temp lists to save data
         temp_orientation_list = []

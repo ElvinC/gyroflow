@@ -238,8 +238,8 @@ class Stabilizer:
 
             plt.subplot(312, sharex=xplot)
             
-            plt.plot(times1, -transforms1[:,1] * self.fps)
-            plt.plot(times2, -transforms2[:,1] * self.fps)
+            plt.plot(times1, transforms1[:,1] * self.fps)
+            plt.plot(times2, transforms2[:,1] * self.fps)
             plt.plot(corrected_times, self.integrator.get_raw_data("y"))
             plt.ylabel("omega y [rad/s]")
 
@@ -288,10 +288,10 @@ class Stabilizer:
             axes[0][j].set(title=f"Syncpoint {j + 1}")
             for i, r in enumerate(['x', 'y', 'z']):
                 axes[i][j].plot(corrected_times[mask], self.integrator.get_raw_data(r)[mask], alpha=.8)
-                if r == 'z':
-                    axes[i][j].plot(self.transform_times[j], self.transforms[j][:, i] * self.fps, alpha=.8)
-                else:
+                if r == 'x':
                     axes[i][j].plot(self.transform_times[j], -self.transforms[j][:, i] * self.fps, alpha=.8)
+                else:
+                    axes[i][j].plot(self.transform_times[j], self.transforms[j][:, i] * self.fps, alpha=.8)
 
         axes[0][0].set(ylabel="omega x [rad/s]")
         axes[1][0].set(ylabel="omega y [rad/s]")
@@ -593,7 +593,7 @@ class Stabilizer:
         new_OF_transforms = np.copy(OF_transforms) * self.fps
         # Optical flow movements gives pixel movement, not camera movement
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
-        new_OF_transforms[:,1] = -new_OF_transforms[:,1]
+        #new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
@@ -666,7 +666,7 @@ class Stabilizer:
         new_OF_transforms = np.copy(OF_transforms) * self.fps
         # Optical flow movements gives pixel movement, not camera movement
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
-        new_OF_transforms[:,1] = -new_OF_transforms[:,1]
+        #new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
 
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll

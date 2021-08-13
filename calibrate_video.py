@@ -339,12 +339,13 @@ class FisheyeCalibrator:
 
         if type(quat) != type(None):
             quat = quat.flatten()
-            R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
-            #R = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_matrix()
+            #R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
+            R = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_matrix()
 
+            R[[0,0,1,2],[1,2,0,0]] *=-1
             #final_rotation = np.eye(3)
             #final_rotation[0,0] = -1
-            #R = np.linalg.multi_dot([final_rotation, np.linalg.inv(R), np.linalg.inv(final_rotation)])
+            #R = np.linalg.multi_dot([np.linalg.inv(final_rotation), R, final_rotation])
 
         img_dim_ratio = img_dim[0] / self.calib_dimension[0]
 
