@@ -1005,7 +1005,7 @@ def guess_log_type_from_log(logfile, check_data = False):
                 
             return True, reader.name, reader.variant
 
-    print(f"Couldn't guess log type of {videofile}")
+    print(f"Couldn't guess log type of {logfile}")
     return False, "", ""
 
 
