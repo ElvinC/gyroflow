@@ -90,7 +90,7 @@ class GyroIntegrator:
         if self.already_integrated:
             return (self.time_list, self.orientation_list)
 
-        apply_complementary = True if self.ac
+        apply_complementary = self.acc_available and use_acc
 
         # temp lists to save data
         temp_orientation_list = []
