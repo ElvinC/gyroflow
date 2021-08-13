@@ -70,14 +70,14 @@ def impute_gyro_data(input_data):
     return np.concatenate(arrays_to_concat)
 
 class Stabilizer:
-    def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = 200, video_rotation = -1):
+    def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
 
         ### Define all important variables
 
         self.initial_offset = 0
         self.rough_sync_search_interval = 10
         self.better_sync_search_interval = 0.2
-        self.gyro_lpf_cutoff = -1
+        self.gyro_lpf_cutoff = gyro_lpf_cutoff
         self.do_video_rotation = False
         self.num_frames_skipped = 1
 
@@ -101,6 +101,7 @@ class Stabilizer:
 
         # self.raw_gyro_data = None
         self.gyro_data = None # self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
+        self.acc_data = None
 
         # time lapse features
         self.hyperlapse_multiplier = 1
@@ -251,7 +252,7 @@ class Stabilizer:
             plt.xlabel("time [s]")
             plt.ylabel("omega z [rad/s]")
 
-        plt.show()
+        plt.show(block=False)
 
         # Temp new integrator with corrected time scale
 
@@ -299,7 +300,7 @@ class Stabilizer:
             axes[2][i].set(xlabel="time [s]")
         plt.tight_layout()
         if show:
-            plt.show()
+            plt.show(block=False)
         return fig, axes
 
 
@@ -1217,7 +1218,6 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,3] = self.gyro_data[:,3]
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
 
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
@@ -1280,8 +1280,6 @@ class InstaStabilizer(Stabilizer):
         hero = 0
 
 
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
-
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
@@ -1341,149 +1339,21 @@ class MultiStabilizer(Stabilizer):
         print(logpath)
 
         # quick fix
-        cam_angle_degrees = -cam_angle_degrees
-
         # TODO: integrate with gyrolog.py for modularity
 
-        if use_csv:
-            with open(bblpath) as bblcsv:
-                gyro_index = None
+        self.log_reader = gyrolog.get_log_reader_by_name(logtype)
+        if not self.log_reader:
+            print(f"Failed to initiate log reader of type {logtype}")
+            return
 
-                csv_reader = csv.reader(bblcsv)
-                for i, row in enumerate(csv_reader):
-                    #print(row)
+        self.log_reader.set_variant(logvariant)
+        self.log_reader.set_cam_up_angle(cam_angle_degrees, degrees=True)
 
-                    stripped_row = [field.strip() for field in row]
-                    if stripped_row[0] == "loopIteration":
-                        if use_raw_gyro_data:
-                            gyro_index = stripped_row.index('debug[0]')
-                            print('Using raw gyro data')
-                        else:
-                            gyro_index = stripped_row.index('gyroADC[0]')
-                            print('Using filtered gyro data')
+        self.log_reader.extract_log(videopath)
 
-                        break
-
-                data_list = []
-                gyroscale = np.pi/180
-                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
-                for row in csv_reader:
-
-                    gx = float(row[gyro_index+1])* gyroscale
-                    gy = float(row[gyro_index+2])* gyroscale
-                    gz = float(row[gyro_index]) * gyroscale
-
-                    to_rotate = [-(gx),
-                                    (gy),
-                                    -(gz)]
-
-                    rotated = r.apply(to_rotate)
-
-                    f = [float(row[1]) / 1000000,
-                            rotated[0],
-                            rotated[1],
-                            rotated[2]]
-
-                    data_list.append(f)
-
-                self.gyro_data = np.array(data_list)
-
-        elif logtype == "gyroflow":
-            with open(bblpath) as csvfile:
-                next(csvfile)
-                lines = csvfile.readlines()
-
-                data_list = []
-                gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
-                #gyroscale = 0.070/4 * np.pi/180 # 500 dps
-                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
-
-                for line in lines:
-                    splitdata = [float(x) for x in line.split(",")]
-                    t = splitdata[0]/1000
-                    gx = splitdata[1] * gyroscale
-                    gy = splitdata[2] * gyroscale
-                    gz = splitdata[3] * gyroscale
-                    # Z: roll
-                    # X: yaw
-                    # y: pitch
-
-                    data_list.append([t, gx, gy, gz])
-                #from scipy.signal import resample
-                #gyro_arr = np.array(data_list)
-                #x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
-                #self.gyro_data = np.column_stack((t,x))
-                self.gyro_data = np.array(data_list)
-                print(self.gyro_data)
-        elif logtype == "runcam":
-            with open(bblpath) as csvfile:
-                next(csvfile)
-
-                lines = csvfile.readlines()
-
-                data_list = []
-                #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
-                gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
-                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
-
-                for line in lines:
-                    splitdata = [float(x) for x in line.split(",")]
-                    t = splitdata[0]/1000
-
-                    # RC5
-                    gx = splitdata[3] * gyroscale
-                    gy = -splitdata[1] * gyroscale
-                    gz = splitdata[2] * gyroscale
-
-                    # Z: roll
-                    # X: yaw
-                    # y: pitch
-
-                    data_list.append([t, gx, gy, gz])
-                #from scipy.signal import resample
-                #gyro_arr = np.array(data_list)
-                #x, t = resample(gyro_arr[:,1:], 22 * 200,gyro_arr[:,0])
-                #self.gyro_data = np.column_stack((t,x))
-                self.gyro_data = np.array(data_list)
-                print(self.gyro_data)
-
-        elif logtype == "gocam":
-            with open(bblpath) as csvfile:
-                next(csvfile)
-                lines = csvfile.readlines()
-                data_list = []
-                #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
-                gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
-                r  = Rotation.from_euler('x', cam_angle_degrees, degrees=True)
-
-                for line in lines:
-                    splitdata = [float(x) for x in line.split(",")]
-                    t = splitdata[0]/1000
-                    # RC/IF test
-                    gx = -splitdata[3] * gyroscale
-                    gy = -splitdata[1] * gyroscale
-                    gz = -splitdata[2] * gyroscale
-
-                    data_list.append([t, gx, gy, gz])
-
-                self.gyro_data = np.array(data_list)
-                print(self.gyro_data)
-        else:
-            try:
-                self.bbe = BlackboxExtractor(bblpath)
-                self.gyro_data = self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
-            except ValueError:
-                print("Error reading raw blackbox file. Try converting to CSV in blackbox explorer")
-
-        # This seems to make the orientation match. Implement auto match later
-        #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-        #self.gyro_data[:,2] = -self.gyro_data[:,2]
-
-        #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
-        #self.gyro_data[:,2] = self.gyro_data[:,2]
-        #self.gyro_data[:,3] = -self.gyro_data[:,3]
-
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
+        self.gyro_data = self.log_reader.get_transformed_gyro()
+        self.gyro_data = impute_gyro_data(self.gyro_data)
+        self.acc_data = self.log_reader.get_transformed_acc()
 
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
@@ -1491,7 +1361,6 @@ class MultiStabilizer(Stabilizer):
         # Other attributes
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
 
-        self.gyro_data = impute_gyro_data(self.gyro_data)
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
         self.integrator.integrate_all()
@@ -1499,6 +1368,7 @@ class MultiStabilizer(Stabilizer):
         self.stab_transform = None
 
         self.initial_offset = initial_offset
+
 
 
 class BBLStabilizer(Stabilizer):
@@ -1651,8 +1521,6 @@ class BBLStabilizer(Stabilizer):
         #self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
         #self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
-
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
 
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()

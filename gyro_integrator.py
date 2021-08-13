@@ -195,7 +195,7 @@ class GyroIntegrator:
         
         if self.smoothing_algo:
             if self.smoothing_algo.bypass_external_processing:
-                print("USING SMOTOHING ALGO INTEGRATION STEP")
+                print("Bypassing quaternion orientation integration")
                 time_list, smoothed_orientation = self.smoothing_algo.get_stabilize_transform(self.data)
             else:
                 time_list, smoothed_orientation = self.get_stabilize_transform()

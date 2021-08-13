@@ -208,10 +208,10 @@ class GyrologReader:
 
         # Slightly different log formats
         self.variants = {
-            "standard": [0], # dict entry with correction matrix ID from ORIENTATIONS
-            "standard1": [-1, [[1,0,0],[0,1,0],[0,0,1]]], # Alternatively -1 with second entry being a rotation matrix
+            "default": [0], # dict entry with correction matrix ID from ORIENTATIONS
+            "default": [-1, [[1,0,0],[0,1,0],[0,0,1]]], # Alternatively -1 with second entry being a rotation matrix
         }
-        self.variant = "standard"
+        self.variant = "default"
 
         self.orientation_presets = []
         self.current_orientation_preset = ""
@@ -308,6 +308,15 @@ class GyrologReader:
         else:
             logging.error("Gyro file doesn't exist")
             return False
+
+    def get_transformed_gyro(self):
+        if self.extracted:
+            return self.standard_gyro
+        return None
+
+    def get_transformed_acc(self):
+        if self.extracted:
+            return self.standard_acc
 
     def get_gyro(self):
         if self.extracted:
@@ -406,10 +415,10 @@ class BlackboxCSVData(GyrologReader):
         self.angle_setting = 0
 
         self.variants = {
-            "standard": [12] # dict entry with correction matrix ID from ORIENTATIONS
+            "default": [12] # dict entry with correction matrix ID from ORIENTATIONS
         }
 
-        self.variant = "standard"
+        self.variant = "default"
 
         self.post_init()
 
@@ -501,10 +510,10 @@ class BlackboxRawData(GyrologReader):
         self.angle_setting = 0
 
         self.variants = {
-            "standard": [12] # dict entry with correction matrix ID from ORIENTATIONS
+            "default": [12] # dict entry with correction matrix ID from ORIENTATIONS
         }
 
-        self.variant = "standard"
+        self.variant = "default"
 
         self.post_init()
 
@@ -944,12 +953,18 @@ def get_all_log_reader_instances():
 log_reader_instances = get_all_log_reader_instances()
 
 def get_log_reader_by_name(name="nothing"):
-    """Get an instance of a smoothing algorithm class from name
+    """Get an instance of a log reader class from name
     """
     if name in log_reader_names:
         return log_reader_classes[log_reader_names.index(name)]()
     else:
         return None
+
+def get_variants_by_log_type(logtype="Gyroflow IMU log"):
+    reader = get_log_reader_by_name(logtype)
+    if reader:
+        return reader.get_variants()
+    return []
 
 def guess_log_type_from_video(videofile, check_data = False):
     for reader in log_reader_instances:
@@ -967,28 +982,47 @@ def guess_log_type_from_video(videofile, check_data = False):
 
                     reader.save_gyroflow_format()
                 
-            return guess, reader.name
+            return guess, reader.name, reader.variant
 
     print(f"Couldn't guess log type of {videofile}")
-    return False, ""
+    return False, "", ""
 
+def guess_log_type_from_log(logfile, check_data = False):
+    for reader in log_reader_instances:
+        check = reader.check_log_type(logfile)
+        if check:
+            print(f"log {logfile} has type '{reader.name}'")
+            
 
+            if check_data:
+                if reader.extract_log(logfile):
+                    N = reader.gyro.shape[0]
+                    print(f"{N} samples extracted")
+
+                    reader.plot_gyro()
+
+                    reader.save_gyroflow_format()
+                
+            return True, reader.name, reader.variant
+
+    print(f"Couldn't guess log type of {videofile}")
+    return False, "", ""
 
 
 if __name__ == "__main__":
 
-    test_video_clips = [
-        "test_clips/PRO_VID_20210111_144304_00_010.mp4",
-        "test_clips/RC_0031_210722220523.MP4",
-        "test_clips/GX016015.MP4",
-        "test_clips/nivim_insta360.mp4",
-        "test_clips/Tiago_Ferreira_5_inch.mp4",
-        "test_clips/MasterTim17_caddx.mp4",
-        "test_clips/starling2.MOV",
-        "test_clips/raw_inav_log.mp4"
-    ]
-    for clip in test_video_clips:
-        guess_log_type_from_video(clip,check_data=True)
+    #test_video_clips = [
+    #    "test_clips/PRO_VID_20210111_144304_00_010.mp4",
+    #    "test_clips/RC_0031_210722220523.MP4",
+    #    "test_clips/GX016015.MP4",
+    #    "test_clips/nivim_insta360.mp4",
+    #    "test_clips/Tiago_Ferreira_5_inch.mp4",
+    #    "test_clips/MasterTim17_caddx.mp4",
+    #    "test_clips/starling2.MOV",
+    #    "test_clips/raw_inav_log.mp4"
+    #]
+    #for clip in test_video_clips:
+    #    guess_log_type_from_video(clip,check_data=True)
         
 
     #exit()
@@ -1003,6 +1037,8 @@ if __name__ == "__main__":
     
     for reader, path in testcases:
 
+        print(guess_log_type_from_log(path))
+        continue
         print(f"Using {reader.name}")
         check = reader.check_log_type(path)
 
