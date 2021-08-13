@@ -1349,7 +1349,7 @@ class MultiStabilizer(Stabilizer):
         self.log_reader.set_variant(logvariant)
         self.log_reader.set_cam_up_angle(cam_angle_degrees, degrees=True)
 
-        self.log_reader.extract_log(videopath)
+        self.log_reader.extract_log(logpath)
 
         self.gyro_data = self.log_reader.get_transformed_gyro()
         self.gyro_data = impute_gyro_data(self.gyro_data)
