@@ -8,6 +8,7 @@ import re
 import time
 import sys, inspect
 import logging
+from scipy import signal
 
 import insta360_utility as insta360_util
 from blackbox_extract import BlackboxExtractor
@@ -201,6 +202,8 @@ class GyrologReader:
         self.has_acc = False
         # Assume same time reference and orientation used for both
 
+        self.default_filter = -1
+
         self.filename = ""
 
         # Extra settings
@@ -282,6 +285,9 @@ class GyrologReader:
         self.gyro = None
         self.acc = None
 
+        self.num_data_points = 0
+        self.gyro_sample_rate = 1
+
         # True if successful
         return True
 
@@ -292,8 +298,17 @@ class GyrologReader:
             self.extracted = self.extract_log_internal(filename)
 
             if self.extracted:
+                
                 self.filename = filename
                 if type(self.gyro) != type(None):
+
+                    self.num_data_points = self.gyro.shape[0]
+                    if self.num_data_points < 20:
+                        print("Not enough datapoints")
+                        return False
+
+                    self.gyro_sample_rate = self.num_data_points / (self.gyro[-1,0] - self.gyro[0,0])
+
                     self.standard_gyro = np.copy(self.gyro)
 
                     self.apply_variant_rotation_in_place(self.standard_gyro)
@@ -302,6 +317,17 @@ class GyrologReader:
                     self.standard_acc = np.copy(self.acc)
 
                     self.apply_variant_rotation_in_place(self.standard_acc)
+
+                    # Get rid of high freq.
+                    sosgyro = signal.butter(1, 50, "lowpass", fs=self.gyro_sample_rate, output="sos")
+                    self.acc[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc[:,1:4], 0) # Filter along "vertical" time axis
+
+
+                    sosgyro = signal.butter(1, 5, "lowpass", fs=self.gyro_sample_rate, output="sos")
+                    self.acc[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc[:,1:4], 0) # Filter along "vertical" time axis
+
+                    # valid range: 0.9 to 1.1 g
+
 
             return self.extracted
 
@@ -317,14 +343,17 @@ class GyrologReader:
     def get_transformed_acc(self):
         if self.extracted:
             return self.standard_acc
+        return None
 
     def get_gyro(self):
         if self.extracted:
             return self.gyro
+        return None
 
     def get_acc(self):
         if self.extracted and self.has_acc:
             return self.acc
+        return None
 
     def apply_rotation(self, rotmat, time_data):
         # Applies in place
@@ -368,6 +397,37 @@ class GyrologReader:
 
         plt.show()
 
+    def plot_acc(self):
+        if type(self.acc) != type(None):
+            xplot = plt.subplot(411)
+
+            plt.plot(self.acc[:,0], self.acc[:,1])
+            plt.ylabel("acc x [g]")
+
+            plt.subplot(412, sharex=xplot)
+
+            plt.plot(self.acc[:,0], self.acc[:,2])
+            plt.ylabel("acc y [g]")
+
+            plt.subplot(413, sharex=xplot)
+
+            plt.plot(self.acc[:,0], self.acc[:,3])
+            #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+            plt.xlabel("time [s]")
+            plt.ylabel("acc z [g]")
+
+            plt.subplot(414, sharex=xplot)
+
+            plt.plot(self.acc[:,0], np.sqrt(np.sum(self.acc[:,1:]**2,1)))
+            plt.plot([0, self.acc[-1,0]], [1.1,1.1])
+            plt.plot([0, self.acc[-1,0]], [0.9,0.9])
+            #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+            plt.xlabel("time [s]")
+            plt.ylabel("mag [g]")
+
+            plt.show()
+
+
     def save_gyroflow_format(self, filename=False):
         if not filename:
             filename = self.filename + ".gcsv"
@@ -393,7 +453,7 @@ class GyrologReader:
             f.write("GYROFLOW IMU LOG\n")
             f.write("tscale,1\n") # time in seconds
             f.write("gscale,1\n") # gyro in rad/s
-            f.write("ascale,1\n") # acceleration in m/s^2
+            f.write("ascale,1\n") # acceleration in g
             f.write("t,gx,gy,gz,ax,ay,az" if has_acc else "t,gx,gy,gz\n")
 
             for i in range(self.gyro.shape[0]):
@@ -520,6 +580,8 @@ class BlackboxRawData(GyrologReader):
 
         self.variant = "default"
 
+        self.default_filter = -1
+
         self.post_init()
 
     def check_log_type(self, filename):
@@ -570,13 +632,15 @@ class BlackboxRawData(GyrologReader):
 class RuncamData(GyrologReader):
     def __init__(self):
         super().__init__("Runcam CSV log")
-        self.filename_pattern = "RC_GyroData\d{4}\.csv"
+        self.filename_pattern = ".*\.csv"
 
         self.variants = {
             "Runcam 5 Orange": [0],
             "iFlight GOCam GR": [0]
         }
         self.variant = "Runcam 5 Orange"
+
+        self.default_filter = 35
 
         self.post_init()
 
@@ -601,27 +665,27 @@ class RuncamData(GyrologReader):
         rc5pattern = re.compile("RC_(\d{4})_.*\..*") # example: RC_0030_210719221659.MP4
         gocampattern = re.compile("IF-RC01_(\d{4})\..*") # example: IF-RC01_0011.MP4
         
-        if rc5pattern.match(fname): 
+        if rc5pattern.match(fname):
+            self.variant = "Runcam 5 Orange"
             counter = int(rc5pattern.match(fname).group(1))
         
         # Gocam
         elif gocampattern.match(fname):
+            self.variant = "iFlight GOCam GR"
             counter = int(gocampattern.match(fname).group(1))
 
         else:
             return False
 
-        logname = f"RC_GyroData{counter:04d}.csv"
+        lognames = [f"RC_GyroData{counter:04d}.csv", f"gyroDate{counter:04d}.csv"] # different firmwares
+        for logname in lognames:
+            logpath = videofile.rstrip(fname) + logname
+            print(logpath)
+            if os.path.isfile(logpath):
+                if self.check_log_type(logpath):
+                    return logpath
         
-        logpath = videofile.rstrip(fname) + logname
-        
-        if not os.path.isfile(logpath):
-            return False
-
-        if self.check_log_type(logpath):
-            return logpath
-        else:
-            return False
+        return False
 
 
     def extract_log_internal(self, filename):
@@ -631,18 +695,43 @@ class RuncamData(GyrologReader):
 
             lines = csvfile.readlines()
 
+            has_acc = len(lines[0].split(",")) == 7
+
             data_list = []
+            acc_list = []
             #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
             gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
+            acc_scale = 2 / 2**15 # +/- 2 g
+
+            
 
             for line in lines:
                 splitdata = [float(x) for x in line.split(",")]
                 t = splitdata[0]/1000
 
                 # RC5
-                gx = splitdata[3] * gyroscale
-                gy = -splitdata[1] * gyroscale
-                gz = splitdata[2] * gyroscale
+                if self.variant=="Runcam 5 Orange":
+                    gx = splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = splitdata[2] * gyroscale
+                elif self.variant == "iFlight GOCam GR":
+                    gx = -splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = -splitdata[2] * gyroscale
+                
+                if has_acc:
+                    if self.variant=="Runcam 5 Orange":
+                        ax = -splitdata[4] * acc_scale
+                        ay = -splitdata[5] * acc_scale
+                        az = splitdata[6] * acc_scale
+                    elif self.variant == "iFlight GOCam GR":
+                        ax = -splitdata[4] * acc_scale
+                        ay = splitdata[5] * acc_scale
+                        az = -splitdata[6] * acc_scale
+
+                    acc_list.append([t, ax, ay, az])
+
+                # accelerometer
 
                 # Z: roll
                 # X: yaw
@@ -651,6 +740,8 @@ class RuncamData(GyrologReader):
                 data_list.append([t, gx, gy, gz])
 
         self.gyro = np.array(data_list)
+        if has_acc:
+            self.acc = np.array(acc_list)
 
         return True
 
@@ -666,6 +757,8 @@ class Insta360Log(GyrologReader):
         }
 
         self.variant = "smo4k"
+
+        self.default_filter = 50
 
         self.post_init()
 
@@ -717,6 +810,8 @@ class GPMFLog(GyrologReader):
 
         self.variant = "hero6"
 
+        self.default_filter = -1
+
         self.gpmf = None
 
         self.post_init()
@@ -756,7 +851,9 @@ class GPMFLog(GyrologReader):
                 self.gpmf = GPMFExtractor(filename)
 
             self.gyro = self.gpmf.get_gyro(True)
-        except:
+            self.gpmf.parse_accl()
+            self.acc = self.gpmf.get_accl(True)
+        except ZeroDivisionError:
             print("Failed to extract GPMF gyro")
             return False
 
@@ -802,6 +899,8 @@ class GyroflowGyroLog(GyrologReader):
         }
 
         self.variant = "default"
+
+        self.default_filter = -1
 
         self.post_init()
 
@@ -984,6 +1083,7 @@ def guess_log_type_from_video(videofile, check_data = False):
                     print(f"{N} samples extracted")
 
                     reader.plot_gyro()
+                    reader.plot_acc()
 
                     reader.save_gyroflow_format()
                 
@@ -1016,21 +1116,24 @@ def guess_log_type_from_log(logfile, check_data = False):
 
 if __name__ == "__main__":
 
-    #test_video_clips = [
-    #    "test_clips/PRO_VID_20210111_144304_00_010.mp4",
-    #    "test_clips/RC_0031_210722220523.MP4",
-    #    "test_clips/GX016015.MP4",
-    #    "test_clips/nivim_insta360.mp4",
-    #    "test_clips/Tiago_Ferreira_5_inch.mp4",
-    #    "test_clips/MasterTim17_caddx.mp4",
-    #    "test_clips/starling2.MOV",
-    #    "test_clips/raw_inav_log.mp4"
-    #]
-    #for clip in test_video_clips:
-    #    guess_log_type_from_video(clip,check_data=True)
+    test_video_clips = [
+        #"D:\\DCIM\\100RUNCAM\\RC_0038_210813215250.MP4",
+        #"test_clips/PRO_VID_20210111_144304_00_010.mp4",
+        #"test_clips/IF-RC01_0026.MP4",
+        #"test_clips/RC_0038_210813211513.MP4",
+        #"test_clips/RC_0031_210722220523.MP4",
+        "test_clips/GX016015.MP4",
+        "test_clips/nivim_insta360.mp4",
+        "test_clips/Tiago_Ferreira_5_inch.mp4",
+        "test_clips/MasterTim17_caddx.mp4",
+        "test_clips/starling2.MOV",
+        "test_clips/raw_inav_log.mp4"
+    ]
+    for clip in test_video_clips:
+        guess_log_type_from_video(clip,check_data=True)
         
 
-    #exit()
+    exit()
 
 
     testcases = [[BlackboxCSVData(), "test_clips/btfl_005.bbl.csv"],

@@ -33,6 +33,8 @@ class Extractor:
         self.parsed_gyro = np.zeros((1,4)) # placeholder
         self.parse_gyro()
 
+        self.accl = []
+
     def find_video_length(self):
         
         #find video length using openCV
@@ -88,7 +90,7 @@ class Extractor:
         
         
         # Convert to angular vel. vector in rad/s ??
-        omega = np.array(self.accl) / self.accl_scal
+        omega = np.array(self.accl) / self.accl_scal / 9.80665
         self.num_accl_samples = omega.shape[0]
 
         self.accl_rate = self.num_accl_samples / self.video_length 
