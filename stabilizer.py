@@ -167,6 +167,22 @@ class Stabilizer:
 
         self.gyro_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
 
+    def filter_acc(self):
+        # rather aggressive filtering is applied here
+        if type(self.acc_data) != type(None):
+            acc_cutoff = 1
+
+            num_data_points = self.acc_data.shape[0]
+            acc_sample_rate = num_data_points / (self.acc_data[-1,0] - self.acc_data[0,0])
+
+            # Nyquist frequency
+            if (acc_sample_rate / 2) <= acc_cutoff:
+                self.gyro_lpf_cutoff = acc_sample_rate / 2 - 1
+            
+            sosacc = signal.butter(1, acc_cutoff, "lowpass", fs=acc_sample_rate, output="sos")
+
+            self.acc_data[:,1:4] = signal.sosfiltfilt(sosacc, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
+
 
     def set_hyperlapse(self, hyperlapse_multiplier = 1, hyperlapse_num_blended_frames = 1):
 
@@ -256,14 +272,23 @@ class Stabilizer:
 
         # Temp new integrator with corrected time scale
 
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
         new_gyro_data = np.copy(self.gyro_data)
+
 
         # Correct time scale
         new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
+
+        if type(self.acc_data) != type(None):
+            new_acc_data = np.copy(self.acc_data)
+            new_acc_data[:,0] = new_gyro_data[:,0]
+        else:
+            new_acc_data = None
+
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
         new_integrator.integrate_all()
         #self.last_smooth = smooth
 
@@ -324,14 +349,22 @@ class Stabilizer:
 
         # Temp new integrator with corrected time scale
 
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
         new_gyro_data = np.copy(self.gyro_data)
 
         # Correct time scale
         new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
+        if type(self.acc_data) != type(None):
+            new_acc_data = np.copy(self.acc_data)
+            new_acc_data[:,0] = new_gyro_data[:,0]
+        else:
+            new_acc_data = None
+
+
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation,acc_data=new_acc_data)
         new_integrator.integrate_all()
         #self.last_smooth = smooth
 
@@ -1223,7 +1256,7 @@ class GPMFStabilizer(Stabilizer):
             self.filter_gyro()
 
         # Other attributes
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('xyz', [0, 0, 180], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
         self.integrator.integrate_all()
@@ -1354,15 +1387,20 @@ class MultiStabilizer(Stabilizer):
         self.gyro_data = self.log_reader.get_transformed_gyro()
         self.gyro_data = impute_gyro_data(self.gyro_data)
         self.acc_data = self.log_reader.get_transformed_acc()
+        if type(self.acc_data) != type(None):
+            self.acc_data = impute_gyro_data(self.acc_data)
+
+
 
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
         # Other attributes
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
 
-        self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
+        self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation, acc_data=self.acc_data)
         self.integrator.integrate_all()
         self.times = None
         self.stab_transform = None

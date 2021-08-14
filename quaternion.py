@@ -19,11 +19,56 @@ def quaternion_multiply(Q1, Q2):
                      -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
                      x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0])
 
+def quat_mult_nnp(Q1,Q2):
+    w0, x0, y0, z0 = Q2
+    w1, x1, y1, z1 = Q1
+    return [-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
+            x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+            -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+            x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0]
 
 # https://www.mathworks.com/help/aeroblks/quaternioninverse.html
 def inverse(q):
     # negate imaginary components to get inverse of unit quat
     return quaternion(q[0],-q[1],-q[2],-q[3])
+
+def conjugate(q):
+    # negate imaginary components to get inverse of unit quat
+    return quaternion(q[0],-q[1],-q[2],-q[3])
+
+def rotate_vector(q, v):
+    q2 = [0, v[0],v[1],v[2]]
+    return quaternion_multiply(quaternion_multiply(q,q2), conjugate(q))[1:]
+
+def rotate_vector_fast(q,v):
+
+    q2 = [0, v[0],v[1],v[2]]
+    return np.array(quat_mult_nnp(quat_mult_nnp(q,q2), [q[0],-q[1],-q[2],-q[3]])[1:])
+
+def rotate_vector_standalone(q,v):
+    wxyz = q ** 2
+    wx,wy,wz = q[0] * q[1:]
+
+    xy = q[1] * q[2]
+    xz = q[1] * q[3]
+    yz = q[2] * q[3]
+
+    # Formula from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/transforms/index.htm
+    # p2.x = w*w*p1.x + 2*y*w*p1.z - 2*z*w*p1.y + x*x*p1.x + 2*y*x*p1.y + 2*z*x*p1.z - z*z*p1.x - y*y*p1.x;
+    # p2.y = 2*x*y*p1.x + y*y*p1.y + 2*z*y*p1.z + 2*w*z*p1.x - z*z*p1.y + w*w*p1.y - 2*x*w*p1.z - x*x*p1.y;
+    # p2.z = 2*x*z*p1.x + 2*y*z*p1.y + z*z*p1.z - 2*w*y*p1.x - y*y*p1.z + 2*w*x*p1.y - x*x*p1.z + w*w*p1.z;
+
+    r1 = wxyz[0]*v[0] + 2*wy*v[2] - 2*wz*v[1] + \
+                wxyz[1]*v[0] + 2*xy*v[1] + 2*xz*v[2] - \
+                wxyz[3]*v[0] - wxyz[2]*v[0]
+    r2 = 2*xy*v[0] + wxyz[2]*v[1] + 2*yz*v[2] + \
+                2*wz*v[0] - wxyz[3]*v[1] + wxyz[0]*v[1] - \
+                2*wx*v[2] - wxyz[1]*v[1]
+    r3 = 2*xz*v[0] + 2*yz*v[1] + wxyz[3]*v[2] - \
+                2*wy*v[0] - wxyz[2]*v[2] + 2*wx*v[1] - \
+                wxyz[1]*v[2] + wxyz[0]*v[2]
+
+    return np.array([r1,r2,r3])
 
 def rot_between(q1, q2):
     """Compute rotation quaternion from q1 to q2"""
@@ -91,10 +136,32 @@ def angle_between(q1, q2):
     angle = 2 * np.arccos(min(z[0], 1))
     return angle
 
-
 if __name__ == "__main__":
-    import pyquaternion
     import time
+
+
+    q = np.array([0.5,0.7,0.5,0.5])
+    v = np.array([1,2,3])
+    start = time.time()
+
+    for i in range(100000):
+        rotate_vector(q,v)
+
+    stop = time.time()
+    print((stop-start) * 1000)
+
+    start = time.time()
+
+    for i in range(100000):
+        rotate_vector_fast(q,v)
+
+    stop = time.time()
+    print((stop-start) * 1000)
+    
+
+    print(rotate_vector_fast(q,v))
+
+    exit()
 
     a = pyquaternion.Quaternion([1,0,0,0])
     b = pyquaternion.Quaternion([0,1,0,0])

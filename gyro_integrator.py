@@ -20,25 +20,35 @@ class GyroIntegrator:
             zero_out_time (bool, optional): Always start time at 0 in the output data. Defaults to True.
             initial_orientation (float[4]): Quaternion representing the starting orientation, Defaults to [1, 0.0001, 0.0001, 0.0001].
             acc_data (numpy.ndarray): Nx4 array, where each row is [time, accX, accY, accZ]. TODO: Use this in orientation determination
+            acc_scaling (float): Scaling to give the acceleration in g
         """
 
         # data is only the gyro
         self.data = np.copy(input_data)
-        self.acc = np.copy(acc_data) if type(acc_data) != type(None) else None
+        self.acc = None
 
+        self.acc_cutoff = 1 # Hz, low cutoff
+        self.acc_available = False
         if type(acc_data) != type(None):
             # resample if they don't already match
-            if self.data.shape[0] == self.acc.shape[0]:
+            if self.data.shape[0] == acc_data.shape[0]:
                 self.acc_available = True
+
+                self.acc = np.copy(acc_data)
+                self.data[:,0] *= time_scaling
+                self.data[:,1:4] *= acc_scaling
             else:
                 print("Gyro and acceleration data don't line up")
                 self.acc_available = False
-
+        if self.acc_available:
+            print(self.acc.shape)
         # Check for corrupted/out of order timestamps
         time_order_check = self.data[:-1,0] > self.data[1:,0]
         if np.any(time_order_check):
             print("Truncated bad gyro data")
             self.data = self.data[0:np.argmax(time_order_check)+1,:]
+            if self.acc_available:
+                self.acc = self.acc[0:np.argmax(time_order_check)+1,:]
 
         # scale input data
         self.data[:,0] *= time_scaling
@@ -51,6 +61,8 @@ class GyroIntegrator:
         # zero out timestamps
         if zero_out_time:
             self.data[:,0] -= self.data[0,0]
+            if self.acc_available:
+                self.acc[:,0] -= self.acc[0,0]
 
         self.num_data_points = self.data.shape[0]
 
@@ -92,9 +104,19 @@ class GyroIntegrator:
 
         apply_complementary = self.acc_available and use_acc
 
+        if apply_complementary:
+            # find valid accelation data points
+            print(self.acc)
+            print(self.acc.shape)
+            asquared = np.sum(self.acc[:,1:]**2,1)
+            # between 0.9 and 1.1 g
+            complementary_mask = np.logical_and(0.81<asquared,asquared<1.21)
+
         # temp lists to save data
         temp_orientation_list = []
         temp_time_list = []
+
+        start_time = self.data[0][0] # seconds
 
         for i in range(self.num_data_points):
 
@@ -110,12 +132,30 @@ class GyroIntegrator:
             delta_time = (next_time - last_time)/2
 
             # Only calculate if angular velocity is present
-            if np.any(omega):
+            if np.any(omega) or apply_complementary:
+                # complementary filter
+                if apply_complementary:
+                    if complementary_mask[i]:
+                        avec = self.acc[i][1:]
+
+                        accWorldVec = quat.rotate_vector_fast(self.orientation, avec)
+                        correctionWorld = np.cross(accWorldVec, self.grav_vec)
+
+                        # high weight for first few seconds to "lock" it, then 
+                        weight = 12 if this_time - start_time < 5 else 0.2
+                        correctionBody = weight * quat.rotate_vector_fast(quat.conjugate(self.orientation), correctionWorld)
+                        omega = omega + correctionBody
+
+
                 # calculate rotation quaternion
                 delta_q = self.rate_to_quat(omega, delta_time)
 
                 # rotate orientation by this quaternion
                 self.orientation = quat.quaternion_multiply(self.orientation, delta_q) # Maybe change order
+
+
+
+                
 
                 self.orientation = quat.normalize(self.orientation)
 

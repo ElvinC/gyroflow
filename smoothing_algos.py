@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation
 from PySide2 import QtCore, QtWidgets, QtGui
 
 class SmoothingAlgo:
-    def __init__(self, name="nothing"):
+    def __init__(self, name="Nothing"):
         self.name = name
 
         # Options exposed to the user
@@ -43,7 +43,7 @@ class SmoothingAlgo:
                 steps = 100
                 conv_func = self.get_slider_conv_func(option["min"], option["max"], steps, option["slider_expo"])
 
-                initial = 20
+                initial = self.slider_conv_func_inverse(option["min"], option["max"], steps, option["slider_expo"], value)
                 ui_input.setMinimum(0)
                 ui_input.setMaximum(steps)
                 ui_input.setValue(initial)
@@ -61,7 +61,7 @@ class SmoothingAlgo:
                 ui_input = QtWidgets.QSpinBox(self.ui_widget)
 
                 conv_func = lambda val: val
-
+                initial = value
                 ui_input.setMinimum(option["min"])
                 ui_input.setMaximum(option["max"])
                 ui_input.setValue(value)
@@ -98,6 +98,8 @@ class SmoothingAlgo:
     def get_slider_conv_func(self, minval, maxval, steps, expo):
         return lambda val: (val/steps)**expo * (maxval - minval)+minval
 
+    def slider_conv_func_inverse(self, minval, maxval, steps, expo, realval):
+        return round(steps * ((realval - minval)/(maxval - minval))**(1/expo))
 
 
 
@@ -202,7 +204,7 @@ class PlainSlerp(SmoothingAlgo):
     """Default symmetrical quaternion slerp without limits
     """
     def __init__(self):
-        super().__init__("Plain quaternion slerp")
+        super().__init__("Plain 3D smoothing")
 
         self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
@@ -253,7 +255,7 @@ class LimitedSlerp(SmoothingAlgo):
     """Default symmetrical quaternion slerp with limits
     """
     def __init__(self):
-        super().__init__("Quaternion slerp with experimental angle limit")
+        super().__init__("3D smoothing with sharp angle limit")
 
         self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
@@ -386,7 +388,7 @@ class SmoothLimitedSlerp(SmoothingAlgo):
     """Limited quaternion slerp
     """
     def __init__(self):
-        super().__init__("Limited quaternion slerp (Aphobius)")
+        super().__init__("3D smoothing with smooth angle limit (Aphobius)")
 
         self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
@@ -470,24 +472,73 @@ class SmoothLimitedSlerp(SmoothingAlgo):
 
         return times, final_orientation
 
-#class HorizonLock(SmoothingAlgo):
-#    """Keep horizon level
-#    """
-#    def __init__(self):
-#        super().__init__("Lock horizon (TODO)")
+class HorizonLock(SmoothingAlgo):
+    """Keep horizon level
+    """
+    def __init__(self):
+        super().__init__("Lock horizon (requires accelerometer)")
 
-#        self.add_user_option("smoothness", 0.2, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
-#                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
-#
-#
-#    def smooth_orientations_internal(self, times, orientation_list):
-#        pass
+        self.add_user_option("smoothness", 0.1, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+
+        self.add_user_option("horizon_angle", 0, -180, 180, ui_label = "Horizon angle",
+                             explanation="If you want a nonzero horizon or add a correction", input_expo = 1, input_type="int")
+
+    def smooth_orientations_internal(self, times, orientation_list):
+        
+        alpha = 1
+        smooth = self.get_user_option_value("smoothness")
+        if smooth > 0:
+            alpha = 1 - np.exp(-(1 / self.gyro_sample_rate) /smooth)
+
+
+            smoothed_orientation = np.zeros(orientation_list.shape)
+
+            value = orientation_list[0,:]
+
+
+            for i in range(self.num_data_points):
+                value = quat.single_slerp(value, orientation_list[i,:],alpha)
+                smoothed_orientation[i] = value
+
+            # reverse pass
+            start_orientations = np.zeros(orientation_list.shape)
+
+            value2 = smoothed_orientation[-1,:]
+
+            for i in range(self.num_data_points-1, -1, -1):
+                value2 = quat.single_slerp(value2, smoothed_orientation[i,:],alpha)
+                start_orientations[i] = value2
+        
+        else:
+            start_orientations = np.array(orientation_list)
+
+        # swap around
+        start_orientations[:,[0,1,2,3]] = start_orientations[:,[1,2,3,0]]
+
+        eul = Rotation(start_orientations).as_euler("zxy")
+        plt.figure()
+        plt.plot(eul[:,0])
+        plt.plot(eul[:,1])
+        plt.plot(eul[:,2])
+        plt.show()        
+        eul[:,0] = self.get_user_option_value("horizon_angle") * np.pi/180
+
+        #new_quat = Rotation.from_euler(["xyz", "zxy", "yzx", "xzy", "zyx", "yxz"][self.get_user_option_value("eul")], eul).as_quat()
+        new_quat = Rotation.from_euler("zxy", eul).as_quat()
+
+
+        new_quat[:,[0,1,2,3]] = new_quat[:,[3,0,1,2]]
+        
+        return times, new_quat
 
 smooth_algo_classes = []
 
-for n, obj in inspect.getmembers(sys.modules[__name__], lambda member: inspect.isclass(member) and member.__module__ == __name__):
-    if inspect.isclass(obj):
-        smooth_algo_classes.append(obj)
+#for n, obj in inspect.getmembers(sys.modules[__name__], lambda member: inspect.isclass(member) and member.__module__ == __name__):
+#    if inspect.isclass(obj):
+#        smooth_algo_classes.append(obj)
+
+smooth_algo_classes = [PlainSlerp, RateSmoothing, HorizonLock, SmoothLimitedSlerp, LimitedSlerp, SmoothingAlgo]
 
 smooth_algo_names = [alg().name for alg in smooth_algo_classes]
 
