@@ -1867,7 +1867,7 @@ if __name__ == "__main__":
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.21,1*30, 25 * 30, 50) # FPV clip
+    #stab.auto_sync_stab(0.21,1*30, 25 * 30, 50) # FPV clip
     #stab.stabilization_settings()
 
     # Visual stabilizer test
@@ -1881,7 +1881,7 @@ if __name__ == "__main__":
 
 
     #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
-    stab.renderfile(0, 25, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
+    #stab.renderfile(0, 25, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     #stab.stabilization_settings(smooth=0.6)
     #stab.renderfile(113, 130, "nurk_stabi3.mp4",out_size = (3072,1728))
 

@@ -470,6 +470,7 @@ class BlackboxCSVData(GyrologReader):
 
         self.variants = {
             "default": [12], # dict entry with correction matrix ID from ORIENTATIONS
+            "Raw gyro (debug_mode = GYRO_SCALED)": [12],
             "iNav/blackbox-tools": [12]
         }
 
@@ -510,10 +511,10 @@ class BlackboxCSVData(GyrologReader):
 
     def extract_log_internal(self, filename):
 
-        use_raw_gyro_data = False
-
         with open(filename) as bblcsv:
             gyro_index = None
+            acc_index = None
+            max_index = 0
 
             csv_reader = csv.reader(bblcsv)
             for i, row in enumerate(csv_reader):
@@ -521,44 +522,53 @@ class BlackboxCSVData(GyrologReader):
 
                 stripped_row = [field.strip() for field in row]
                 if stripped_row[0] == "loopIteration":
-                    if use_raw_gyro_data:
+                    if self.variant == "Raw gyro (debug_mode = GYRO_SCALED)" and 'debug[0]' in stripped_row:
                         gyro_index = stripped_row.index('debug[0]')
                         print('Using raw gyro data')
                     else:
                         gyro_index = stripped_row.index('gyroADC[0]')
                         #print('Using filtered gyro data')
 
+                    max_index = gyro_index + 2
+
+                    if "accSmooth[0]" in stripped_row:
+                        acc_index = stripped_row.index("accSmooth[0]")
+                        max_index = acc_index + 2
+
                     break
 
             data_list = []
+            acc_list = []
             gyroscale = np.pi/180
-            r  = Rotation.from_euler('x', self.angle_setting, degrees=True)
+            acc_scale = 1/2048
+
             last_t = 0
             self.max_data_gab = 10
             for row in csv_reader:
                 t = float(row[1])
-                if ((0 < (t - last_t) < 1000000 * self.max_data_gab) or (last_t == 0)):
+                if max_index<len(row) and (((0 < (t - last_t) < 1000000 * self.max_data_gab) or (last_t == 0))) :
 
-                    gx = float(row[gyro_index+1])* gyroscale
-                    gy = float(row[gyro_index+2])* gyroscale
-                    gz = float(row[gyro_index])* gyroscale
+                    gx = float(row[gyro_index+1])
+                    gy = float(row[gyro_index+2])
+                    gz = float(row[gyro_index])
                     last_t = t
-
-                    #to_rotate = [-(gx),
-                    #                (gy),
-                    #                -(gz)]
-
-                    #rotated = r.apply(to_rotate)
-
-                    #f = [t / 1000000,
-                    #        rotated[0],
-                    #        rotated[1],
-                    #        rotated[2]]
 
                     #data_list.append(f)
                     data_list.append([t / 1000000, gx, gy, gz])
+                    if acc_index:
+                        ax = float(row[acc_index+1])
+                        ay = float(row[acc_index+2])
+                        az = float(row[acc_index])
+
+                        acc_list.append([t / 1000000, ax, ay, az])
 
             self.gyro = np.array(data_list)
+            self.gyro[:,1:] *= gyroscale
+
+            if acc_index:
+                self.acc = np.array(acc_list)
+                self.acc[:,1:] *= acc_scale
+
 
         return True
 
@@ -1142,6 +1152,7 @@ if __name__ == "__main__":
         #"test_clips/RC_0038_210813211513.MP4",
         #"test_clips/RC_0031_210722220523.MP4",
         #"test_clips/Runcam/RC_0036_filtered.MP4",
+        "test_clips/DJIG0043wiebe.mp4",
         "test_clips/GX016015.MP4",
         "test_clips/nivim_insta360.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",

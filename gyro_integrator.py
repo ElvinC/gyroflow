@@ -685,7 +685,7 @@ if __name__ == "__main__":
     final_rotation = np.eye(3)
     final_rotation[0,0] = -1
 
-    combined_rotation[0:3,0:3] = np.linalg.multi_dot([final_rotation, np.linalg.inv(combined_rotation[0:3,0:3]), np.linalg.inv(final_rotation)])
+    #combined_rotation[0:3,0:3] = np.linalg.multi_dot([final_rotation, np.linalg.inv(combined_rotation[0:3,0:3]), np.linalg.inv(final_rotation)])
     #rot = Rotation([-q[1],-q[2],q[3],-q[0]]).as_matrix()
     print(rot)
 
