@@ -40,8 +40,8 @@ class GyroIntegrator:
             else:
                 print("Gyro and acceleration data don't line up")
                 self.acc_available = False
-        if self.acc_available:
-            print(self.acc.shape)
+        #if self.acc_available:
+            #print(self.acc.shape)
         # Check for corrupted/out of order timestamps
         time_order_check = self.data[:-1,0] > self.data[1:,0]
         if np.any(time_order_check):
@@ -92,7 +92,7 @@ class GyroIntegrator:
         self.smoothing_algo = None
 
 
-    def integrate_all(self, use_acc = True):
+    def integrate_all(self, use_acc = False):
         """go through each gyro sample and integrate to find orientation
 
         Returns:
@@ -106,8 +106,8 @@ class GyroIntegrator:
 
         if apply_complementary:
             # find valid accelation data points
-            print(self.acc)
-            print(self.acc.shape)
+            #print(self.acc)
+            #print(self.acc.shape)
             asquared = np.sum(self.acc[:,1:]**2,1)
             # between 0.9 and 1.1 g
             complementary_mask = np.logical_and(0.81<asquared,asquared<1.21)
@@ -142,7 +142,7 @@ class GyroIntegrator:
                         correctionWorld = np.cross(accWorldVec, self.grav_vec)
 
                         # high weight for first few seconds to "lock" it, then 
-                        weight = 12 if this_time - start_time < 5 else 0.2
+                        weight = 10 if this_time - start_time < 5 else 0.6
                         correctionBody = weight * quat.rotate_vector_fast(quat.conjugate(self.orientation), correctionWorld)
                         omega = omega + correctionBody
 

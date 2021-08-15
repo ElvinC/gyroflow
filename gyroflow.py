@@ -25,6 +25,7 @@ import gyrolog
 # area for environment variables
 try:
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
+    os.environ.pop("QT_QPA_FONTDIR")
 except:
     pass
 
@@ -151,7 +152,7 @@ class Launcher(QtWidgets.QWidget):
         """
         # Only open if not already open
         if self.stretch_utility:
-            if self.calibrator_utility.isVisible():
+            if self.stretch_utility.isVisible():
                 return
         self.stretch_utility = StretchUtility()
         self.stretch_utility.resize(500, 500)
@@ -1416,7 +1417,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(text)
         #self.input_controls_layout.addStretch()
 
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds (Keep 0 for GPMF):"))
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds:"))
 
         self.offset_control = QtWidgets.QDoubleSpinBox(self)
         self.offset_control.setMinimum(-1000)
@@ -1651,7 +1652,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
         self.export_controls_layout.addWidget(self.fov_smoothing)
 
-        self.zoom_text = QtWidgets.QLabel("Zoom Factor: 1.0")
+        self.zoom_text = QtWidgets.QLabel("Zoom Factor (1 is minimum static crop without edges): 1.0")
         self.export_controls_layout.addWidget(self.zoom_text)
         self.zoom = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.zoom.setMinimum(5)
@@ -1869,7 +1870,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
 
         self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
-        self.video_info_dict["bitrate"] = int(cap.get(cv2.CAP_PROP_BITRATE))
+        try:
+            self.video_info_dict["bitrate"] = int(cap.get(cv2.CAP_PROP_BITRATE))
+        except:
+            # estimate based on filesize
+            size = os.path.getsize(self.infile_path)
+            self.video_info_dict["bitrate"] = (size / self.video_info_dict.get("time", 1)) / 1000 # to kbps
         cap.release()
 
         self.display_video_info()
@@ -2019,6 +2025,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             #print(self.log_reader.get_variants())
             self.gyro_variant_control.addItems(self.log_reader.get_variants())
             self.gyro_variant_control.setCurrentIndex(self.gyro_variant_control.findText(self.log_reader.variant))
+            self.input_lpf_control.setValue(self.log_reader.default_filter)
 
     def update_gyro_input_settings_dropdown(self):
         selected_log_format = self.gyro_log_format_select.currentData()
@@ -2100,7 +2107,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
     def zoom_changed(self):
         val = self.zoom.value() / 10
-        self.zoom_text.setText("Zoom Factor: {}".format(val))
+        self.zoom_text.setText("Zoom Factor (1 is minimum static crop without edges): {}".format(val))
 
     def update_out_size(self):
         """Update export image size

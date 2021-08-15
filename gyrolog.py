@@ -323,8 +323,14 @@ class GyrologReader:
                     self.acc[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc[:,1:4], 0) # Filter along "vertical" time axis
 
 
-                    sosgyro = signal.butter(1, 5, "lowpass", fs=self.gyro_sample_rate, output="sos")
+                    sosgyro = signal.butter(1, 0.3, "lowpass", fs=self.gyro_sample_rate, output="sos")
                     self.acc[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc[:,1:4], 0) # Filter along "vertical" time axis
+
+                    acc_cutoff = 1
+                    
+                    sosacc = signal.butter(1, acc_cutoff, "lowpass", fs=self.gyro_sample_rate, output="sos")
+
+                    self.acc[:,1:4] = signal.sosfiltfilt(sosacc, self.acc[:,1:4], 0) # Filter along "vertical" time axis
 
                     # valid range: 0.9 to 1.1 g
 
@@ -1122,6 +1128,7 @@ if __name__ == "__main__":
         #"test_clips/IF-RC01_0026.MP4",
         #"test_clips/RC_0038_210813211513.MP4",
         #"test_clips/RC_0031_210722220523.MP4",
+        "test_clips/Runcam/RC_0036_filtered.MP4",
         "test_clips/GX016015.MP4",
         "test_clips/nivim_insta360.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",
@@ -1129,7 +1136,7 @@ if __name__ == "__main__":
         "test_clips/starling2.MOV",
         "test_clips/raw_inav_log.mp4"
     ]
-    for clip in test_video_clips:
+    for clip in test_video_clips[0:1]:
         guess_log_type_from_video(clip,check_data=True)
         
 

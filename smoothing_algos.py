@@ -21,6 +21,8 @@ class SmoothingAlgo:
         self.ui_widget_layout = None
         self.ui_input_widgets = {}
 
+        self.require_acceleration = False
+
         # Enable if the smoothing algo should directly return correction quats from raw data
         self.bypass_external_processing = False
         
@@ -477,6 +479,8 @@ class HorizonLock(SmoothingAlgo):
     """
     def __init__(self):
         super().__init__("Lock horizon (requires accelerometer)")
+
+        self.require_acceleration = True
 
         self.add_user_option("smoothness", 0.1, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
                              explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")

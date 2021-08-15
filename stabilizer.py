@@ -288,12 +288,14 @@ class Stabilizer:
         else:
             new_acc_data = None
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
-        new_integrator.integrate_all()
-        #self.last_smooth = smooth
-
         if not self.smoothing_algo:
             self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
+        if self.smoothing_algo.require_acceleration and type(new_acc_data) == type(None):
+            print("No acceleration data available. Horizon reference doesn't work without it.")
+        new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        #self.last_smooth = smooth
 
         new_integrator.set_smoothing_algo(self.smoothing_algo)
         self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
@@ -364,12 +366,14 @@ class Stabilizer:
             new_acc_data = None
 
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation,acc_data=new_acc_data)
-        new_integrator.integrate_all()
-        #self.last_smooth = smooth
-
         if not self.smoothing_algo:
             self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation,acc_data=new_acc_data)
+        new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        #self.last_smooth = smooth
+
+        
 
         new_integrator.set_smoothing_algo(self.smoothing_algo)
         self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
@@ -1259,7 +1263,7 @@ class GPMFStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('xyz', [0, 0, 180], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
-        self.integrator.integrate_all()
+        self.integrator.integrate_all(use_acc=False)
         self.times = None
         self.stab_transform = None
 
@@ -1385,6 +1389,14 @@ class MultiStabilizer(Stabilizer):
         self.log_reader.extract_log(logpath)
 
         self.gyro_data = self.log_reader.get_transformed_gyro()
+
+        # If no data:
+        if type(self.gyro_data) == type(None):
+            print("No valid gyro data")
+            return
+        elif self.gyro_data.shape[0] < 2:
+            print("No valid gyro data")
+            return
         self.gyro_data = impute_gyro_data(self.gyro_data)
         self.acc_data = self.log_reader.get_transformed_acc()
         if type(self.acc_data) != type(None):
@@ -1401,7 +1413,7 @@ class MultiStabilizer(Stabilizer):
 
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation, acc_data=self.acc_data)
-        self.integrator.integrate_all()
+        self.integrator.integrate_all(use_acc=False)
         self.times = None
         self.stab_transform = None
 
