@@ -39,7 +39,7 @@ from scipy.spatial.transform import Rotation
 if __name__ == '__main__':
 
     #Read input image, and create output image
-    src = cv2.imread('goldstone.jpg')
+    src = cv2.imread('sony_chess.png')
     src = cv2.resize(src,(640,480))
     dst = np.zeros_like(src)
     h, w = src.shape[:2]
@@ -79,6 +79,13 @@ if __name__ == '__main__':
         combined_rotation = np.eye(4)
         #combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [eul[0], eul[1], -eul[2]], degrees=False).as_matrix()
         combined_rotation[0:3,0:3] = Rotation.from_euler('xyz', [rotX, rotY, rotZ], degrees=False).as_matrix() #Rotation([-quart[1],-quart[2],quart[3],-quart[0]]).as_matrix()
+        
+        final_rotation = np.eye(3)
+        final_rotation[0,0] = -1
+
+        combined_rotation[0:3,0:3] = np.linalg.multi_dot([final_rotation, np.linalg.inv(combined_rotation[0:3,0:3]), np.linalg.inv(final_rotation)])
+        #combined_rotation[0:3,0:3] = np.linalg.inv(combined_rotation[0:3,0:3])
+        print(combined_rotation[0:3,0:3])
         #eul = Rotation(quart).as_euler('xyz')[0]
 
         # Camera intrinsic matrix
