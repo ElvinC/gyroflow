@@ -137,12 +137,13 @@ class GyroIntegrator:
                 if apply_complementary:
                     if complementary_mask[i]:
                         avec = self.acc[i][1:]
+                        avec /= np.linalg.norm(avec)
 
                         accWorldVec = quat.rotate_vector_fast(self.orientation, avec)
                         correctionWorld = np.cross(accWorldVec, self.grav_vec)
 
                         # high weight for first two seconds to "lock" it, then 
-                        weight = 10 if this_time - start_time < 1.5 else 0.6
+                        weight = 10 if this_time - start_time < 1.5 else 0.5
                         correctionBody = weight * quat.rotate_vector_fast(quat.conjugate(self.orientation), correctionWorld)
                         omega = omega + correctionBody
 

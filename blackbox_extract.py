@@ -14,7 +14,9 @@ class BlackboxExtractor:
         self.n_of_logs = self.parser.reader.log_count
 
         self.gyro_scale = self.parser.headers["gyro_scale"] #should be already scaled in the fc
+        self.acc_scale = 1/self.parser.headers["acc_1G"]
         self.final_gyro_data = []
+        self.final_acc_data = []
         self.extracted = False
         self.camera_angle = None
 
@@ -76,9 +78,9 @@ class BlackboxExtractor:
 
         return self.final_gyro_data
 
-    def get_untransformed_gyro_data(self):
+    def get_untransformed_imu_data(self):
         if self.extracted:
-            return np.array(self.final_gyro_data)
+            return np.array(self.final_gyro_data), np.array(self.final_acc_data)
         
         r  = Rotation.from_euler('x', self.camera_angle, degrees=True)
         
@@ -89,23 +91,43 @@ class BlackboxExtractor:
             gy = self.parser.field_names.index('gyroADC[2]')
             gz = self.parser.field_names.index('gyroADC[0]')
             data_frames = []
+
+            max_index = gy
+
+            acc_index = None
+            if "accSmooth[0]" in self.parser.field_names:
+                acc_index = self.parser.field_names.index("accSmooth[0]")
+                max_index = max(acc_index + 2, gy)
             
+            acc_frames = []
+
             last_t = 0
             for frame in self.parser.frames():
-                #print(len(frame.data))
-                if len(frame.data) > gy and ((0 < (frame.data[t] - last_t) < self.max_data_gab) or (last_t == 0)):
+                if len(frame.data) > max_index and ((0 < (frame.data[t] - last_t) < 1000000 * self.max_data_gab) or (last_t == 0)):
                     
                     data_frames.append([frame.data[t], frame.data[gx], frame.data[gy], frame.data[gz]])
+                    
+                    if acc_index:
+                        acc_frames.append([frame.data[t], frame.data[acc_index+1], frame.data[acc_index+2], frame.data[acc_index]])
+
                     last_t = frame.data[t]
 
-            if len(data_frames) < 2:
-                return False
             self.final_gyro_data.extend(data_frames)
+            if acc_index:
+                self.final_acc_data.extend(acc_frames)
 
 
         self.final_gyro_data = np.array(self.final_gyro_data, dtype=np.float64)
+        #if self.final_gyro_data.shape[0] < 2:
+        #    print("No valid motion data")
+        #    return False, False
         self.final_gyro_data[:,0] /= 1000000
         self.final_gyro_data[:,1:] *= np.pi/180
+
+        if acc_index:
+            self.final_acc_data = np.array(self.final_acc_data, dtype=np.float64)
+            self.final_acc_data[:,0] /= 1000000
+            self.final_acc_data[:,1:] *= self.acc_scale
 
         # rough gyro rate assumed to be constant
 
@@ -114,7 +136,7 @@ class BlackboxExtractor:
 
         self.extracted = True
 
-        return self.final_gyro_data
+        return self.final_gyro_data, self.final_acc_data
 
 
 

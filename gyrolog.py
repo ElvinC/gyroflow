@@ -626,10 +626,10 @@ class BlackboxRawData(GyrologReader):
 
         try:
             bbe = BlackboxExtractor(filename)
-            self.gyro = bbe.get_gyro_data(cam_angle_degrees=self.angle_setting)
+            self.gyro, self.acc = bbe.get_untransformed_imu_data()
 
             return True
-        except:
+        except: # TODO: change
             print("Error reading raw blackbox file. Try converting to CSV in blackbox explorer")
             return False
 
@@ -1152,9 +1152,9 @@ if __name__ == "__main__":
         #"test_clips/RC_0038_210813211513.MP4",
         #"test_clips/RC_0031_210722220523.MP4",
         #"test_clips/Runcam/RC_0036_filtered.MP4",
-        "test_clips/DJIG0043wiebe.mp4",
-        "test_clips/GX016015.MP4",
-        "test_clips/nivim_insta360.mp4",
+        #"test_clips/DJIG0043wiebe.mp4",
+        #"test_clips/GX016015.MP4",
+        #"test_clips/nivim_insta360.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",
         "test_clips/MasterTim17_caddx.mp4",
         "test_clips/starling2.MOV",
