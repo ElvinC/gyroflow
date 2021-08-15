@@ -81,6 +81,9 @@ class FisheyeCalibrator:
 
         self.data_from_preset_file = False
 
+        # when loading a preset file
+        self.extra_cam_info = None
+
     def set_horizontal_stretch(self, new_stretch = 1):
         # For handling anamorphic or squeezed footage.
         self.input_horizontal_stretch = new_stretch
@@ -469,7 +472,33 @@ class FisheyeCalibrator:
         outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
         return outimg
 
+    def get_minimal_data(self):
+        calibration_data = {
+            "name": self.extra_cam_info.get("name", ""),
+            "calibrator_version": self.extra_cam_info.get("calibrator_version", ""),
+            "calib_dimension": {
+                "w": self.calib_dimension[0],
+                "h": self.calib_dimension[1]
+            },
+            "orig_dimension": {
+                "w": self.orig_dimension[0],
+                "h": self.orig_dimension[1]
+            },
+            "input_horizontal_stretch": self.input_horizontal_stretch, # to de-stretch anamorphic/linearly stretched video.
+            "num_images": self.num_images_used,
 
+            "use_opencv_fisheye": True,
+            "fisheye_params": {
+                "RMS_error": self.RMS_error,
+                "camera_matrix": self.K.tolist(),
+                "distortion_coeffs": self.D.flatten().tolist()
+            },
+            # For (potential) use with the standard cv2.calibrateCamera
+            "use_opencv_standard": False,
+            "calib_params": {}
+        }
+
+        return calibration_data
 
     def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", camera_brand="", camera_model="", lens_model="", camera_setting="", note="", calibrated_by=""):
         """Save camera calibration parameters as JSON file
@@ -590,6 +619,8 @@ class FisheyeCalibrator:
                     "aspect": self.orig_dimension[0]/self.orig_dimension[1],
                     "num_images": self.num_images
                 }
+
+                self.extra_cam_info = extra_cam_info
 
                 return extra_cam_info
 

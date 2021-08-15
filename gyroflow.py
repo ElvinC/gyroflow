@@ -1226,11 +1226,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.setAlignment(QtCore.Qt.AlignTop)
         self.export_controls.setMinimumWidth(500)
 
-        self.export_keyframes_controls = QtWidgets.QWidget()
-        self.export_keyframes_controls_layout = QtWidgets.QVBoxLayout()
-        self.export_keyframes_controls.setLayout(self.export_keyframes_controls_layout)
-        self.export_keyframes_controls_layout.setAlignment(QtCore.Qt.AlignTop)
-        self.export_keyframes_controls.setMinimumWidth(500)
+        #self.export_keyframes_controls = QtWidgets.QWidget()
+        #self.export_keyframes_controls_layout = QtWidgets.QVBoxLayout()
+        #self.export_keyframes_controls.setLayout(self.export_keyframes_controls_layout)
+        #self.export_keyframes_controls_layout.setAlignment(QtCore.Qt.AlignTop)
+        #self.export_keyframes_controls.setMinimumWidth(500)
 
 
         text = QtWidgets.QLabel("<h2>Input parameters:</h2>".format(__version__))
@@ -1789,6 +1789,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_button.clicked.connect(self.export_video)
         self.export_controls_layout.addWidget(self.export_button)
 
+        self.export_gyroflow_button = QtWidgets.QPushButton("Export Gyroflow Data")
+        self.export_gyroflow_button.setMinimumHeight(30)
+        self.export_gyroflow_button.setEnabled(True)
+        self.export_gyroflow_button.clicked.connect(self.export_gyroflow)
+        self.export_controls_layout.addWidget(self.export_gyroflow_button)
+
         self.export_keyframes_button = QtWidgets.QPushButton("Export (hopefully) stabilized keyframes for the whole clip")
         self.export_keyframes_button.setMinimumHeight(30)
         self.export_keyframes_button.setEnabled(False)
@@ -2301,7 +2307,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
                              smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color, audio=audio)
 
-
+    def export_gyroflow(self):
+        self.stab.export_gyroflow_file()
 
     def show_error(self, msg):
         err_window = QtWidgets.QMessageBox(self)
@@ -2606,8 +2613,9 @@ def main():
 if __name__ == "__main__":
     main()
     # Pack to exe using:
-    # pyinstaller gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll -F
+    # pyinstaller --icon=media\icon.ico gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll -F
     # in my case:
     # pyside2-rcc images.qrc -o bundled_images.py
     # poetry run pyinstaller -F --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
     # -F == one file, -w == no command window
+    # Alternative: pyinstaller gyroflow.py -F --icon=media\icon.ico

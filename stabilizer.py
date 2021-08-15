@@ -1,3 +1,4 @@
+from quaternion import quaternion
 import numpy as np
 import cv2
 import csv
@@ -16,6 +17,7 @@ from matplotlib import colors
 from vidgear.gears import WriteGear
 from vidgear.gears import helper as vidgearHelper
 import gyrolog
+import json
 from _version import __version__
 
 from scipy import signal, interpolate
@@ -96,6 +98,7 @@ class Stabilizer:
         self.map_func_scale = 0.9
 
         self.integrator = None #GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
+        self.new_integrator = None
         self.times = None
         self.stab_transform = None
 
@@ -301,14 +304,14 @@ class Stabilizer:
         if not self.smoothing_algo:
             self.smoothing_algo = smoothing_algos.PlainSlerp()
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
+        self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
         if self.smoothing_algo.require_acceleration and type(new_acc_data) == type(None):
             print("No acceleration data available. Horizon reference doesn't work without it.")
-        new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
         #self.last_smooth = smooth
 
-        new_integrator.set_smoothing_algo(self.smoothing_algo)
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+        self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
@@ -379,14 +382,14 @@ class Stabilizer:
         if not self.smoothing_algo:
             self.smoothing_algo = smoothing_algos.PlainSlerp()
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation,acc_data=new_acc_data)
-        new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation,acc_data=new_acc_data)
+        self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
         #self.last_smooth = smooth
 
         
 
-        new_integrator.set_smoothing_algo(self.smoothing_algo)
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+        self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
 
 
@@ -1090,13 +1093,66 @@ class Stabilizer:
 
             print("Audio exported")
 
+    def load_gyroflow_file(self, filename="file.gyroflow"):
+        with open(filename, "r") as f:
+            for line in f.readlines():
+                print(line)
 
     def export_gyroflow_file(self, filename=None):
+
+        if type(self.undistort) == type(None) or type(self.integrator) == type(None) or type(self.new_integrator) == type(None) or type(self.stab_transform) == type(None):
+            print("Unable to export a data file")
+
+        gyroflow_data = {}
+
+        gyroflow_data["calibration_data"] = self.undistort.get_minimal_data()
+        gyroflow_data["do_video_rotation"] = self.do_video_rotation
+        gyroflow_data["gyro_lpf_cutoff"] = self.gyro_lpf_cutoff
+
+        video_info = {
+            "orig_w": self.orig_dimension[0],
+            "orig_h": self.orig_dimension[1],
+            "process_w": self.process_dimension[0],
+            "process_h": self.process_dimension[0],
+            "fps": self.fps,
+            "num_frames": self.num_frames
+        }
+
+        gyroflow_data["video_info"] = video_info
+
+
+        gyroflow_data["sensor_DOF"] = 6 if type(self.acc_data) != type(None) else 3 # 6 DOF if acc is available
+
+        gyroflow_data["raw_imu"] = self.new_integrator.get_raw_gyro_acc().tolist() # time is already corrected
+
+        gyroflow_data["stab_summary"] = self.smoothing_algo.get_summary()
+
+        stab_transform = np.array(self.stab_transform)
+        #print(self.stab_transform)
+        #print(stab_transform)
+        # [index, time, w, x, y, z]
+        time_stab_transform = np.hstack([np.arange(stab_transform.shape[0])[...,None],np.array(self.times)[...,None],stab_transform])
+        gyroflow_data["stab_transform"] = time_stab_transform.tolist()
+
+        # General format description:
+        # Contains the following:
+        # * Gyroflow version info
+        # * General info, video filename, camera name
+        # * Camera parameters (Json from calibration utility)
+        # * raw gyro/acc data
+        # * Processed orientation data
+        # * Per frame 
+        # Try to make 
         if not filename:
             filename = self.videopath + ".gyroflow"
-        with open(filename, "r") as f:
-            f.writeline("Hello world")
 
+        with open(filename, 'w') as outfile:
+            json.dump(
+            gyroflow_data,
+            outfile,
+            indent=4,
+            separators=(',', ': ')
+        )
 
     def release(self):
         self.cap.release()
@@ -1861,8 +1917,8 @@ if __name__ == "__main__":
 
     #stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json", "test_clips/starling.csv", use_csv=False, logtype = "gyroflow")
 
-    undistortTest = OnlyUndistort("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json",fov_scale=1)
-    undistortTest.renderfile(0, 5, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
+    #undistortTest = OnlyUndistort("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json",fov_scale=1)
+    #undistortTest.renderfile(0, 5, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     exit()
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips

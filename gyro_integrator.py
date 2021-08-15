@@ -10,11 +10,11 @@ import quaternion as quat
 import smoothing_algos
 
 class GyroIntegrator:
-    def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None, acc_scaling=1):
+    def __init__(self, gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None, acc_scaling=1):
         """Initialize instance of gyroIntegrator for getting orientation from gyro data
 
         Args:
-            input_data (numpy.ndarray): Nx4 array, where each row is [time, gyroX,gyroY,gyroZ]
+            gyro_data (numpy.ndarray): Nx4 array, where each row is [time, gyroX,gyroY,gyroZ]
             time_scaling (int, optional): time * time_scaling should give time in second. Defaults to 1.
             gyro_scaling (int, optional): gyro<xyz> * gyro_scaling should give angular velocity in rad/s. Defaults to 1.
             zero_out_time (bool, optional): Always start time at 0 in the output data. Defaults to True.
@@ -24,49 +24,49 @@ class GyroIntegrator:
         """
 
         # data is only the gyro
-        self.data = np.copy(input_data)
+        self.gyro = np.copy(gyro_data)
         self.acc = None
 
         self.acc_cutoff = 1 # Hz, low cutoff
         self.acc_available = False
         if type(acc_data) != type(None):
             # resample if they don't already match
-            if self.data.shape[0] == acc_data.shape[0]:
+            if self.gyro.shape[0] == acc_data.shape[0]:
                 self.acc_available = True
 
                 self.acc = np.copy(acc_data)
-                self.data[:,0] *= time_scaling
-                self.data[:,1:4] *= acc_scaling
+                self.gyro[:,0] *= time_scaling
+                self.gyro[:,1:4] *= acc_scaling
             else:
                 print("Gyro and acceleration data don't line up")
                 self.acc_available = False
         #if self.acc_available:
             #print(self.acc.shape)
         # Check for corrupted/out of order timestamps
-        time_order_check = self.data[:-1,0] > self.data[1:,0]
+        time_order_check = self.gyro[:-1,0] > self.gyro[1:,0]
         if np.any(time_order_check):
             print("Truncated bad gyro data")
-            self.data = self.data[0:np.argmax(time_order_check)+1,:]
+            self.gyro = self.gyro[0:np.argmax(time_order_check)+1,:]
             if self.acc_available:
                 self.acc = self.acc[0:np.argmax(time_order_check)+1,:]
 
         # scale input data
-        self.data[:,0] *= time_scaling
-        self.data[:,1:4] *= gyro_scaling
+        self.gyro[:,0] *= time_scaling
+        self.gyro[:,1:4] *= gyro_scaling
 
         # Make sure input data is right handed. Final virtual camera rotation is left-handed
         # while image rotation is right-handed. Improve this later
-        #self.data[:,2] *= -1 # y axis
+        #self.gyro[:,2] *= -1 # y axis
 
         # zero out timestamps
         if zero_out_time:
-            self.data[:,0] -= self.data[0,0]
+            self.gyro[:,0] -= self.gyro[0,0]
             if self.acc_available:
                 self.acc[:,0] -= self.acc[0,0]
 
-        self.num_data_points = self.data.shape[0]
+        self.num_data_points = self.gyro.shape[0]
 
-        self.gyro_sample_rate = self.num_data_points / (self.data[-1,0] - self.data[0,0])
+        self.gyro_sample_rate = self.num_data_points / (self.gyro[-1,0] - self.gyro[0,0])
 
         # initial orientation quaternion
         if type(initial_orientation) != type(None):
@@ -116,17 +116,17 @@ class GyroIntegrator:
         temp_orientation_list = []
         temp_time_list = []
 
-        start_time = self.data[0][0] # seconds
+        start_time = self.gyro[0][0] # seconds
 
         for i in range(self.num_data_points):
 
             # angular velocity vector
-            omega = self.data[i][1:]
+            omega = self.gyro[i][1:]
 
             # get current and adjecent times
-            last_time = self.data[i-1][0] if i > 0 else self.data[i][0]
-            this_time = self.data[i][0]
-            next_time = self.data[i+1][0] if i < self.num_data_points - 1 else self.data[i][0]
+            last_time = self.gyro[i-1][0] if i > 0 else self.gyro[i][0]
+            this_time = self.gyro[i][0]
+            next_time = self.gyro[i+1][0] if i < self.num_data_points - 1 else self.gyro[i][0]
 
             # symmetrical dt calculation. Should give slightly better results when missing data
             delta_time = (next_time - last_time)/2
@@ -253,7 +253,7 @@ class GyroIntegrator:
         if self.smoothing_algo:
             if self.smoothing_algo.bypass_external_processing:
                 print("Bypassing quaternion orientation integration")
-                time_list, smoothed_orientation = self.smoothing_algo.get_stabilize_transform(self.data)
+                time_list, smoothed_orientation = self.smoothing_algo.get_stabilize_transform(self.gyro)
             else:
                 time_list, smoothed_orientation = self.get_stabilize_transform()
         else:
@@ -280,7 +280,7 @@ class GyroIntegrator:
 
                 # interpolate between two quaternions
                 weight = (time - time_list[i])/(time_list[i+1]-time_list[i])
-                slerped_rotations.append(quat.slerp(smoothed_orientation[i],smoothed_orientation[i+1],[weight]))
+                slerped_rotations.append(quat.single_slerp(smoothed_orientation[i],smoothed_orientation[i+1],weight))
                 out_times.append(time)
 
                 time += interval
@@ -312,10 +312,12 @@ class GyroIntegrator:
             "xyz": slice(1,4)
         }[axis]
 
-        return np.copy(self.data[:,idx])
+        return np.copy(self.gyro[:,idx])
 
-
-
+    def get_raw_gyro_acc(self):
+        if self.acc_available:
+            return np.hstack([self.gyro, self.acc[:,1:]])
+        return np.copy(self.gyro)
 
     def rate_to_quat(self, omega, dt):
         """Rotation quaternion from gyroscope sample
@@ -349,18 +351,18 @@ class GyroIntegrator:
 
 
 class FrameRotationIntegrator(GyroIntegrator):
-    def __init__(self, input_data, initial_orientation=None):
+    def __init__(self, gyro_data, initial_orientation=None):
         """Initialize instance of FrameRotationIntegrator for getting orientation from frame change data
 
         Args:
-            input_data (numpy.ndarray): Nx4 array, where each row is [frame num, gyroX,gyroY,gyroZ]
+            gyro_data (numpy.ndarray): Nx4 array, where each row is [frame num, gyroX,gyroY,gyroZ]
             initial_orientation (float[4]): Quaternion representing the starting orientation, Defaults to [1, 0.0001, 0.0001, 0.0001].
         """
 
             
-        self.data = np.copy(input_data)
+        self.gyro = np.copy(gyro_data)
 
-        self.num_data_points = self.data.shape[0]
+        self.num_data_points = self.gyro.shape[0]
 
         # initial orientation quaternion
         if type(initial_orientation) != type(None):
@@ -397,16 +399,16 @@ class FrameRotationIntegrator(GyroIntegrator):
         
 
         temp_orientation_list.append(np.copy(self.orientation))
-        temp_time_list.append(self.data[0][0] - 1)
+        temp_time_list.append(self.gyro[0][0] - 1)
 
 
         for i in range(self.num_data_points):
 
             # angular velocity vector
-            omega = self.data[i][1:]
+            omega = self.gyro[i][1:]
 
             # get current time
-            this_time = self.data[i][0]
+            this_time = self.gyro[i][0]
             # symmetrical dt calculation. Should give slightly better results when missing data
             delta_time = 1 # frame
 
@@ -438,11 +440,11 @@ class FrameRotationIntegrator(GyroIntegrator):
 
 
 class EulerIntegrator:
-    def __init__(self, input_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, acc_data=None):
+    def __init__(self, gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, acc_data=None):
         """Initialize instance of eulerintegrator for getting a faux orientation from gyro data (not true orientation) easier xyz stabilization
 
         Args:
-            input_data (numpy.ndarray): Nx4 array, where each row is [time, gyroX,gyroY,gyroZ]
+            gyro_data (numpy.ndarray): Nx4 array, where each row is [time, gyroX,gyroY,gyroZ]
             time_scaling (int, optional): time * time_scaling should give time in second. Defaults to 1.
             gyro_scaling (int, optional): gyro<xyz> * gyro_scaling should give angular velocity in rad/s. Defaults to 1.
             zero_out_time (bool, optional): Always start time at 0 in the output data. Defaults to True.
@@ -451,16 +453,16 @@ class EulerIntegrator:
         """
 
     
-        self.data = np.copy(input_data)
+        self.gyro = np.copy(gyro_data)
         # scale input data
-        self.data[:,0] *= time_scaling
-        self.data[:,1:4] *= gyro_scaling
+        self.gyro[:,0] *= time_scaling
+        self.gyro[:,1:4] *= gyro_scaling
 
         # zero out timestamps
         if zero_out_time:
-            self.data[:,0] -= self.data[0,0]
+            self.gyro[:,0] -= self.gyro[0,0]
 
-        self.num_data_points = self.data.shape[0]
+        self.num_data_points = self.gyro.shape[0]
 
         # Variables to save integration data
         self.euler_orientation_list = None
@@ -488,12 +490,12 @@ class EulerIntegrator:
         for i in range(self.num_data_points):
 
                 # angular velocity vector
-                omega = self.data[i][1:]
+                omega = self.gyro[i][1:]
 
                 # get current and adjecent times
-                last_time = self.data[i-1][0] if i > 0 else self.data[i][0]
-                this_time = self.data[i][0]
-                next_time = self.data[i+1][0] if i < self.num_data_points - 1 else self.data[i][0]
+                last_time = self.gyro[i-1][0] if i > 0 else self.gyro[i][0]
+                this_time = self.gyro[i][0]
+                next_time = self.gyro[i+1][0] if i < self.num_data_points - 1 else self.gyro[i][0]
 
                 # symmetrical dt calculation. Should give slightly better results when missing data
                 delta_time = (next_time - last_time)/2
@@ -627,7 +629,7 @@ class EulerIntegrator:
             "xyz": slice(1,4)
         }[axis]
 
-        return np.copy(self.data[:,idx])
+        return np.copy(self.gyro[:,idx])
 
 
 

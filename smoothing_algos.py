@@ -103,7 +103,10 @@ class SmoothingAlgo:
     def slider_conv_func_inverse(self, minval, maxval, steps, expo, realval):
         return round(steps * ((realval - minval)/(maxval - minval))**(1/expo))
 
-
+    def get_summary(self):
+        # Get a readable summary of the smoothing method and settings
+        summary = [self.name] + [f'{optionname}:{self.user_options[optionname]["value"]}' for optionname in self.user_options]
+        return ",".join(summary)
 
     def widget_input_update(self, optionname = ""):
         #print("Update option")
