@@ -179,9 +179,19 @@ class Stabilizer:
             if (acc_sample_rate / 2) <= acc_cutoff:
                 self.gyro_lpf_cutoff = acc_sample_rate / 2 - 1
             
+            # First order filters to avoid overshoot
+
+            # Get rid of high freq.
+            sosgyro = signal.butter(1, 40, "lowpass", fs=acc_sample_rate, output="sos")
+            self.acc_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
+
             sosacc = signal.butter(1, acc_cutoff, "lowpass", fs=acc_sample_rate, output="sos")
 
             self.acc_data[:,1:4] = signal.sosfiltfilt(sosacc, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
+
+
+            sosgyro = signal.butter(1, 0.5, "lowpass", fs=acc_sample_rate, output="sos")
+            self.acc_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
 
 
     def set_hyperlapse(self, hyperlapse_multiplier = 1, hyperlapse_num_blended_frames = 1):

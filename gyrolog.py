@@ -8,7 +8,7 @@ import re
 import time
 import sys, inspect
 import logging
-from scipy import signal
+from scipy import signal, interpolate
 
 import insta360_utility as insta360_util
 from blackbox_extract import BlackboxExtractor
@@ -318,19 +318,6 @@ class GyrologReader:
 
                     self.apply_variant_rotation_in_place(self.standard_acc)
 
-                    # Get rid of high freq.
-                    sosgyro = signal.butter(1, 50, "lowpass", fs=self.gyro_sample_rate, output="sos")
-                    self.acc[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc[:,1:4], 0) # Filter along "vertical" time axis
-
-
-                    sosgyro = signal.butter(1, 0.3, "lowpass", fs=self.gyro_sample_rate, output="sos")
-                    self.acc[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc[:,1:4], 0) # Filter along "vertical" time axis
-
-                    acc_cutoff = 1
-                    
-                    sosacc = signal.butter(1, acc_cutoff, "lowpass", fs=self.gyro_sample_rate, output="sos")
-
-                    self.acc[:,1:4] = signal.sosfiltfilt(sosacc, self.acc[:,1:4], 0) # Filter along "vertical" time axis
 
                     # valid range: 0.9 to 1.1 g
 
@@ -446,6 +433,7 @@ class GyrologReader:
 
         if has_acc:
             if self.gyro.shape != self.acc.shape:
+                print(self.gyro.shape, self.acc.shape)
                 print("Gyro and acc are not the same shape")
                 return False
 
@@ -807,11 +795,11 @@ class GPMFLog(GyrologReader):
         self.filename_pattern = "(?i).*\.mp4"
 
         self.variants =  {
-            "hero5": [0], # Zero since this is handled during extraction, not after
+            "hero5": [13],
             "hero6": [0],
             "hero7": [0],
-            "hero8": [0],
-            "hero9": [0]
+            "hero8": [1],
+            "hero9": [13]
         }
 
         self.variant = "hero6"
@@ -859,7 +847,24 @@ class GPMFLog(GyrologReader):
             self.gyro = self.gpmf.get_gyro(True)
             self.gpmf.parse_accl()
             self.acc = self.gpmf.get_accl(True)
-        except ZeroDivisionError:
+            
+            minlength = min(self.gyro.shape[0], self.acc.shape[0])
+            maxlength = max(self.gyro.shape[0], self.acc.shape[0])
+            # Make sure they match
+            if maxlength - minlength == 0: #
+                pass
+            elif maxlength - minlength < 10:
+                # probably just some missing datapoints
+                self.gyro = self.gyro[0:minlength]
+                self.acc = self.acc[0:minlength]
+                self.acc[:,0] = self.gyro[:,0] # same timescale, acceleration less time-sensitive
+            else:
+                to_interp = interpolate.interp1d(self.acc[:,0], self.acc[:,1:], axis=0)
+                self.acc[:,1:] = to_interp(self.gyro[:,0])
+                self.acc[:,0] = self.gyro[:,0]
+                # resample acc to gyro timescale
+
+        except:
             print("Failed to extract GPMF gyro")
             return False
 
@@ -867,28 +872,36 @@ class GPMFLog(GyrologReader):
 
         # Hero 6??
         if hero == 6:
-            self.gyro[:,1] = self.gyro[:,1]
-            self.gyro[:,2] = self.gyro[:,2]
-            self.gyro[:,3] = self.gyro[:,3]
-        if hero == 7:
-            self.gyro[:,1] = self.gyro[:,1]
-            self.gyro[:,2] = self.gyro[:,2]
-            self.gyro[:,3] = self.gyro[:,3]
+            pass
+            # Identity
+            #self.gyro[:,1] = self.gyro[:,1]
+            #self.gyro[:,2] = self.gyro[:,2]
+            #self.gyro[:,3] = self.gyro[:,3]
+        elif hero == 7:
+            pass
+            #self.gyro[:,1] = self.gyro[:,1]
+            #self.gyro[:,2] = self.gyro[:,2]
+            #self.gyro[:,3] = self.gyro[:,3]
         elif hero == 5:
-            self.gyro[:,1] = -self.gyro[:,1]
-            self.gyro[:,2] = self.gyro[:,2]
-            self.gyro[:,3] = self.gyro[:,3]
-            self.gyro[:,[2, 3]] = self.gyro[:,[3, 2]]
+            pass
+            # equivalent to matrix index 13 
+            #self.gyro[:,1] = -self.gyro[:,1]
+            #self.gyro[:,2] = self.gyro[:,2]
+            #self.gyro[:,3] = self.gyro[:,3]
+            #self.gyro[:,[2, 3]] = self.gyro[:,[3, 2]]
 
         elif hero == 8:
+            pass
             # Hero 8??
-            self.gyro[:,[2, 3]] = self.gyro[:,[3, 2]]
-            self.gyro[:,2] = -self.gyro[:,2]
+            # equal matrix index 1
+            #self.gyro[:,[2, 3]] = self.gyro[:,[3, 2]]
+            #self.gyro[:,2] = -self.gyro[:,2]
         elif hero == 9:
-            self.gyro[:,1] = -self.gyro[:,1]
-            self.gyro[:,2] = self.gyro[:,2]
-            self.gyro[:,3] = self.gyro[:,3]
-            self.gyro[:,[2, 3]] = self.gyro[:,[3, 2]]
+            pass
+            #self.gyro[:,1] = -self.gyro[:,1]
+            #self.gyro[:,2] = self.gyro[:,2]
+            #self.gyro[:,3] = self.gyro[:,3]
+            #self.gyro[:,[2, 3]] = self.gyro[:,[3, 2]]
 
         return True
 
@@ -1128,7 +1141,7 @@ if __name__ == "__main__":
         #"test_clips/IF-RC01_0026.MP4",
         #"test_clips/RC_0038_210813211513.MP4",
         #"test_clips/RC_0031_210722220523.MP4",
-        "test_clips/Runcam/RC_0036_filtered.MP4",
+        #"test_clips/Runcam/RC_0036_filtered.MP4",
         "test_clips/GX016015.MP4",
         "test_clips/nivim_insta360.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",

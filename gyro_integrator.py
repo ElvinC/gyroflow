@@ -141,8 +141,8 @@ class GyroIntegrator:
                         accWorldVec = quat.rotate_vector_fast(self.orientation, avec)
                         correctionWorld = np.cross(accWorldVec, self.grav_vec)
 
-                        # high weight for first few seconds to "lock" it, then 
-                        weight = 10 if this_time - start_time < 5 else 0.6
+                        # high weight for first two seconds to "lock" it, then 
+                        weight = 10 if this_time - start_time < 1.5 else 0.6
                         correctionBody = weight * quat.rotate_vector_fast(quat.conjugate(self.orientation), correctionWorld)
                         omega = omega + correctionBody
 
