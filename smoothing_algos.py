@@ -521,11 +521,11 @@ class HorizonLock(SmoothingAlgo):
         start_orientations[:,[0,1,2,3]] = start_orientations[:,[1,2,3,0]]
 
         eul = Rotation(start_orientations).as_euler("zxy")
-        plt.figure()
-        plt.plot(eul[:,0])
-        plt.plot(eul[:,1])
-        plt.plot(eul[:,2])
-        plt.show()        
+        #plt.figure()
+        #plt.plot(eul[:,0])
+        #plt.plot(eul[:,1])
+        #plt.plot(eul[:,2])
+        #plt.show()        
         eul[:,0] = self.get_user_option_value("horizon_angle") * np.pi/180
 
         #new_quat = Rotation.from_euler(["xyz", "zxy", "yzx", "xzy", "zyx", "yxz"][self.get_user_option_value("eul")], eul).as_quat()
