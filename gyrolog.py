@@ -373,17 +373,17 @@ class GyrologReader:
     def plot_gyro(self):
         xplot = plt.subplot(311)
 
-        plt.plot(self.gyro[:,0], self.gyro[:,1])
+        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,1])
         plt.ylabel("omega x [rad/s]")
 
         plt.subplot(312, sharex=xplot)
 
-        plt.plot(self.gyro[:,0], self.gyro[:,2])
+        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,2])
         plt.ylabel("omega y [rad/s]")
 
         plt.subplot(313, sharex=xplot)
 
-        plt.plot(self.gyro[:,0], self.gyro[:,3])
+        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,3])
         #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
         plt.xlabel("time [s]")
         plt.ylabel("omega z [rad/s]")
@@ -394,26 +394,26 @@ class GyrologReader:
         if type(self.acc) != type(None):
             xplot = plt.subplot(411)
 
-            plt.plot(self.acc[:,0], self.acc[:,1])
+            plt.plot(self.standard_acc[:,0], self.standard_acc[:,1])
             plt.ylabel("acc x [g]")
 
             plt.subplot(412, sharex=xplot)
 
-            plt.plot(self.acc[:,0], self.acc[:,2])
+            plt.plot(self.standard_acc[:,0], self.standard_acc[:,2])
             plt.ylabel("acc y [g]")
 
             plt.subplot(413, sharex=xplot)
 
-            plt.plot(self.acc[:,0], self.acc[:,3])
+            plt.plot(self.standard_acc[:,0], self.standard_acc[:,3])
             #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
             plt.xlabel("time [s]")
             plt.ylabel("acc z [g]")
 
             plt.subplot(414, sharex=xplot)
 
-            plt.plot(self.acc[:,0], np.sqrt(np.sum(self.acc[:,1:]**2,1)))
-            plt.plot([0, self.acc[-1,0]], [1.1,1.1])
-            plt.plot([0, self.acc[-1,0]], [0.9,0.9])
+            plt.plot(self.standard_acc[:,0], np.sqrt(np.sum(self.standard_acc[:,1:]**2,1)))
+            plt.plot([0, self.standard_acc[-1,0]], [1.1,1.1])
+            plt.plot([0, self.standard_acc[-1,0]], [0.9,0.9])
             #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
             plt.xlabel("time [s]")
             plt.ylabel("mag [g]")
@@ -756,8 +756,8 @@ class Insta360Log(GyrologReader):
         self.filename_pattern = "(?i).*\.mp4"
 
         self.variants = {
-            "smo4k": [0],
-            "insta360 oner": [0]
+            "smo4k": [22],
+            "insta360 oner": [22]
         }
 
         self.variant = "smo4k"
@@ -783,19 +783,19 @@ class Insta360Log(GyrologReader):
     def extract_log_internal(self, filename):
 
         if self.variant=="smo4k":
-            gyro_data_input, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
+            self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
         elif self.variant=="insta360 oner":
-            gyro_data_input, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[], revertIMU=False)
+            self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[], revertIMU=False)
         else:
             # Assume SMO4K - For no real reason....
-            gyro_data_input, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
+            self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
 
         # Coverting gyro to XYZ to -Z,-X,Y
-        self.gyro = np.empty([len(gyro_data_input), 4])
-        self.gyro[:,0] = gyro_data_input[:,0][:]
-        self.gyro[:,1] = gyro_data_input[:,2][:] * -1
-        self.gyro[:,2] = gyro_data_input[:,3][:]
-        self.gyro[:,3] = gyro_data_input[:,1][:] * -1
+        #self.gyro = np.empty([len(gyro_data_input), 4])
+        #self.gyro[:,0] = gyro_data_input[:,0][:]
+        #self.gyro[:,1] = gyro_data_input[:,2][:] * -1
+        #self.gyro[:,2] = gyro_data_input[:,3][:]
+        #self.gyro[:,3] = gyro_data_input[:,1][:] * -1
 
         return True
 
@@ -999,6 +999,15 @@ class GyroflowGyroLog(GyrologReader):
 
             #print(tscale, gscale, ascale)
 
+
+            header = line.split(",")
+            header_length = len(header)
+
+            has_gyro = "gx" in header
+            has_acc = "ax" in header
+            has_mag = "mx" in header
+
+
             # Get data
             lines = csvfile.readlines()
 
@@ -1006,13 +1015,14 @@ class GyroflowGyroLog(GyrologReader):
 
             for line in lines:
                 splitdata = [float(x) for x in line.split(",")]
-                t = splitdata[0] * tscale
+                if len(splitdata) == header_length: # make sure no missing fields
+                    t = splitdata[0] * tscale
 
-                gx = splitdata[1] * gscale
-                gy = splitdata[2] * gscale
-                gz = splitdata[3] * gscale
+                    gx = splitdata[1] * gscale
+                    gy = splitdata[2] * gscale
+                    gz = splitdata[3] * gscale
 
-                data_list.append([t, gx, gy, gz])
+                    data_list.append([t, gx, gy, gz])
 
         self.gyro = np.array(data_list)
 
@@ -1155,6 +1165,7 @@ if __name__ == "__main__":
         #"test_clips/DJIG0043wiebe.mp4",
         #"test_clips/GX016015.MP4",
         #"test_clips/nivim_insta360.mp4",
+        "test_clips/smo4k_calibration.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",
         "test_clips/MasterTim17_caddx.mp4",
         "test_clips/starling2.MOV",

@@ -15,6 +15,7 @@ def get_insta360_gyro_data(path, filterArray=[[1, 0.35], [1,0.04]], revertIMU=Tr
     if revertIMU is not True:
         gyro_data[:,1] = gyro_data[:,1]*-1
         gyro_data[:,3] = gyro_data[:,3]*-1
+        acc_data[:,1] = acc_data[:,1]*-1
         acc_data[:,3] = acc_data[:,3]*-1
 
     fin.close()
@@ -99,7 +100,7 @@ def __parseAccRecord(fin, size):
         tm = float(timecode/1000)
         d_times.append(tm)
         d_gyros.append((tm, -gyroRoll, gyroPitch, -gyroYaw))
-        d_acc.append((tm, accRoll, accPitch, -accYaw))
+        d_acc.append((tm, -accRoll, accPitch, -accYaw))
     return np.array(d_times), np.array(d_gyros), np.array(d_acc)
 
 def __arrayLowPassFilter(array, orderOfFilter, criticalFrequency):

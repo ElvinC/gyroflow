@@ -1856,7 +1856,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         path = dialog.selectedFiles()
         if (len(path) == 0 or len(path[0]) == 0):
             print("No file selected")
-            return
+            return False
         self.infile_path = path[0]
         self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
         self.open_vid_button.setStyleSheet("font-weight:bold;")
@@ -1900,8 +1900,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #        print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
         #        break
 
-
         self.update_gyro_input_settings()
+        return True
 
     def video_as_log_func(self):
         self.gyro_log_path = self.infile_path
@@ -2504,9 +2504,9 @@ class StabUtility(StabUtilityBarebone):
         """Open file using Qt filedialog
         """
         self.video_viewer.reset_map_function()
-        self.open_video_func()
-        self.video_viewer.set_video_path(self.infile_path)
-        self.video_viewer.next_frame()
+        if self.open_video_func():
+            self.video_viewer.set_video_path(self.infile_path)
+            self.video_viewer.next_frame()
 
     def set_player_video(self):
         self.video_viewer.set_video_path(self.infile_path)
@@ -2606,7 +2606,7 @@ def main():
 if __name__ == "__main__":
     main()
     # Pack to exe using:
-    # pyinstaller gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll
+    # pyinstaller gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll -F
     # in my case:
     # pyside2-rcc images.qrc -o bundled_images.py
     # poetry run pyinstaller -F --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
