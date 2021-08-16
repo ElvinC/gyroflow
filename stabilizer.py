@@ -620,7 +620,7 @@ class Stabilizer:
 
         better_offset = offsets[np.argmin(costs)]
 
-        print("Better offset: {}".format(better_offset))
+        print("Better offset: {}, cost: {}".format(better_offset, min(costs)))
 
         if debug_plots:
             #plt.figure()

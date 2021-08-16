@@ -895,13 +895,14 @@ class GPMFLog(GyrologReader):
                 self.acc = self.acc[0:minlength]
                 self.acc[:,0] = self.gyro[:,0] # same timescale, acceleration less time-sensitive
             else:
-                to_interp = interpolate.interp1d(self.acc[:,0], self.acc[:,1:], axis=0)
+                to_interp = interpolate.interp1d(self.acc[:,0], self.acc[:,1:], axis=0,fill_value=np.array([0,1,0]), bounds_error=False)
                 new_acc = np.copy(self.gyro)
                 new_acc[:,1:] = to_interp(self.gyro[:,0])
                 self.acc = new_acc
                 # resample acc to gyro timescale
 
-        except:
+        except Exception as e:
+            print(e)
             print("Failed to extract GPMF gyro")
             return False
 
