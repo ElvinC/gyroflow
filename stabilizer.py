@@ -152,6 +152,10 @@ class Stabilizer:
         self.process_dimension = self.undistort.get_stretched_size_from_dimension(self.orig_dimension) # Dimension after any stretch corrections
         self.width, self.height = self.process_dimension
 
+        # Sync stuff
+        self.d1 = 0
+        self.d2 = 0
+
         
 
 

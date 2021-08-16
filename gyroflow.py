@@ -1239,7 +1239,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(text)
 
         self.open_vid_button = QtWidgets.QPushButton("Open video file")
-        self.open_vid_button.setMinimumHeight(30)
+        self.open_vid_button.setMinimumHeight(40)
         self.open_vid_button.clicked.connect(self.open_video_func)
         self.input_controls_layout.addWidget(self.open_vid_button)
 
@@ -1261,13 +1261,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         
 
         self.open_preset_button = QtWidgets.QPushButton("Browse lens preset")
-        self.open_preset_button.setMinimumHeight(30)
+        self.open_preset_button.setMinimumHeight(40)
         self.open_preset_button.clicked.connect(self.open_preset_func)
         self.input_controls_layout.addWidget(self.open_preset_button)
 
 
         self.open_gyro_button = QtWidgets.QPushButton("Open Gyro log")
-        self.open_gyro_button.setMinimumHeight(30)
+        self.open_gyro_button.setMinimumHeight(40)
         self.open_gyro_button.clicked.connect(self.open_gyro_func)
         self.input_controls_layout.addWidget(self.open_gyro_button)
 
@@ -1476,31 +1476,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_search_size.setValue(10)
         self.sync_controls_layout.addWidget(self.sync_search_size)
 
-        # Select method for doing low-pass filtering
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
-        self.stabilization_algo_select = QtWidgets.QComboBox()
-
-        self.stab_algo_names = smoothing_algos.get_stab_algo_names()
-        self.stab_algo_instances = smoothing_algos.get_all_stab_algo_instances()
-        self.stab_algo_instance_current = self.stab_algo_instances[0]
-        for name in self.stab_algo_names:
-            self.stabilization_algo_select.addItem(name)
-            
-        self.stabilization_algo_select.currentIndexChanged.connect(self.stab_algo_change)
-
-        self.sync_controls_layout.addWidget(self.stabilization_algo_select)
-
-        self.stab_algo_settings_widget = QtWidgets.QWidget()
-        self.stab_algo_settings_widget_layout = QtWidgets.QVBoxLayout()
-        self.stab_algo_settings_widget.setLayout(self.stab_algo_settings_widget_layout)
-        self.stab_algo_settings_widget_layout.setAlignment(QtCore.Qt.AlignTop)
-        self.sync_controls_layout.addWidget(self.stab_algo_settings_widget)
-
-        for inst in self.stab_algo_instances:
-            self.stab_algo_settings_widget_layout.addWidget(inst.get_ui_widget())
-            inst.get_ui_widget().setVisible(False)
-
-        self.stab_algo_change()
+ 
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
         #self.smooth_max_period = 30 # seconds
@@ -1580,6 +1556,39 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_correction_button.setEnabled(False)
         self.sync_correction_button.clicked.connect(self.correct_sync)
         self.sync_controls_layout.addWidget(self.sync_correction_button)
+
+
+       # Select method for doing low-pass filtering
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
+        self.stabilization_algo_select = QtWidgets.QComboBox()
+
+        self.stab_algo_names = smoothing_algos.get_stab_algo_names()
+        self.stab_algo_instances = smoothing_algos.get_all_stab_algo_instances()
+        self.stab_algo_instance_current = self.stab_algo_instances[0]
+        for name in self.stab_algo_names:
+            self.stabilization_algo_select.addItem(name)
+            
+        self.stabilization_algo_select.currentIndexChanged.connect(self.stab_algo_change)
+
+        self.sync_controls_layout.addWidget(self.stabilization_algo_select)
+
+        self.stab_algo_settings_widget = QtWidgets.QWidget()
+        self.stab_algo_settings_widget_layout = QtWidgets.QVBoxLayout()
+        self.stab_algo_settings_widget.setLayout(self.stab_algo_settings_widget_layout)
+        self.stab_algo_settings_widget_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.sync_controls_layout.addWidget(self.stab_algo_settings_widget)
+
+        for inst in self.stab_algo_instances:
+            self.stab_algo_settings_widget_layout.addWidget(inst.get_ui_widget())
+            inst.get_ui_widget().setVisible(False)
+
+        self.stab_algo_change()
+
+        self.update_smoothness_button = QtWidgets.QPushButton("Apply smoothness settings")
+        self.update_smoothness_button.setMinimumHeight(30)
+        self.update_smoothness_button.setEnabled(False)
+        self.update_smoothness_button.clicked.connect(self.update_smoothness)
+        self.sync_controls_layout.addWidget(self.update_smoothness_button)
 
         # OUTPUT OPTIONS
 
@@ -1847,6 +1856,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.log_reader = None
 
+        self.has_player = False
+
         self.preview_fov_scale = 1.4
 
         self.update_gyro_input_settings()
@@ -1896,20 +1907,34 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # check if gyroflow data file exists
         gyroflow_data_path = stabilizer.find_gyroflow_data_file(self.infile_path)
         if gyroflow_data_path:
-            self.use_gyroflow_data_file = True
-            self.gyro_log_path = gyroflow_data_path
-            self.preset_path = gyroflow_data_path
-            try:
-                self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
-                self.update_gyro_input_settings()
-                self.display_preset_info()
-                return True
+            
+                reply = QtWidgets.QMessageBox.question(self, 'Message', 
+                "Load the associated .gyroflow data file?", QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
+                if reply == QtWidgets.QMessageBox.Yes:
+                    self.use_gyroflow_data_file = True
+                    self.gyro_log_path = gyroflow_data_path
+                    self.preset_path = gyroflow_data_path
+                    try:
+                        self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
+                        self.update_gyro_input_settings()
+                        self.display_preset_info()
+                        self.recompute_stab()
+                        if self.has_player:
+                            self.update_player_maps()
+                        return True
 
-            except RuntimeError as e:
-                print(e)
+                    except RuntimeError as e:
+                        print(e)
+
 
 
         self.use_gyroflow_data_file = False
+
+        if self.gyro_log_path.endswith(".gyroflow"):
+            self.gyro_log_path = ""
+        if self.preset_path.endswith(".gyroflow"):
+            self.preset_path = ""
+            self.display_preset_info()
 
         log_guess, log_type, variant = gyrolog.guess_log_type_from_video(self.infile_path)
 
@@ -1991,6 +2016,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
     def display_preset_info(self):
+        if not self.preset_path:
+            self.open_preset_button.setText("Browse lens preset")
+            self.open_preset_button.setStyleSheet("font-weight:normal;")
+            return
         self.preset_path = self.preset_path.replace("\\", "/")
         self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
         self.open_preset_button.setStyleSheet("font-weight:bold;")
@@ -2051,7 +2080,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.open_gyro_button.setText("Gyro data: {} (click to remove)".format(self.gyro_log_path.split("/")[-1]))
             self.open_gyro_button.setStyleSheet("font-weight:bold;")
         else:
-            self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
+            self.open_gyro_button.setText("Open Gyro log")
             self.open_gyro_button.setStyleSheet("font-weight: normal;")
 
         if self.log_reader and not self.use_gyroflow_data_file:
@@ -2165,6 +2194,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.export_button.setEnabled(False)
             self.export_keyframes_button.setEnabled(False)
             self.sync_correction_button.setEnabled(False)
+            self.update_smoothness_button.setEnabled(False)
             return
 
         if self.gyro_log_path == "":
@@ -2233,6 +2263,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # Show estimated delays in UI
         self.sync_correction_button.setEnabled(True)
+        self.update_smoothness_button.setEnabled(True)
         self.d1_control.setValue(self.stab.d1)
         self.d2_control.setValue(self.stab.d2)
 
@@ -2248,6 +2279,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.set_smoothing_algo(self.stab_algo_instance_current)
         self.stab.manual_sync_correction(d1, d2)
         print("Finished computing")
+
+    def update_smoothness(self):
+        self.stab.set_smoothing_algo(self.stab_algo_instance_current)
+        self.stab.update_smoothing()
 
 
     def export_keyframes(self):
@@ -2406,7 +2441,7 @@ class StabUtility(StabUtilityBarebone):
 
         super().__init__(False)
 
-        self.preview_fov_scale = 1.4
+        self.preview_fov_scale =2.5
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
@@ -2478,8 +2513,8 @@ class StabUtility(StabUtilityBarebone):
         self.preview_fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.preview_fov_scale))
         self.preview_fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.preview_fov_slider.setMinimum(8)
-        self.preview_fov_slider.setValue(18)
-        self.preview_fov_slider.setMaximum(40)
+        self.preview_fov_slider.setValue(25)
+        self.preview_fov_slider.setMaximum(50)
         self.preview_fov_slider.setMaximumWidth(300)
         self.preview_fov_slider.setSingleStep(1)
         self.preview_fov_slider.setTickInterval(1)
@@ -2513,6 +2548,8 @@ class StabUtility(StabUtilityBarebone):
         
 
         self.init_UI()
+
+        self.has_player = True
 
         # file menu setup
         menubar = self.menuBar()
