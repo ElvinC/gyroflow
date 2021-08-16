@@ -27,6 +27,8 @@ class GyroIntegrator:
         self.gyro = np.copy(gyro_data)
         self.acc = None
 
+        self.last_used_acc = False
+
         self.acc_cutoff = 1 # Hz, low cutoff
         self.acc_available = False
         if type(acc_data) != type(None):
@@ -70,8 +72,10 @@ class GyroIntegrator:
 
         # initial orientation quaternion
         if type(initial_orientation) != type(None):
+            self.initial_orientation = np.array(initial_orientation)
             self.orientation = np.array(initial_orientation)
         else:
+            self.initial_orientation = np.array([1, 0.0001, 0.0001, 0.0001])
             self.orientation = np.array([1, 0.0001, 0.0001, 0.0001])
 
         # Variables to save integration data
@@ -99,10 +103,12 @@ class GyroIntegrator:
             (np.ndarray, np.ndarray): tuple (time_list, quaternion orientation array)
         """
 
-        if self.already_integrated:
+        if self.already_integrated and (use_acc == self.last_used_acc or not self.acc_available):
             return (self.time_list, self.orientation_list)
 
         apply_complementary = self.acc_available and use_acc
+
+        self.last_used_acc = use_acc
 
         if apply_complementary:
             # find valid accelation data points
@@ -111,6 +117,9 @@ class GyroIntegrator:
             asquared = np.sum(self.acc[:,1:]**2,1)
             # between 0.9 and 1.1 g
             complementary_mask = np.logical_and(0.81<asquared,asquared<1.21)
+
+
+        self.orientation = np.copy(self.initial_orientation)
 
         # temp lists to save data
         temp_orientation_list = []

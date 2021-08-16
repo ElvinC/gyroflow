@@ -91,9 +91,6 @@ class AdaptiveZoom:
         #if smoothingNumFrames % 2 == 0:
         #    smoothingNumFrames = smoothingNumFrames+1
 
-        #tstart = 0 if tstart == False else tstart
-        #tend = -1 if tend == False else tend
-
         smoothingFocusFrames = int(smoothingFocus * fps)
         if smoothingFocusFrames % 2 == 0:
             smoothingFocusFrames = smoothingFocusFrames+1

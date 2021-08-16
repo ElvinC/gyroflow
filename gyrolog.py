@@ -9,6 +9,7 @@ import time
 import sys, inspect
 import logging
 from scipy import signal, interpolate
+from scipy.fft import fft, fftfreq
 
 import insta360_utility as insta360_util
 from blackbox_extract import BlackboxExtractor
@@ -313,6 +314,8 @@ class GyrologReader:
 
                     self.apply_variant_rotation_in_place(self.standard_gyro)
 
+
+
                 if type(self.acc) != type(None):
                     self.standard_acc = np.copy(self.acc)
 
@@ -371,24 +374,43 @@ class GyrologReader:
         pass
 
     def plot_gyro(self):
-        xplot = plt.subplot(311)
+        #xplot = plt.subplot(311)
 
-        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,1])
-        plt.ylabel("omega x [rad/s]")
+        #plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,1])
+        #plt.ylabel("omega x [rad/s]")
 
-        plt.subplot(312, sharex=xplot)
+        # plt.subplot(312, sharex=xplot)
 
-        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,2])
-        plt.ylabel("omega y [rad/s]")
+        # plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,2])
+        # plt.ylabel("omega y [rad/s]")
 
-        plt.subplot(313, sharex=xplot)
+        # plt.subplot(313, sharex=xplot)
 
-        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,3])
-        #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
-        plt.xlabel("time [s]")
-        plt.ylabel("omega z [rad/s]")
+        # plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,3])
+        # #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+        # plt.xlabel("time [s]")
+        # plt.ylabel("omega z [rad/s]")
 
-        plt.show()
+
+
+        #plt.show()
+
+        N = self.standard_gyro.shape[0]
+        T = (self.standard_gyro[-1,0] - self.standard_gyro[0,0]) /  N
+        freq = 1/T
+        x = self.standard_gyro[:,0]
+        y = self.standard_gyro[:,3]
+        
+        yf = fft(y)
+        xf = fftfreq(N, T)[:N//2]
+
+        sosgyro = signal.butter(1, 0.0015, "lowpass", fs=freq/N, output="sos")
+
+        yf = signal.sosfiltfilt(sosgyro, yf, 0) # Filter along "vertical" time axis
+
+        plt.plot(xf, 2.0/N * np.abs(yf[0:N//2]))
+        plt.grid()
+        #plt.show()
 
     def plot_acc(self):
         if type(self.acc) != type(None):
@@ -744,6 +766,10 @@ class RuncamData(GyrologReader):
                 data_list.append([t, gx, gy, gz])
 
         self.gyro = np.array(data_list)
+        sosgyro = signal.butter(1, 8, "lowpass", fs=500, output="sos")
+
+        self.gyro[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro[:,1:4], 0) # Filter along "vertical" time axis
+
         if has_acc:
             self.acc = np.array(acc_list)
 
@@ -870,8 +896,9 @@ class GPMFLog(GyrologReader):
                 self.acc[:,0] = self.gyro[:,0] # same timescale, acceleration less time-sensitive
             else:
                 to_interp = interpolate.interp1d(self.acc[:,0], self.acc[:,1:], axis=0)
-                self.acc[:,1:] = to_interp(self.gyro[:,0])
-                self.acc[:,0] = self.gyro[:,0]
+                new_acc = np.copy(self.gyro)
+                new_acc[:,1:] = to_interp(self.gyro[:,0])
+                self.acc = new_acc
                 # resample acc to gyro timescale
 
         except:
@@ -1155,6 +1182,24 @@ def guess_log_type_from_log(logfile, check_data = False):
 
 if __name__ == "__main__":
 
+    tests = [
+        "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl",
+        "C:/Users/TUDelftSID/Downloads/20210814 gocam/gyroDate0010.csv",
+    ]
+
+    reader = BlackboxRawData()
+    reader.set_cam_up_angle(30,degrees=True)
+    reader.extract_log("C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl")
+    reader.plot_gyro()
+
+    reader = RuncamData()
+    reader.set_variant("iFlight GOCam GR")
+    reader.extract_log("C:/Users/TUDelftSID/Downloads/20210814 gocam/gyroDate0010.csv")
+    reader.standard_gyro[:,0] += 80-57.16
+    reader.plot_gyro()
+    plt.show()
+    exit()
+
     test_video_clips = [
         #"D:\\DCIM\\100RUNCAM\\RC_0038_210813215250.MP4",
         #"test_clips/PRO_VID_20210111_144304_00_010.mp4",
@@ -1162,16 +1207,17 @@ if __name__ == "__main__":
         #"test_clips/RC_0038_210813211513.MP4",
         #"test_clips/RC_0031_210722220523.MP4",
         #"test_clips/Runcam/RC_0036_filtered.MP4",
-        #"test_clips/DJIG0043wiebe.mp4",
+        "test_clips/DJIG0043wiebe.mp4",
         #"test_clips/GX016015.MP4",
         #"test_clips/nivim_insta360.mp4",
+        "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.MP4",
         "test_clips/smo4k_calibration.mp4",
         "test_clips/Tiago_Ferreira_5_inch.mp4",
         "test_clips/MasterTim17_caddx.mp4",
         "test_clips/starling2.MOV",
         "test_clips/raw_inav_log.mp4"
     ]
-    for clip in test_video_clips[0:1]:
+    for clip in test_video_clips[0:2]:
         guess_log_type_from_video(clip,check_data=True)
         
 

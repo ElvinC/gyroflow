@@ -472,10 +472,19 @@ class FisheyeCalibrator:
         outimg = cv2.warpPerspective(img,H,(img.shape[1],img.shape[0]))
         return outimg
 
-    def get_minimal_data(self):
+    def get_calibration_data(self):
+
+
         calibration_data = {
             "name": self.extra_cam_info.get("name", ""),
-            "calibrator_version": self.extra_cam_info.get("calibrator_version", ""),
+            "note": self.extra_cam_info.get("note", ""),
+            "calibrated_by": self.extra_cam_info.get("calibrated_by", "N/A"),
+            "camera_brand": self.extra_cam_info.get("camera_brand", "N/A"),
+            "camera_model": self.extra_cam_info.get("camera_model", "N/A"),
+            "lens_model": self.extra_cam_info.get("lens_model", "N/A"),
+            "camera_setting": self.extra_cam_info.get("camera_setting", "N/A"),
+            "calibrator_version": self.extra_cam_info.get("calibrator_version", "N/A"),
+            "date": self.extra_cam_info.get("date", "N/A"),
             "calib_dimension": {
                 "w": self.calib_dimension[0],
                 "h": self.calib_dimension[1]
@@ -499,6 +508,75 @@ class FisheyeCalibrator:
         }
 
         return calibration_data
+
+    def load_calibration_data(self, cal_data, printinfo = False):
+
+        try:
+            if not cal_data["use_opencv_fisheye"]:
+                raise Exception("Preset not for OpenCV fisheye lens model")
+
+            self.data_from_preset_file = True
+
+            if printinfo:
+                print("Preset name: {}".format(cal_data["name"]))
+                print("Note: {}".format(cal_data["note"]))
+                print("Made with {} frames using calibrator version {} on date {}"
+                    .format(cal_data["num_images"],
+                            cal_data["calibrator_version"],
+                            cal_data["date"]))
+
+            if cal_data["calibrator_version"] != __version__:
+                print("Note: Versions don't match. Calibrator: {}, Preset: {}. Should be fine though."
+                    .format(__version__, cal_data["calibrator_version"]))
+
+            cal_width = cal_data["calib_dimension"]["w"]
+            cal_height = cal_data["calib_dimension"]["h"]
+
+            self.calib_dimension = (cal_width, cal_height)
+
+            # Added in 0.3.0
+            if "orig_dimension" in cal_data:
+                orig_w = cal_data["orig_dimension"]["w"]
+                orig_h = cal_data["orig_dimension"]["h"]
+                self.input_horizontal_stretch = cal_data["input_horizontal_stretch"]
+                self.orig_dimension = (orig_w, orig_h)
+            else:
+                self.input_horizontal_stretch = 1
+                self.orig_dimension = self.calib_dimension
+
+
+            self.num_images = self.num_images_used = cal_data["num_images"]
+
+            self.RMS_error = cal_data["fisheye_params"]["RMS_error"]
+            self.K = np.array(cal_data["fisheye_params"]["camera_matrix"])
+            self.D = np.array(cal_data["fisheye_params"]["distortion_coeffs"])
+
+            #if presets["calibrator_version"].split(".")[0:1] != ["0","1"]:
+            # version 0.1.x doesn't have cam information
+
+            fixed_name = " ".join(cal_data.get("name").replace("_", " ").split())
+
+            self.extra_cam_info = {
+                "name": fixed_name,
+                "note": cal_data.get("note"),
+                "calibrated_by": cal_data.get("calibrated_by", "N/A"),
+                "camera_brand": cal_data.get("camera_brand", "N/A"),
+                "camera_model": cal_data.get("camera_model", "N/A"),
+                "camera_setting": cal_data.get("camera_setting", "N/A"),
+                "lens_model": cal_data.get("lens_model", "N/A"),
+                "calibrator_version": cal_data.get("calibrator_version"),
+                "date": cal_data.get("date"),
+                "width": self.orig_dimension[0],
+                "height": self.orig_dimension[1],
+                "aspect": self.orig_dimension[0]/self.orig_dimension[1],
+                "num_images": self.num_images
+            }
+
+        except ZeroDivisionError:
+            raise KeyError("Error loading preset file")
+        
+
+        return self.extra_cam_info
 
     def save_calibration_json(self, filename="calibration.json", calib_name="Camera name", camera_brand="", camera_model="", lens_model="", camera_setting="", note="", calibrated_by=""):
         """Save camera calibration parameters as JSON file
@@ -563,69 +641,7 @@ class FisheyeCalibrator:
         with open(filename, "r") as infile:
             presets = json.load(infile)
 
-            try:
-                if not presets["use_opencv_fisheye"]:
-                    raise Exception("Preset not for OpenCV fisheye lens model")
-
-                self.data_from_preset_file = True
-
-                if printinfo:
-                    print("Preset name: {}".format(presets["name"]))
-                    print("Note: {}".format(presets["note"]))
-                    print("Made with {} frames using calibrator version {} on date {}"
-                        .format(presets["num_images"],
-                                presets["calibrator_version"],
-                                presets["date"]))
-
-                if presets["calibrator_version"] != __version__:
-                    print("Note: Versions don't match. Calibrator: {}, Preset: {}. Should be fine though."
-                        .format(__version__, presets["calibrator_version"]))
-
-                cal_width = presets["calib_dimension"]["w"]
-                cal_height = presets["calib_dimension"]["h"]
-
-                self.calib_dimension = (cal_width, cal_height)
-
-                # Added in 0.3.0
-                if "orig_dimension" in presets:
-                    orig_w = presets["orig_dimension"]["w"]
-                    orig_h = presets["orig_dimension"]["h"]
-                    self.input_horizontal_stretch = presets["input_horizontal_stretch"]
-                    self.orig_dimension = (orig_w, orig_h)
-                else:
-                    self.input_horizontal_stretch = 1
-                    self.orig_dimension = self.calib_dimension
-
-
-                self.num_images = self.num_images_used = presets["num_images"]
-
-                self.RMS_error = presets["fisheye_params"]["RMS_error"]
-                self.K = np.array(presets["fisheye_params"]["camera_matrix"])
-                self.D = np.array(presets["fisheye_params"]["distortion_coeffs"])
-
-                #if presets["calibrator_version"].split(".")[0:1] != ["0","1"]:
-                # version 0.1.x doesn't have cam information
-                extra_cam_info = {
-                    "name": presets.get("calib_name"),
-                    "note": presets.get("note"),
-                    "calibrated_by": presets.get("calibrated_by", "N/A"),
-                    "camera_brand": presets.get("camera_brand", "N/A"),
-                    "camera_model": presets.get("camera_model", "N/A"),
-                    "lens_model": presets.get("lens_model", "N/A"),
-                    "calibrator_version": presets.get("calibrator_version"),
-                    "date": presets.get("date"),
-                    "width": self.orig_dimension[0],
-                    "height": self.orig_dimension[1],
-                    "aspect": self.orig_dimension[0]/self.orig_dimension[1],
-                    "num_images": self.num_images
-                }
-
-                self.extra_cam_info = extra_cam_info
-
-                return extra_cam_info
-
-            except KeyError:
-                raise KeyError("Error loading preset file")
+            return self.load_calibration_data(presets, printinfo)
 
 
     def load_calibration_prompt(self, printinfo = False):

@@ -1,5 +1,6 @@
-from quaternion import quaternion
+#from quaternion import quaternion
 import numpy as np
+from datetime import date
 import cv2
 import csv
 import os
@@ -72,7 +73,7 @@ def impute_gyro_data(input_data):
     return np.concatenate(arrays_to_concat)
 
 class Stabilizer:
-    def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
+    def __init__(self, videopath, calibrationfile=None, gyro_path=None, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1, gyroflow_file=None):
 
         ### Define all important variables
 
@@ -82,6 +83,8 @@ class Stabilizer:
         self.gyro_lpf_cutoff = gyro_lpf_cutoff
         self.do_video_rotation = False
         self.num_frames_skipped = 1
+
+        self.use_gyroflow_data_file = False
 
         # General video stuff
         self.cap = 0
@@ -126,21 +129,30 @@ class Stabilizer:
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.orig_dimension = (orig_w,orig_h) #Dimension of input file
+
+        self.undistort = FisheyeCalibrator()
+
         self.video_rotate_code = video_rotation
+
+        if type(gyroflow_file) != type(None):
+            success = self.import_gyroflow_file(gyroflow_file)
+            if not success:
+                raise RuntimeError
+
+        else:
+            self.undistort.load_calibration_json(calibrationfile, True)
+
         self.do_video_rotation = self.video_rotate_code != -1
         if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
             orig_w, orig_h = orig_w, orig_h
 
-        # Camera undistortion stuff
-        self.undistort = FisheyeCalibrator()
-        self.undistort.load_calibration_json(calibrationfile, True)
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(orig_w,orig_h))
-
-        self.orig_dimension = (orig_w,orig_h) #Dimension of input file
+        
         self.process_dimension = self.undistort.get_stretched_size_from_dimension(self.orig_dimension) # Dimension after any stretch corrections
         self.width, self.height = self.process_dimension
 
-        self.smoothing_algo = None
+        
 
 
     def set_initial_offset(self, initial_offset):
@@ -214,12 +226,29 @@ class Stabilizer:
         else:
             self.smoothing_algo = algo
         
+    def update_smoothing(self):
+
+        if type(self.new_integrator) != type(None):
+            self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+            self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+            self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+
+            return True
+        
+
+        print("Orientations not calculated yet")
+        return False
+
 
 
     def auto_sync_stab(self, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         if debug_plots:
             FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
             
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+        
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
         d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
@@ -346,6 +375,10 @@ class Stabilizer:
 
     def manual_sync_correction(self, d1, d2):
 
+
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
 
         v1 = self.v1
         v2 = self.v2
@@ -1093,21 +1126,20 @@ class Stabilizer:
 
             print("Audio exported")
 
-    def load_gyroflow_file(self, filename="file.gyroflow"):
-        with open(filename, "r") as f:
-            for line in f.readlines():
-                print(line)
+    def export_gyroflow_file(self, filename=None, out_size = (1920,1080), smoothingFocus=2.0, zoom=1.0):
 
-    def export_gyroflow_file(self, filename=None):
+        print("Exporting gyroflow data file")
 
         if type(self.undistort) == type(None) or type(self.integrator) == type(None) or type(self.new_integrator) == type(None) or type(self.stab_transform) == type(None):
             print("Unable to export a data file")
 
         gyroflow_data = {}
-
-        gyroflow_data["calibration_data"] = self.undistort.get_minimal_data()
-        gyroflow_data["do_video_rotation"] = self.do_video_rotation
+        gyroflow_data["title"] = "Gyroflow data file"
+        gyroflow_data["videofile"] = os.path.split(self.videopath)[-1] 
+        gyroflow_data["calibration_data"] = self.undistort.get_calibration_data()
+        gyroflow_data["video_rotate_code"] = self.video_rotate_code
         gyroflow_data["gyro_lpf_cutoff"] = self.gyro_lpf_cutoff
+        gyroflow_data["date"] = str(date.today())
 
         video_info = {
             "orig_w": self.orig_dimension[0],
@@ -1122,16 +1154,30 @@ class Stabilizer:
 
 
         gyroflow_data["sensor_DOF"] = 6 if type(self.acc_data) != type(None) else 3 # 6 DOF if acc is available
-
-        gyroflow_data["raw_imu"] = self.new_integrator.get_raw_gyro_acc().tolist() # time is already corrected
+        raw_imu = np.round(self.new_integrator.get_raw_gyro_acc(), 5)
+        gyroflow_data["raw_imu"] = raw_imu.tolist() # time is already corrected
 
         gyroflow_data["stab_summary"] = self.smoothing_algo.get_summary()
 
         stab_transform = np.array(self.stab_transform)
+
+        adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
+
+        fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
+                                                        smoothingFocus=smoothingFocus)
+
+        gyroflow_data["min_fcorr"] = np.min(fcorr)
+
         #print(self.stab_transform)
         #print(stab_transform)
-        # [index, time, w, x, y, z]
-        time_stab_transform = np.hstack([np.arange(stab_transform.shape[0])[...,None],np.array(self.times)[...,None],stab_transform])
+        # [index, time, smoothed_fov, w, x, y, z]
+        time_stab_transform = np.hstack([np.arange(stab_transform.shape[0])[...,None],
+                                         np.array(self.times)[...,None],
+                                         fcorr[...,None],
+                                         stab_transform])
+
+        time_stab_transform = np.round(time_stab_transform, 5)
+
         gyroflow_data["stab_transform"] = time_stab_transform.tolist()
 
         # General format description:
@@ -1150,9 +1196,49 @@ class Stabilizer:
             json.dump(
             gyroflow_data,
             outfile,
-            indent=4,
+            indent=1,
             separators=(',', ': ')
         )
+
+        print("Finished exporting")
+
+    def import_gyroflow_file(self, filename="file.gyroflow"):
+        print("Loading Gyroflow data file")
+        # Load absolutely everything
+
+        with open(filename, "r") as infile:
+            
+
+            try:
+                gyroflow_data = json.load(infile)
+                calibration_data = gyroflow_data["calibration_data"]
+                self.undistort.load_calibration_data(calibration_data,True)
+
+                self.video_rotate_code = gyroflow_data["video_rotate_code"]
+
+                initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+                initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
+
+                motion_dof = gyroflow_data["sensor_DOF"]
+                raw_imu = gyroflow_data["raw_imu"]
+                raw_imu = np.array(raw_imu)
+                self.gyro_data = raw_imu[:,[0,1,2,3]]
+                if motion_dof >= 6:
+                    self.acc_data = raw_imu[:,[0,4,5,6]]
+
+                self.integrator = GyroIntegrator(self.gyro_data, zero_out_time=False, initial_orientation=initial_orientation, acc_data=self.acc_data)
+                self.new_integrator = self.integrator
+
+                self.new_integrator.integrate_all(use_acc=False)
+
+                #self.times = None
+                #self.stab_transform = None
+                self.use_gyroflow_data_file = True
+
+            except KeyError: # TODO change?
+                print("Couldn't load gyroflow data file")
+                return False
+            return True
 
     def release(self):
         self.cap.release()
@@ -1452,7 +1538,11 @@ class MultiStabilizer(Stabilizer):
         self.log_reader.set_variant(logvariant)
         self.log_reader.set_cam_up_angle(cam_angle_degrees, degrees=True)
 
-        self.log_reader.extract_log(logpath)
+        extracted = self.log_reader.extract_log(logpath)
+
+        if not extracted:
+            print("Failed to extract and parse motion data")
+            return
 
         self.gyro_data = self.log_reader.get_transformed_gyro()
 
@@ -1900,7 +1990,11 @@ class OpticalStabilizer:
         self.cap.release()
 
 
+def find_gyroflow_data_file(videofile = "in.mp4"):
+    if os.path.isfile(videofile + ".gyroflow"):
+        return videofile + ".gyroflow"
 
+    return ""
 
 
 if __name__ == "__main__":

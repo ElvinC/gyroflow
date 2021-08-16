@@ -859,13 +859,14 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
 
 
-        calib_name = f"{cam_brand}_{cam_model}_{cam_lens}_{cam_setting}"
+        calib_name = f"{cam_brand}_{cam_model}_{cam_lens}_{cam_setting}".replace("__", "_").replace("__", "_")
+        calib_name = " ".join(calib_name.replace("_", " ").split())
 
         # make sure name works
         default_file_name = calib_name.replace("@", "At") # 18-55mm@18mm -> 18-55mmAt18mm, eh works I guess
         default_file_name = default_file_name.replace("/", "_").replace(".", "_").replace(" ","_") # f/1.8 -> f_1_8
         default_file_name = "".join([c for c in default_file_name if c.isalpha() or c.isdigit() or c in "_-"]).rstrip()
-        default_file_name = default_file_name.replace("__", "_").replace("__", "_")
+        default_file_name = "_".join(default_file_name.replace("_", " ").split())
 
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export calibration preset", default_file_name,
                                                         filter="JSON preset (*.json)")
@@ -1842,7 +1843,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab = None
         self.analyzed = False
 
+        self.use_gyroflow_data_file = False
+
         self.log_reader = None
+
+        self.preview_fov_scale = 1.4
+
         self.update_gyro_input_settings()
 
     def stab_algo_change(self):
@@ -1887,6 +1893,23 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.display_video_info()
 
         #no_suffix = os.path.splitext(self.infile_path)[0]
+        # check if gyroflow data file exists
+        gyroflow_data_path = stabilizer.find_gyroflow_data_file(self.infile_path)
+        if gyroflow_data_path:
+            self.use_gyroflow_data_file = True
+            self.gyro_log_path = gyroflow_data_path
+            self.preset_path = gyroflow_data_path
+            try:
+                self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
+                self.update_gyro_input_settings()
+                self.display_preset_info()
+                return True
+
+            except RuntimeError as e:
+                print(e)
+
+
+        self.use_gyroflow_data_file = False
 
         log_guess, log_type, variant = gyrolog.guess_log_type_from_video(self.infile_path)
 
@@ -1972,7 +1995,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.open_preset_button.setText("Preset file: {}".format(self.preset_path.split("/")[-1]))
         self.open_preset_button.setStyleSheet("font-weight:bold;")
 
-        self.preset_info_dict = calibrate_video.FisheyeCalibrator().load_calibration_json(self.preset_path)
+        if type(self.stab) == type(None):
+            self.use_gyroflow_data_file = False
+
+        if self.use_gyroflow_data_file:
+            self.preset_info_dict = self.stab.undistort.extra_cam_info
+        else:    
+            self.preset_info_dict = calibrate_video.FisheyeCalibrator().load_calibration_json(self.preset_path)
         #print(self.preset_info_dict)
 
         info = self.preset_info_template.format(**self.preset_info_dict)
@@ -2025,7 +2054,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.open_gyro_button.setText("Open Gyro log (BBL, CSV, GoPro/Insta360 video)")
             self.open_gyro_button.setStyleSheet("font-weight: normal;")
 
-        if self.log_reader:
+        if self.log_reader and not self.use_gyroflow_data_file:
             self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData(self.log_reader.name))
             self.gyro_variant_control.clear()
             #print(self.log_reader.get_variants())
@@ -2062,14 +2091,19 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.gyro_log_path = path[0]
 
-        log_guess, log_type, variant = gyrolog.guess_log_type_from_log(self.gyro_log_path)
+        if self.gyro_log_path.endswith(".gyroflow"):
+            self.use_gyroflow_data_file = True
+        else:
+            self.use_gyroflow_data_file = False
 
-        if log_guess:
-            self.gyro_log_type = log_type
-            print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
+            log_guess, log_type, variant = gyrolog.guess_log_type_from_log(self.gyro_log_path)
 
-            self.log_reader = gyrolog.get_log_reader_by_name(self.gyro_log_type)
-            self.log_reader.set_variant(variant)
+            if log_guess:
+                self.gyro_log_type = log_type
+                print("Automatically detected gyro log file: {}".format(self.gyro_log_path.split("/")[-1]))
+
+                self.log_reader = gyrolog.get_log_reader_by_name(self.gyro_log_type)
+                self.log_reader.set_variant(variant)
 
 
         self.update_gyro_input_settings()
@@ -2170,7 +2204,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         rotate_code = self.input_video_rotate_select.currentData()
         logvariant=self.gyro_variant_control.currentText()
 
-        self.stab = stabilizer.MultiStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
+
+        if self.use_gyroflow_data_file:
+            if type(self.stab) == type(None):
+                self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
+        else:
+            self.stab = stabilizer.MultiStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
                                                gyro_lpf_cutoff = gyro_lpf, logtype=selected_log_type, logvariant=logvariant, video_rotation=rotate_code)
 
         self.stab.set_initial_offset(self.offset_control.value())
@@ -2367,7 +2406,8 @@ class StabUtility(StabUtilityBarebone):
 
         super().__init__(False)
 
-         
+        self.preview_fov_scale = 1.4
+
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
@@ -2433,8 +2473,6 @@ class StabUtility(StabUtilityBarebone):
         self.trim_end_button.setMinimumHeight(self.button_height)
         self.trim_end_button.clicked.connect(self.trimend)
         self.calib_controls_layout.addWidget(self.trim_end_button)
-
-        self.preview_fov_scale = 1.4
 
         # slider for adjusting FOV
         self.preview_fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.preview_fov_scale))
@@ -2505,6 +2543,7 @@ class StabUtility(StabUtilityBarebone):
         self.infile_path = ""
         self.show()
 
+        
         self.main_setting_widget.show()
 
     def open_video_with_player_func(self):
