@@ -467,7 +467,7 @@ class SmoothLimitedSlerp(SmoothingAlgo):
 
         # limit rotation
         interp_factor = 1 - (rot_limit / (distance + rot_limit / 2))
-        np.maximum(interp_factor, 0)
+        interp_factor = np.maximum(interp_factor, 0)
         interp_factor *= interp_factor
 
         final_orientation = np.zeros(orientation_list.shape)
