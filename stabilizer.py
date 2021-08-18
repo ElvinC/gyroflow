@@ -5,6 +5,7 @@ import cv2
 import csv
 import os
 import platform
+from tqdm import tqdm
 
 from freqAnalysis import FreqAnalysis
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
@@ -28,6 +29,7 @@ import insta360_utility as insta360_util
 import smoothing_algos
 
 VIDGEAR_LOGGING = False
+
 
 def impute_gyro_data(input_data):
 
@@ -71,6 +73,7 @@ def impute_gyro_data(input_data):
     arrays_to_concat.append(input_data[last_ix:,:])
 
     return np.concatenate(arrays_to_concat)
+
 
 class Stabilizer:
     def __init__(self, videopath, calibrationfile=None, gyro_path=None, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1, gyroflow_file=None):
@@ -148,16 +151,13 @@ class Stabilizer:
             orig_w, orig_h = orig_w, orig_h
 
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(orig_w,orig_h))
-        
+
         self.process_dimension = self.undistort.get_stretched_size_from_dimension(self.orig_dimension) # Dimension after any stretch corrections
         self.width, self.height = self.process_dimension
 
         # Sync stuff
         self.d1 = 0
         self.d2 = 0
-
-        
-
 
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
@@ -197,7 +197,7 @@ class Stabilizer:
             # Nyquist frequency
             if (acc_sample_rate / 2) <= acc_cutoff:
                 self.gyro_lpf_cutoff = acc_sample_rate / 2 - 1
-            
+
             # First order filters to avoid overshoot
 
             # Get rid of high freq.
@@ -211,7 +211,6 @@ class Stabilizer:
 
             sosgyro = signal.butter(1, 0.5, "lowpass", fs=acc_sample_rate, output="sos")
             self.acc_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
-
 
     def set_hyperlapse(self, hyperlapse_multiplier = 1, hyperlapse_num_blended_frames = 1):
 
@@ -229,7 +228,7 @@ class Stabilizer:
             algo = smoothing_algos.PlainSlerp() # Default
         else:
             self.smoothing_algo = algo
-        
+
     def update_smoothing(self):
 
         if type(self.new_integrator) != type(None):
@@ -238,21 +237,19 @@ class Stabilizer:
             self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
             return True
-        
+
 
         print("Orientations not calculated yet")
         return False
 
-
-
     def auto_sync_stab(self, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         if debug_plots:
             FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
-            
+
         if self.use_gyroflow_data_file:
             self.update_smoothing()
             return
-        
+
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
         d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
@@ -299,7 +296,7 @@ class Stabilizer:
             plt.ylabel("omega x [rad/s]")
 
             plt.subplot(312, sharex=xplot)
-            
+
             plt.plot(times1, transforms1[:,1] * self.fps)
             plt.plot(times2, transforms2[:,1] * self.fps)
             plt.plot(corrected_times, self.integrator.get_raw_data("y"))
@@ -376,7 +373,6 @@ class Stabilizer:
             plt.show(block=False)
         return fig, axes
 
-
     def manual_sync_correction(self, d1, d2):
 
 
@@ -423,13 +419,10 @@ class Stabilizer:
         self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
         #self.last_smooth = smooth
 
-        
+
 
         self.new_integrator.set_smoothing_algo(self.smoothing_algo)
         self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
-
-
-
 
     def optical_flow_comparison(self, start_frame=0, analyze_length = 50, debug_plots = True):
         frame_times = []
@@ -449,7 +442,7 @@ class Stabilizer:
         if self.undistort.image_is_stretched():
             prev_gray = cv2.resize(prev_gray, self.process_dimension)
 
-        for i in range(analyze_length):
+        for i in tqdm(range(analyze_length), desc="Analyzing frame", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
@@ -461,8 +454,8 @@ class Stabilizer:
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
 
-            if i % 10 == 0:
-                print("Analyzing frame: {}/{}".format(i,analyze_length))
+            #if i % 10 == 0:
+            #    print("Analyzing frame: {}/{}".format(i,analyze_length))
 
             if succ and i % self.num_frames_skipped == 0:
                 # Only add if succeeded
@@ -538,7 +531,6 @@ class Stabilizer:
         transforms = np.array(transforms)
         estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
         return estimated_offset, frame_times, transforms
-
 
     def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list, debug_plots = True):
         #print(prev_pts_list)
@@ -740,7 +732,6 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-
     def fast_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
 
@@ -802,7 +793,7 @@ class Stabilizer:
         if frame_num >= len(self.stab_transform):
             frame_num = len(self.stab_transform)-1
             print("No more stabilization data. Using last frame")
-        
+
         return self.undistort.get_maps(self.map_func_scale,
             new_img_dim=(self.orig_dimension[0], self.orig_dimension[1]),
             output_dim=out_size,
@@ -821,7 +812,7 @@ class Stabilizer:
         (out_width, out_height) = out_size
 
         #export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
-        
+
         borderMode = 0
         borderValue = 0
 
@@ -934,7 +925,7 @@ class Stabilizer:
         print("Done computing optimal Fov")
 
         #new_img_dim=(int(self.width * scale),int(self.height*scale))
-        
+
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
         time.sleep(0.1)
 
@@ -960,24 +951,25 @@ class Stabilizer:
         num_not_success = 0
         num_not_success_lim = 5 # stop after 5 failures to read frame
 
-        while(True):
+        for i in tqdm(range(1, num_frames), desc="Frame Extraction", colour="blue"):
+
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read()
-            
+
             if self.do_video_rotation:
                 frame = cv2.rotate(frame, self.video_rotation_code)
             # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
                 fraction_done = i/num_frames
-                elapsed_time = time.time() - starttime # in seconds
+                elapsed_time = time.time() - starttime  # in seconds
                 est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
-                print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
-                
+                #print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
+
 
             if success:
-                i +=1
+                #i +=1
                 num_not_success = 0
             elif num_not_success >= num_not_success_lim:
                 # If unable to read multiple frames in a row
@@ -985,9 +977,9 @@ class Stabilizer:
             else:
                 num_not_success += 1
 
+            #
             if i > num_frames:
-                break
-
+                break   # This condition will never happen
             elif frame_num >= len(self.stab_transform):
                 print("No more stabilization data. Stopping render here.")
                 break
@@ -1023,12 +1015,12 @@ class Stabilizer:
                     # Process using integers for speed
                     frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                                 borderMode=borderMode, borderValue=borderValue)
-                    
+
                     if self.hyperlapse_num_blended_frames > 1:
                         # process using floats
                         frame_temp += 1/(self.hyperlapse_num_blended_frames) * frame_out.astype(np.float64)
-                    
-                    
+
+
                 if debug_text and ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
                     # Add debug text to last frame only
                     topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
@@ -1066,7 +1058,7 @@ class Stabilizer:
                     else:
 
                         out.write(frame_out)
-                        
+
                         if display_preview:
                             if frame_out.shape[1] > 1280:
                                 frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
@@ -1139,7 +1131,7 @@ class Stabilizer:
 
         gyroflow_data = {}
         gyroflow_data["title"] = "Gyroflow data file"
-        gyroflow_data["videofile"] = os.path.split(self.videopath)[-1] 
+        gyroflow_data["videofile"] = os.path.split(self.videopath)[-1]
         gyroflow_data["calibration_data"] = self.undistort.get_calibration_data()
         gyroflow_data["video_rotate_code"] = self.video_rotate_code
         gyroflow_data["gyro_lpf_cutoff"] = self.gyro_lpf_cutoff
@@ -1191,8 +1183,8 @@ class Stabilizer:
         # * Camera parameters (Json from calibration utility)
         # * raw gyro/acc data
         # * Processed orientation data
-        # * Per frame 
-        # Try to make 
+        # * Per frame
+        # Try to make
         if not filename:
             filename = self.videopath + ".gyroflow"
 
@@ -1211,7 +1203,7 @@ class Stabilizer:
         # Load absolutely everything
 
         with open(filename, "r") as infile:
-            
+
 
             try:
                 gyroflow_data = json.load(infile)
@@ -1446,9 +1438,6 @@ class GPMFStabilizer(Stabilizer):
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
-
-
-
 class InstaStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1, InstaType=""):
 
@@ -1525,7 +1514,7 @@ class InstaStabilizer(Stabilizer):
 
 class MultiStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, logpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, gyro_lpf_cutoff = 100, logtype="Gyroflow IMU log", logvariant="", video_rotation = -1):
-    
+
         super().__init__(videopath, calibrationfile, logpath, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
 
         # Get gyro data
@@ -1580,10 +1569,9 @@ class MultiStabilizer(Stabilizer):
         self.initial_offset = initial_offset
 
 
-
 class BBLStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1, use_raw_gyro_data=False):
-        
+
         super().__init__(videopath, calibrationfile, bblpath, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
 
         # Get gyro data
@@ -1773,8 +1761,6 @@ class BBLStabilizer(Stabilizer):
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
-
-
 class OpticalStabilizer:
     def __init__(self, videopath, calibrationfile):
         # General video stuff
@@ -1841,7 +1827,7 @@ class OpticalStabilizer:
         _, prev = self.cap.read()
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
 
-        for i in range(analyze_length):
+        for i in tqdm(range(analyze_length), desc="Analyzing frame", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
@@ -1852,8 +1838,8 @@ class OpticalStabilizer:
             succ, curr = self.cap.read()
 
 
-            if i % 10 == 0:
-                print("Analyzing frame: {}/{}".format(i,analyze_length))
+            #if i % 10 == 0:
+            #    print("Analyzing frame: {}/{}".format(i,analyze_length))
 
             if succ:
                 # Only add if succeeded
@@ -1994,7 +1980,7 @@ class OpticalStabilizer:
         self.cap.release()
 
 
-def find_gyroflow_data_file(videofile = "in.mp4"):
+def find_gyroflow_data_file(videofile="in.mp4"):
     if os.path.isfile(videofile + ".gyroflow"):
         return videofile + ".gyroflow"
 
