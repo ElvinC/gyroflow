@@ -29,6 +29,10 @@ import smoothing_algos
 
 VIDGEAR_LOGGING = False
 
+BLOCKING_PLOTS = True
+if platform.system() == "Darwin":
+    BLOCKING_PLOTS = False
+
 def impute_gyro_data(input_data):
 
 
@@ -104,6 +108,9 @@ class Stabilizer:
         self.new_integrator = None
         self.times = None
         self.stab_transform = None
+
+        self.initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        self.initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
         # self.raw_gyro_data = None
         self.gyro_data = None # self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
@@ -255,9 +262,9 @@ class Stabilizer:
         
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
-        d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
+        d1, cost1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
         #self.initial_offset = d1
-        d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
+        d2, cost2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
 
         self.transform_times = [times1, times2]
         self.transforms = [transforms1, transforms2]
@@ -284,7 +291,7 @@ class Stabilizer:
 
         print("Gyro correction slope {}".format(slope))
 
-        self.plot_sync(corrected_times, slicelength, show=False)
+        self.plot_sync(corrected_times, slicelength, show=True)
 
 
 
@@ -314,7 +321,7 @@ class Stabilizer:
             plt.xlabel("time [s]")
             plt.ylabel("omega z [rad/s]")
 
-        plt.show(block=False)
+            plt.show(block=BLOCKING_PLOTS)
 
         # Temp new integrator with corrected time scale
 
@@ -348,9 +355,135 @@ class Stabilizer:
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
-    def full_auto_sync(self, debug_plots = True):
-        # TODO: Adapt logic from multisync.py
-        pass
+    def multi_sync_init(self):
+        self.transform_times = []
+        self.transforms = []
+        self.sync_vtimes = []
+        self.sync_delays = []
+        self.sync_costs = []
+
+
+    def multi_sync_add_slice(self, slice_frame_start, slicelength = 50, debug_plots = True):
+        v1 = (slice_frame_start + slicelength/2) / self.fps
+        d1, cost1, times1, transforms1 = self.optical_flow_comparison(slice_frame_start, slicelength, debug_plots = debug_plots)
+
+        self.transform_times.append(times1)
+        self.transforms.append(transforms1)
+        self.sync_vtimes.append(v1)
+        self.sync_delays.append(d1)
+        self.sync_costs.append(cost1)
+
+        return cost1
+    
+    def multi_sync_delete_slice(self, idx):
+        if len(self.transform_times) > idx:
+            del self.transform_times[idx]
+            del self.transforms[idx]
+            del self.sync_vtimes[idx]
+            del self.sync_delays[idx]
+            del self.sync_costs[idx]
+
+            return True
+
+        return False
+
+
+    def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.05, piecewise_correction = False):
+
+        assert len(self.transform_times) == len(self.transforms) == len(self.sync_vtimes) == len(self.sync_delays) == len(self.sync_costs)
+
+        if piecewise_correction:
+            print("Not implemented yet")
+
+        N = len(self.transform_times)
+        if N == 0:
+            # no change
+            self.new_integrator = GyroIntegrator(self.gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=self.acc_data)
+        
+        elif N == 1:
+
+            new_gyro_data = np.copy(self.gyro_data)
+
+            # Shift the time
+            new_gyro_data[:,0] = self.integrator.get_raw_data("t") + self.sync_delays[0] # (new_gyro_data[:,0]+gyro_start) *correction_slope
+
+            if type(self.acc_data) != type(None):
+                new_acc_data = np.copy(self.acc_data)
+                new_acc_data[:,0] = new_gyro_data[:,0]
+            else:
+                new_acc_data = None
+            
+        else:
+            # N is two or above, use the weird non-random RANSAC fitting
+            times = self.sync_vtimes
+            delays = self.sync_delays
+
+            plt.scatter(times, delays)
+
+
+            chosen_indices = {}
+            num_chosen = 0
+            rsquared_best = 1000
+            chosen_coefs = None
+
+            for i in range(N):
+                for j in range(i, N):
+                    if i != j:
+                        
+                        del_i = delays[i]
+                        del_j = delays[j]
+
+                        t_i = times[i]
+                        t_j = times[j]
+
+                        slope = (del_j - del_i) / (t_j - t_i)
+                        intersect = del_i - t_i * slope
+
+                        within_error = []
+                        est_curve = times * slope + intersect
+                        within_error = np.where(np.abs(est_curve - delays) < max_error)[0]
+
+                        if within_error.shape[0] >= num_chosen and set(within_error) != chosen_indices:
+                            #print(times[within_error])
+                            fit = np.polyfit(times[within_error], delays[within_error], 1, full=True)
+                            coefs = fit[0]
+
+                            if within_error.shape[0] > 2:
+                                rsquared = fit[1]
+
+                                if rsquared < rsquared_best:
+                                    rsquared_best = rsquared
+                                    chosen_coefs = coefs
+                                    num_chosen = within_error.shape[0]
+                                    chosen_indices = set(within_error)
+                            else:
+                                chosen_coefs = coefs
+                                num_chosen = within_error.shape[0]
+                                chosen_indices = set(within_error)
+
+                            
+
+
+            new_gyro_data = np.copy(self.gyro_data)
+            new_gyro_data[:,0] = (self.integrator.get_raw_data("t") + chosen_coefs[1])/(1- chosen_coefs[0])
+
+            if type(self.acc_data) != type(None):
+                new_acc_data = np.copy(self.acc_data)
+                new_acc_data[:,0] = new_gyro_data[:,0]
+            else:
+                new_acc_data = None
+
+            self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
+
+
+        if self.smoothing_algo.require_acceleration and type(new_acc_data) == type(None):
+            print("No acceleration data available. Horizon reference doesn't work without it.")
+        self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        #self.last_smooth = smooth
+
+        self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+
 
     def plot_sync(self, corrected_times, slicelength, show=False):
         n = len(self.transform_times)
@@ -373,7 +506,8 @@ class Stabilizer:
             axes[2][i].set(xlabel="time [s]")
         plt.tight_layout()
         if show:
-            plt.show(block=False)
+            plt.show(block=BLOCKING_PLOTS)
+            
         return fig, axes
 
 
@@ -536,8 +670,8 @@ class Stabilizer:
                 print("Frame {}".format(i))
 
         transforms = np.array(transforms)
-        estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
-        return estimated_offset, frame_times, transforms
+        estimated_offset, cost = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
+        return estimated_offset, cost, frame_times, transforms
 
 
     def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list, debug_plots = True):
@@ -623,8 +757,9 @@ class Stabilizer:
             costs.append(cost)
 
         better_offset = offsets[np.argmin(costs)]
+        cost = min(costs)
 
-        print("Better offset: {}, cost: {}".format(better_offset, min(costs)))
+        print("Better offset: {}, cost: {}".format(better_offset, cost))
 
         if debug_plots:
             #plt.figure()
@@ -635,7 +770,7 @@ class Stabilizer:
 
             #plt.show()
 
-        return better_offset
+        return better_offset, cost
 
     def gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
@@ -913,7 +1048,7 @@ class Stabilizer:
         #output_params["-fps"] = self.fps
 
 
-        out = WriteGear(output_filename=outpath, logging=VIDGEAR_LOGGING, **output_params)
+        out = WriteGear(output_filename=outpath, logging=debug_text, **output_params)
 
         num_frames = int((stoptime - starttime) * self.fps)
 

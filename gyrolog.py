@@ -666,7 +666,7 @@ class RuncamData(GyrologReader):
         }
         self.variant = "Runcam 5 Orange"
 
-        self.default_filter = 35
+        self.default_filter = 70
 
         self.post_init()
 
@@ -766,9 +766,9 @@ class RuncamData(GyrologReader):
                 data_list.append([t, gx, gy, gz])
 
         self.gyro = np.array(data_list)
-        sosgyro = signal.butter(1, 8, "lowpass", fs=500, output="sos")
+        #sosgyro = signal.butter(1, 8, "lowpass", fs=500, output="sos")
 
-        self.gyro[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro[:,1:4], 0) # Filter along "vertical" time axis
+        #self.gyro[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro[:,1:4], 0) # Filter along "vertical" time axis
 
         if has_acc:
             self.acc = np.array(acc_list)

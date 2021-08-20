@@ -1090,7 +1090,7 @@ class StretchUtility(QtWidgets.QMainWindow):
     def open_file_func(self):
         """Open file using Qt filedialog
         """
-        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov)")
+        path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file", filter="Video (*.mp4 *.avi *.mov *.MP4 *.AVI *.MOV)")
         self.infile_path = path[0]
         self.video_viewer.set_video_path(path[0])
 
@@ -1874,7 +1874,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """
         #path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file")
         dialog = QtWidgets.QFileDialog()
-        dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime"])
+        dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime", "application/octet-stream"])
         dialog.exec_()
         path = dialog.selectedFiles()
         if (len(path) == 0 or len(path[0]) == 0):
