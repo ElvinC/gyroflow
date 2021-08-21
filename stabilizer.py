@@ -385,7 +385,7 @@ class Stabilizer:
         return False
 
 
-    def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.05, piecewise_correction = False):
+    def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.02, piecewise_correction = False):
 
         assert len(self.transform_times) == len(self.transforms) == len(self.sync_vtimes) == len(self.sync_delays) == len(self.sync_costs)
 
@@ -450,7 +450,9 @@ class Stabilizer:
                             fit = np.polyfit(times[within_error], delays[within_error], 1, full=True)
                             coefs = fit[0]
 
-                            if within_error.shape[0] > 2:
+                            close_constant = -0.1 < coefs[0] < 0.1
+
+                            if within_error.shape[0] > 2 and close_constant:
                                 rsquared = fit[1]
 
                                 if rsquared < rsquared_best:
@@ -458,12 +460,15 @@ class Stabilizer:
                                     chosen_coefs = coefs
                                     num_chosen = within_error.shape[0]
                                     chosen_indices = set(within_error)
-                            else:
+                            elif close_constant: # close to linear
                                 chosen_coefs = coefs
                                 num_chosen = within_error.shape[0]
                                 chosen_indices = set(within_error)
 
                             
+            if type(chosen_coefs) == type(None):
+                return False
+
             print(chosen_coefs)
             print(chosen_indices)
 
@@ -477,6 +482,7 @@ class Stabilizer:
                 new_acc_data = None
 
             self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=new_acc_data)
+            
 
 
         if not self.smoothing_algo:
@@ -488,9 +494,15 @@ class Stabilizer:
 
         self.new_integrator.set_smoothing_algo(self.smoothing_algo)
         self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+        return True
 
 
-    def full_auto_sync(self):
+    def full_auto_sync(self, max_fitting_error):
+
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
         self.multi_sync_init()
 
         max_sync_cost = 6 # > 6 is nogo.
@@ -505,10 +517,10 @@ class Stabilizer:
         num_frames = self.num_frames
         vid_length = num_frames / self.fps
 
-        inter_delay = 15 # second between syncs
+        inter_delay = 13 # second between syncs
         inter_delay_frames = int(inter_delay * self.fps)
 
-        min_slices = 3
+        min_slices = 4
 
         max_slices = 8
 
@@ -546,7 +558,13 @@ class Stabilizer:
         for frame_index, n_frames in syncpoints:
             self.multi_sync_add_slice(frame_index, n_frames, False)
 
-        self.multi_sync_compute()
+        success = self.multi_sync_compute(max_fitting_error = max_fitting_error)
+        if success:
+            print("Auto sync complete")
+            return True
+        else:
+            print("Auto sync failed to converge. Sorry about that")
+            return False
 
 
         
@@ -2202,8 +2220,6 @@ if __name__ == "__main__":
         exit()
 
     stab = MultiStabilizer(infile_path, "camera_presets/RunCam/DEV_Runcam_5_Orange_4K_30FPS_XV_16by9_stretched.json", log_guess, gyro_lpf_cutoff = 50, logtype=log_type, logvariant=variant)
-
-    
 
     stab.full_auto_sync()
 

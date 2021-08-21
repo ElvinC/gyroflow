@@ -1421,6 +1421,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(text)
         #self.input_controls_layout.addStretch()
 
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Auto sync error margin (seconds):"))
+        self.max_fitting_control = QtWidgets.QDoubleSpinBox(self)
+        self.max_fitting_control.setMinimum(0)
+        self.max_fitting_control.setMaximum(1)
+        self.max_fitting_control.setValue(0.02)
+
+        self.sync_controls_layout.addWidget(self.max_fitting_control)
+
+        # button for (re)computing sync
+        self.auto_sync_button = QtWidgets.QPushButton("Attempt auto sync")
+        self.auto_sync_button.setMinimumHeight(30)
+        self.auto_sync_button.clicked.connect(self.auto_sync_start)
+        self.sync_controls_layout.addWidget(self.auto_sync_button)
+
+
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.sync_controls_layout.addWidget(line)
+
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds:"))
 
         self.offset_control = QtWidgets.QDoubleSpinBox(self)
@@ -1876,6 +1896,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """Open file using Qt filedialog
         """
         #path = QtWidgets.QFileDialog.getOpenFileName(self, "Open video file")
+        if self.has_player:
+            self.video_viewer.stop()
+
+
         dialog = QtWidgets.QFileDialog()
         dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime", "application/octet-stream"])
         dialog.exec_()
@@ -2187,22 +2211,97 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #print(self.out_width_control.value())
         pass
 
-    def recompute_stab(self):
-        """Update sync and stabilization
-        """
-
-
+    def check_inputs_valid(self):
         if self.infile_path == "" or self.preset_path == "":
             self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
             self.export_button.setEnabled(False)
             self.export_keyframes_button.setEnabled(False)
             self.sync_correction_button.setEnabled(False)
             self.update_smoothness_button.setEnabled(False)
-            return
+            return False
 
         if self.gyro_log_path == "":
             self.show_error("No gyro log given. If you want to use the internal gyro data, there's a convenient button for using the input video as the gyro log.")
+            return False
+        
+        return True
+    
+    def auto_sync_start(self):
+        if not self.check_inputs_valid():
             return
+
+        if not self.check_inputs_valid():
+            return
+
+
+        fov_val = self.fov_slider.value() / 10
+        #smoothness_time_constant = self.get_smoothness_timeconstant()
+        OF_slice_length = self.OF_frames_control.value()
+
+
+        #cap = cv2.VideoCapture(self.infile_path)
+        #width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        #height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        #fps = cap.get(cv2.CAP_PROP_FPS)
+        #num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        #cap.release()
+
+        gyro_lpf = self.input_lpf_control.value()
+
+
+        selected_log_type = self.gyro_log_format_select.currentData()
+        uptilt = self.fpv_tilt_control.value()
+        print("Going skiing?" if uptilt < 0 else "That's a lotta angle" if uptilt > 70 else "{} degree gyro/camera angle".format(uptilt))
+
+        rotate_code = self.input_video_rotate_select.currentData()
+        logvariant=self.gyro_variant_control.currentText()
+
+        if self.use_gyroflow_data_file:
+            if type(self.stab) == type(None):
+                self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
+        else:
+            self.stab = stabilizer.MultiStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
+                                               gyro_lpf_cutoff = gyro_lpf, logtype=selected_log_type, logvariant=logvariant, video_rotation=rotate_code)
+
+        self.stab.set_initial_offset(self.offset_control.value())
+        self.stab.set_rough_search(self.sync_search_size.value())
+        self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
+
+        self.stab.set_smoothing_algo(self.stab_algo_instance_current)
+
+        max_fitting_error = self.max_fitting_control.value()
+
+        success = self.stab.full_auto_sync(max_fitting_error)
+
+        if not success:
+            return
+
+        print("Finished computing")
+
+        #self.recompute_stab_button.setText("Recompute sync")
+        self.export_button.setEnabled(True)
+        self.export_keyframes_button.setEnabled(True)
+
+        # Show estimated delays in UI
+        self.sync_correction_button.setEnabled(True)
+        self.update_smoothness_button.setEnabled(True)
+        #self.d1_control.setValue(self.stab.d1)
+        #self.d2_control.setValue(self.stab.d2)
+
+        self.stab.set_map_func_scale(self.preview_fov_scale)
+
+        if self.has_player:
+            self.update_player_maps()
+        self.analyzed = True
+
+    def recompute_stab(self):
+        """Update sync and stabilization
+        """
+
+        if not self.check_inputs_valid():
+            return
+
 
         fov_val = self.fov_slider.value() / 10
         #smoothness_time_constant = self.get_smoothness_timeconstant()

@@ -204,6 +204,7 @@ class GyrologReader:
         # Assume same time reference and orientation used for both
 
         self.default_filter = -1
+        self.default_search_size = 10 # expected range of gyro/video offset
 
         self.filename = ""
 
@@ -497,6 +498,7 @@ class BlackboxCSVData(GyrologReader):
         }
 
         self.variant = "default"
+        self.default_search_size = 10
 
         self.post_init()
 
@@ -607,6 +609,7 @@ class BlackboxRawData(GyrologReader):
         self.variant = "default"
 
         self.default_filter = -1
+        self.default_search_size = 10
 
         self.post_init()
 
@@ -667,6 +670,7 @@ class RuncamData(GyrologReader):
         self.variant = "Runcam 5 Orange"
 
         self.default_filter = 70
+        self.default_search_size = 4 # usually within +/- 1 second
 
         self.post_init()
 
@@ -789,6 +793,7 @@ class Insta360Log(GyrologReader):
         self.variant = "smo4k"
 
         self.default_filter = 50
+        self.default_search_size = 10
 
         self.post_init()
 
@@ -841,6 +846,7 @@ class GPMFLog(GyrologReader):
         self.variant = "hero6"
 
         self.default_filter = -1
+        self.default_search_size = 4
 
         self.gpmf = None
 
@@ -958,6 +964,7 @@ class GyroflowGyroLog(GyrologReader):
         self.variant = "default"
 
         self.default_filter = -1
+        self.default_search_size = 10
 
         self.post_init()
 
