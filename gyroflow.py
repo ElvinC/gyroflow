@@ -1344,12 +1344,15 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.gyro_variant_control = QtWidgets.QComboBox()
         self.gyro_variant_control.clear()
+        
+        self.log_reader = gyrolog.GyroflowGyroLog()
+        #self.gyro_variant_control.addItem("hero5")
+        #self.gyro_variant_control.addItem("hero6")
+        #self.gyro_variant_control.addItem("hero7")
+        #self.gyro_variant_control.addItem("hero8")
+        #self.gyro_variant_control.addItem("hero9")
 
-        self.gyro_variant_control.addItem("hero5")
-        self.gyro_variant_control.addItem("hero6")
-        self.gyro_variant_control.addItem("hero7")
-        self.gyro_variant_control.addItem("hero8")
-        self.gyro_variant_control.addItem("hero9")
+        #self.gyro_variant_control.addItems(gyrolog.GyroflowGyroLog().get_variants())
 
         self.input_controls_layout.addWidget(self.gyro_variant_control)
 
@@ -1854,7 +1857,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.use_gyroflow_data_file = False
 
-        self.log_reader = None
+        
 
         self.has_player = False
 
