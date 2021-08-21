@@ -110,6 +110,7 @@ class Stabilizer:
         self.new_integrator = None
         self.times = None
         self.stab_transform = None
+        self.smoothing_algo = None
 
         self.initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
         self.initial_orientation[[0,1,2,3]] = self.initial_orientation[[3,0,1,2]]
@@ -411,16 +412,19 @@ class Stabilizer:
             
         else:
             # N is two or above, use the weird non-random RANSAC fitting
-            times = self.sync_vtimes
-            delays = self.sync_delays
+            times = np.array(self.sync_vtimes)
+            delays = np.array(self.sync_delays)
+            sync_costs = np.array(self.sync_costs)
 
             plt.scatter(times, delays)
-
+            plt.show()
 
             chosen_indices = {}
             num_chosen = 0
             rsquared_best = 1000
             chosen_coefs = None
+
+            #max_sync_cost = 6 # > 6 is nogo.
 
             for i in range(N):
                 for j in range(i, N):
@@ -437,7 +441,9 @@ class Stabilizer:
 
                         within_error = []
                         est_curve = times * slope + intersect
-                        within_error = np.where(np.abs(est_curve - delays) < max_error)[0]
+                        within_error = np.where(np.abs(est_curve - delays) < max_fitting_error)[0]
+
+                        
 
                         if within_error.shape[0] >= num_chosen and set(within_error) != chosen_indices:
                             #print(times[within_error])
@@ -458,7 +464,8 @@ class Stabilizer:
                                 chosen_indices = set(within_error)
 
                             
-
+            print(chosen_coefs)
+            print(chosen_indices)
 
             new_gyro_data = np.copy(self.gyro_data)
             new_gyro_data[:,0] = (self.integrator.get_raw_data("t") + chosen_coefs[1])/(1- chosen_coefs[0])
@@ -469,16 +476,82 @@ class Stabilizer:
             else:
                 new_acc_data = None
 
-            self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
+            self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=new_acc_data)
 
+
+        if not self.smoothing_algo:
+            self.smoothing_algo = smoothing_algos.PlainSlerp()
 
         if self.smoothing_algo.require_acceleration and type(new_acc_data) == type(None):
             print("No acceleration data available. Horizon reference doesn't work without it.")
         self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
-        #self.last_smooth = smooth
 
         self.new_integrator.set_smoothing_algo(self.smoothing_algo)
         self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+
+
+    def full_auto_sync(self):
+        self.multi_sync_init()
+
+        max_sync_cost = 6 # > 6 is nogo.
+
+
+        syncpoints = [] # save where to analyze. list of [frameindex, num_analysis_frames]
+        num_frames_analyze = 25
+        num_frames_offset = int(num_frames_analyze / 2)
+        end_delay = 3 # seconds buffer zone
+        end_frames = end_delay * self.fps # buffer zone
+
+        num_frames = self.num_frames
+        vid_length = num_frames / self.fps
+
+        inter_delay = 15 # second between syncs
+        inter_delay_frames = int(inter_delay * self.fps)
+
+        min_slices = 3
+
+        max_slices = 8
+
+
+
+        if vid_length < 4: # only one sync
+            syncpoints.append([5, max(60, int(num_frames-5-self.fps)) ])
+
+            num_syncs = 1
+
+        elif vid_length < 10: # two points
+            first_index = 30
+            last_index = num_frames - 30 - num_frames_analyze
+            syncpoints.append([first_index, num_frames_analyze])
+            syncpoints.append([last_index, num_frames_analyze])
+
+            num_syncs = 2
+
+        else:
+            # Analysis starts at first frame, so take this into account
+            # Add also motion analysis from logs here
+            first_index = end_frames - num_frames_offset
+            last_index = num_frames - end_frames - num_frames_offset
+
+            num_syncs = max(min(round((last_index - first_index)/inter_delay_frames), max_slices), min_slices)
+            inter_frames_actual = (last_index - first_index) / num_syncs
+
+            for i in range(num_syncs):
+                syncpoints.append([round(first_index + i * inter_frames_actual), num_frames_analyze])
+
+        # Analyze these slices
+
+        print(f"Analyzing {num_syncs} slices")
+
+        for frame_index, n_frames in syncpoints:
+            self.multi_sync_add_slice(frame_index, n_frames, False)
+
+        self.multi_sync_compute()
+
+
+        
+
+
 
 
     def plot_sync(self, corrected_times, slicelength, show=False):
@@ -892,7 +965,7 @@ class Stabilizer:
         sliced_gyro_data = gyro_data[mask,:]
         sliced_gyro_times = gyro_times[mask]
 
-        nearest = interpolate.interp1d(gyro_times, gyro_data, kind='nearest', assume_sorted=True, axis = 0)
+        nearest = interpolate.interp1d(gyro_times, gyro_data, kind='nearest', assume_sorted=True, axis = 0, fill_value=np.array([0,0,0]), bounds_error=False)
         gyro_dat_resampled = nearest(OF_times)
 
         squared_diff = (gyro_dat_resampled - new_OF_transforms)**2
@@ -938,9 +1011,9 @@ class Stabilizer:
     def set_map_func_scale(self, map_scale = 0.9):
         self.map_func_scale = map_scale
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = False,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000", audio=True):
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=4.0, zoom=1.0, bg_color="#000000", audio=True):
         if outpath == self.videopath:
             outpath = outpath.lower().replace(".mp4", "_gyroflow.mp4", )
         (out_width, out_height) = out_size
@@ -1085,7 +1158,7 @@ class Stabilizer:
         num_not_success = 0
         num_not_success_lim = 5 # stop after 5 failures to read frame
 
-        for i in tqdm(range(1, num_frames), desc="Frame Extraction", colour="blue"):
+        for i in tqdm(range(1, num_frames), desc="Rendering", colour="blue"):
 
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -2122,6 +2195,22 @@ def find_gyroflow_data_file(videofile="in.mp4"):
 
 
 if __name__ == "__main__":
+    infile_path = "test_clips/Runcam/RC_0036_filtered.MP4"
+    log_guess, log_type, variant = gyrolog.guess_log_type_from_video(infile_path)
+    if not log_guess:
+        print("Can't guess log")
+        exit()
+
+    stab = MultiStabilizer(infile_path, "camera_presets/RunCam/DEV_Runcam_5_Orange_4K_30FPS_XV_16by9_stretched.json", log_guess, gyro_lpf_cutoff = 50, logtype=log_type, logvariant=variant)
+
+    
+
+    stab.full_auto_sync()
+
+    stab.export_gyroflow_file()
+
+    stab.renderfile(30, 70, "autosync_1.mp4", out_size = (1920,1080))
+
     # insta360 test
 
     #stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/SMO4K_4K_Wide43.json", gyrocsv="test_clips/insta360_gyro.csv")

@@ -1184,18 +1184,19 @@ def guess_log_type_from_log(logfile, check_data = False):
 if __name__ == "__main__":
 
     tests = [
+        "test_clips/Runcam/gyroDate0006.csv"
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl",
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/gyroDate0010.csv",
     ]
 
-    reader = BlackboxRawData()
-    reader.set_cam_up_angle(30,degrees=True)
-    reader.extract_log("C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl")
-    reader.plot_gyro()
+    #reader = BlackboxRawData()
+    #reader.set_cam_up_angle(30,degrees=True)
+    #reader.extract_log("C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl")
+    #reader.plot_gyro()
 
     reader = RuncamData()
     reader.set_variant("iFlight GOCam GR")
-    reader.extract_log("C:/Users/TUDelftSID/Downloads/20210814 gocam/gyroDate0010.csv")
+    reader.extract_log("test_clips/Runcam/gyroDate0029.csv")
     reader.standard_gyro[:,0] += 80-57.16
     reader.plot_gyro()
     plt.show()
