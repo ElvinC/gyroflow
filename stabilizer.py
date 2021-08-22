@@ -1164,7 +1164,7 @@ class Stabilizer:
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
                                                         smoothingFocus=smoothingFocus,
                                                         tstart = tstart, tend = tend,
-                                                        debug_plots=(smoothingFocus != -1))
+                                                        debug_plots=(smoothingFocus != -1), plot_blocking = BLOCKING_PLOTS)
         print("Done computing optimal Fov")
 
         #new_img_dim=(int(self.width * scale),int(self.height*scale))

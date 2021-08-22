@@ -85,7 +85,7 @@ class AdaptiveZoom:
 
         return 1/fcorr #np.min([xminDist/output_width, yminDist/output_height])
 
-    def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0, tstart = False, tend = False, debug_plots=False):
+    def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0, tstart = False, tend = False, debug_plots=False, plot_blocking = False):
         #print(locals())
         #smoothingNumFrames = int(smoothingCenter * fps)
         #if smoothingNumFrames % 2 == 0:
@@ -138,7 +138,7 @@ class AdaptiveZoom:
                 plt.plot(fovValues)
                 plt.plot(fovMin)
                 plt.plot(fovSmooth)
-                plt.show()
+                plt.show(block=plot_blocking)
             fovValues = fovSmooth
         elif smoothingFocus < 0: #disabled
             maxF = np.max(fovValues)
