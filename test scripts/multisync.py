@@ -1,6 +1,44 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+t = np.linspace(0, 100, 100 * 200)
+
+v1 = 10
+v2 = 90
+d1 = 0.2
+d2 = 6
+
+err_slope = (d2-d1)/(v2-v1)
+correction_slope = err_slope + 1
+gyro_start = (d1 - err_slope*v1)
+
+#interval = 1/(correction_slope * self.fps)
+
+g1 = v1 - d1
+g2 = v2 - d2
+slope = (v2 - v1) / (g2 - g1)
+corrected_times = slope * (t - g1) + v1
+
+
+fit = np.polyfit([v1, v2], [d1, d2], 1, full=True)
+coefs = fit[0]
+
+
+
+corrected_times_2 = (t + coefs[1])/(1- coefs[0])
+
+plt.plot(corrected_times)
+plt.plot(corrected_times_2)
+
+print(np.allclose(corrected_times_2, corrected_times))
+
+plt.show()
+
+
+
+
+exit()
+
 vidlength = 120 # 2 minutes
 
 end_delay = 5 # seconds
@@ -30,7 +68,7 @@ if vidlength < (inter_delay + 2 * end_delay):
     times = np.array([end_delay, vidlength - end_delay])
 
 else:
-    num_syncs = round((vidlength - 2 * end_delay) / inter_delay)
+    num_syncs = 2 # round((vidlength - 2 * end_delay) / inter_delay)
 
     times = np.linspace(end_delay, vidlength - end_delay, num_syncs)
 

@@ -11,12 +11,12 @@ import numpy as np
 
 example_in = np.array([1,2,3])
 gx, gy, gz = example_in
-out = np.array([-(gx), (gy), -(gz)])
+out = np.array([-(gy), gz, -(gx)])
 
-camera_gyro_angle = 45
+#camera_gyro_angle = 45
 
-r  = Rotation.from_euler('x', camera_gyro_angle, degrees=True)
-out = r.apply(out)
+#r  = Rotation.from_euler('x', camera_gyro_angle, degrees=True)
+#out = r.apply(out)
 
 def generate_uptilt_mat(angle, degrees=False):
     angle = angle * np.pi / 180 if degrees else angle
@@ -28,7 +28,8 @@ def generate_uptilt_mat(angle, degrees=False):
     return rotmat
 
 for i, rotmat in enumerate(gyrolog.ORIENTATIONS):
-    result = np.linalg.multi_dot([generate_uptilt_mat(45, True),rotmat, example_in])
+    #result = np.linalg.multi_dot([generate_uptilt_mat(45, True),rotmat, example_in])
+    result = np.linalg.multi_dot([rotmat, example_in])
     #print(result)
     if np.allclose(result,out):
         print(i)
