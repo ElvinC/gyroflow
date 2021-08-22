@@ -12,12 +12,12 @@ class Extractor:
     def __init__(self, videopath = "hero5.mp4"):
         self.videopath = videopath
 
-        payloads, parser = get_gpmf_payloads_from_file(videopath)
+        self.payloads, parser = get_gpmf_payloads_from_file(videopath)
 
         self.parsed = []
-        print(payloads)
+        #print(f"GPMF payloads {self.payloads}")
 
-        for gpmf_data, timestamps in payloads:
+        for gpmf_data, timestamps in self.payloads:
             self.parsed.append(gpmf_parse.parse_dict(gpmf_data))
 
 
@@ -33,6 +33,8 @@ class Extractor:
         self.parsed_gyro = np.zeros((1,4)) # placeholder
         self.parse_gyro()
 
+        self.accl = []
+
     def find_video_length(self):
         
         #find video length using openCV
@@ -40,7 +42,7 @@ class Extractor:
         num_frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
         self.fps = video.get(cv2.CAP_PROP_FPS)
         self.video_length =  num_frames / self.fps
-        print("Video length: {} s, framerate: {} FPS".format(self.video_length,self.fps))
+        #print("Video length: {} s, framerate: {} FPS".format(self.video_length,self.fps))
 
         self.size = int(video.get(cv2.CAP_PROP_FRAME_WIDTH)), int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -64,7 +66,7 @@ class Extractor:
 
 
         self.gyro_rate = self.num_gyro_samples / self.video_length 
-        print("Gyro rate: {} Hz, should be close to 200 or 400 Hz".format(self.gyro_rate))
+        #print("Gyro rate: {} Hz, should be close to 200 or 400 Hz".format(self.gyro_rate))
 
 
         self.parsed_gyro = np.zeros((self.num_gyro_samples, 4))
@@ -88,7 +90,7 @@ class Extractor:
         
         
         # Convert to angular vel. vector in rad/s ??
-        omega = np.array(self.accl) / self.accl_scal
+        omega = np.array(self.accl) / self.accl_scal / 9.80665
         self.num_accl_samples = omega.shape[0]
 
         self.accl_rate = self.num_accl_samples / self.video_length 
@@ -115,6 +117,10 @@ class Extractor:
 
     def get_video_length(self):
         return self.video_length
+
+    def has_gpmf(self, filepath):
+        pass
+
 
 
 if __name__ == "__main__":

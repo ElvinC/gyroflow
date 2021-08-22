@@ -91,9 +91,6 @@ class AdaptiveZoom:
         #if smoothingNumFrames % 2 == 0:
         #    smoothingNumFrames = smoothingNumFrames+1
 
-        #tstart = 0 if tstart == False else tstart
-        #tend = -1 if tend == False else tend
-
         smoothingFocusFrames = int(smoothingFocus * fps)
         if smoothingFocusFrames % 2 == 0:
             smoothingFocusFrames = smoothingFocusFrames+1
@@ -191,7 +188,10 @@ class AdaptiveZoom:
         R = np.eye(3)
         if type(quat) != type(None):
             quat = quat.flatten()
-            R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
+            #R = Rotation([-quat[1],-quat[2],quat[3],-quat[0]]).as_matrix()
+            R = Rotation([quat[1],quat[2],quat[3],quat[0]]).as_matrix()
+
+            R[[0,0,1,2],[1,2,0,0]] *=-1
 
         distorted_points = []
         for i in range(numPoints-1):

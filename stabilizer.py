@@ -1,8 +1,11 @@
+#from quaternion import quaternion
 import numpy as np
+from datetime import date
 import cv2
 import csv
 import os
 import platform
+from tqdm import tqdm
 
 from freqAnalysis import FreqAnalysis
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
@@ -15,6 +18,8 @@ from matplotlib import pyplot as plt
 from matplotlib import colors
 from vidgear.gears import WriteGear
 from vidgear.gears import helper as vidgearHelper
+import gyrolog
+import json
 from _version import __version__
 
 from scipy import signal, interpolate
@@ -24,6 +29,10 @@ import insta360_utility as insta360_util
 import smoothing_algos
 
 VIDGEAR_LOGGING = False
+
+BLOCKING_PLOTS = True
+if platform.system() == "Darwin":
+    BLOCKING_PLOTS = False
 
 def impute_gyro_data(input_data):
 
@@ -68,17 +77,20 @@ def impute_gyro_data(input_data):
 
     return np.concatenate(arrays_to_concat)
 
+
 class Stabilizer:
-    def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = 200, video_rotation = -1):
+    def __init__(self, videopath, calibrationfile=None, gyro_path=None, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1, gyroflow_file=None):
 
         ### Define all important variables
 
         self.initial_offset = 0
         self.rough_sync_search_interval = 10
         self.better_sync_search_interval = 0.2
-        self.gyro_lpf_cutoff = -1
+        self.gyro_lpf_cutoff = gyro_lpf_cutoff
         self.do_video_rotation = False
         self.num_frames_skipped = 1
+
+        self.use_gyroflow_data_file = False
 
         # General video stuff
         self.cap = 0
@@ -95,11 +107,17 @@ class Stabilizer:
         self.map_func_scale = 0.9
 
         self.integrator = None #GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
+        self.new_integrator = None
         self.times = None
         self.stab_transform = None
+        self.smoothing_algo = None
+
+        self.initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        self.initial_orientation[[0,1,2,3]] = self.initial_orientation[[3,0,1,2]]
 
         # self.raw_gyro_data = None
         self.gyro_data = None # self.bbe.get_gyro_data(cam_angle_degrees=cam_angle_degrees)
+        self.acc_data = None
 
         # time lapse features
         self.hyperlapse_multiplier = 1
@@ -121,22 +139,32 @@ class Stabilizer:
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        self.orig_dimension = (orig_w,orig_h) #Dimension of input file
+
+        self.undistort = FisheyeCalibrator()
+
         self.video_rotate_code = video_rotation
+
+        if type(gyroflow_file) != type(None):
+            success = self.import_gyroflow_file(gyroflow_file)
+            if not success:
+                raise RuntimeError
+
+        else:
+            self.undistort.load_calibration_json(calibrationfile, True)
+
         self.do_video_rotation = self.video_rotate_code != -1
         if self.video_rotate_code == cv2.ROTATE_90_CLOCKWISE or self.video_rotate_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
             orig_w, orig_h = orig_w, orig_h
 
-        # Camera undistortion stuff
-        self.undistort = FisheyeCalibrator()
-        self.undistort.load_calibration_json(calibrationfile, True)
         self.map1, self.map2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(orig_w,orig_h))
 
-        self.orig_dimension = (orig_w,orig_h) #Dimension of input file
         self.process_dimension = self.undistort.get_stretched_size_from_dimension(self.orig_dimension) # Dimension after any stretch corrections
         self.width, self.height = self.process_dimension
 
-        self.smoothing_algo = None
-
+        # Sync stuff
+        self.d1 = 0
+        self.d2 = 0
 
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
@@ -165,6 +193,31 @@ class Stabilizer:
 
         self.gyro_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro_data[:,1:4], 0) # Filter along "vertical" time axis
 
+    def filter_acc(self):
+        # rather aggressive filtering is applied here
+        if type(self.acc_data) != type(None):
+            acc_cutoff = 1
+
+            num_data_points = self.acc_data.shape[0]
+            acc_sample_rate = num_data_points / (self.acc_data[-1,0] - self.acc_data[0,0])
+
+            # Nyquist frequency
+            if (acc_sample_rate / 2) <= acc_cutoff:
+                self.gyro_lpf_cutoff = acc_sample_rate / 2 - 1
+
+            # First order filters to avoid overshoot
+
+            # Get rid of high freq.
+            sosgyro = signal.butter(1, 40, "lowpass", fs=acc_sample_rate, output="sos")
+            self.acc_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
+
+            sosacc = signal.butter(1, acc_cutoff, "lowpass", fs=acc_sample_rate, output="sos")
+
+            self.acc_data[:,1:4] = signal.sosfiltfilt(sosacc, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
+
+
+            sosgyro = signal.butter(1, 0.5, "lowpass", fs=acc_sample_rate, output="sos")
+            self.acc_data[:,1:4] = signal.sosfiltfilt(sosgyro, self.acc_data[:,1:4], 0) # Filter along "vertical" time axis
 
     def set_hyperlapse(self, hyperlapse_multiplier = 1, hyperlapse_num_blended_frames = 1):
 
@@ -182,18 +235,33 @@ class Stabilizer:
             algo = smoothing_algos.PlainSlerp() # Default
         else:
             self.smoothing_algo = algo
-        
 
+    def update_smoothing(self):
+
+        if type(self.new_integrator) != type(None):
+            self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+            self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+            self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+
+            return True
+
+
+        print("Orientations not calculated yet")
+        return False
 
     def auto_sync_stab(self, sliceframe1 = 10, sliceframe2 = 1000, slicelength = 50, debug_plots = True):
         if debug_plots:
             FreqAnalysis(self.integrator).sampleFrequencyAnalysis()
-            
+
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
         v1 = (sliceframe1 + slicelength/2) / self.fps
         v2 = (sliceframe2 + slicelength/2) / self.fps
-        d1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
+        d1, cost1, times1, transforms1 = self.optical_flow_comparison(sliceframe1, slicelength, debug_plots = debug_plots)
         #self.initial_offset = d1
-        d2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
+        d2, cost2, times2, transforms2 = self.optical_flow_comparison(sliceframe2, slicelength, debug_plots = debug_plots)
 
         self.transform_times = [times1, times2]
         self.transforms = [transforms1, transforms2]
@@ -220,30 +288,309 @@ class Stabilizer:
 
         print("Gyro correction slope {}".format(slope))
 
-        self.plot_sync(corrected_times, slicelength)
+        self.plot_sync(corrected_times, slicelength, show=True)
+
+
+
+        oldplot = True
+        if oldplot and debug_plots:
+            plt.figure()
+            xplot = plt.subplot(311)
+
+            plt.plot(times1, -transforms1[:,0] * self.fps)
+            plt.plot(times2, -transforms2[:,0] * self.fps)
+            plt.plot(corrected_times, self.integrator.get_raw_data("x"))
+            plt.ylabel("omega x [rad/s]")
+
+            plt.subplot(312, sharex=xplot)
+
+            plt.plot(times1, transforms1[:,1] * self.fps)
+            plt.plot(times2, transforms2[:,1] * self.fps)
+            plt.plot(corrected_times, self.integrator.get_raw_data("y"))
+            plt.ylabel("omega y [rad/s]")
+
+            plt.subplot(313, sharex=xplot)
+
+            plt.plot(times1, transforms1[:,2] * self.fps)
+            plt.plot(times2, transforms2[:,2] * self.fps)
+            plt.plot(corrected_times, self.integrator.get_raw_data("z"))
+            #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+            plt.xlabel("time [s]")
+            plt.ylabel("omega z [rad/s]")
+
+            plt.show(block=BLOCKING_PLOTS)
 
         # Temp new integrator with corrected time scale
 
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
         new_gyro_data = np.copy(self.gyro_data)
+
 
         # Correct time scale
         new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
-        new_integrator.integrate_all()
-        #self.last_smooth = smooth
+
+        if type(self.acc_data) != type(None):
+            new_acc_data = np.copy(self.acc_data)
+            new_acc_data[:,0] = new_gyro_data[:,0]
+        else:
+            new_acc_data = None
 
         if not self.smoothing_algo:
             self.smoothing_algo = smoothing_algos.PlainSlerp()
 
-        new_integrator.set_smoothing_algo(self.smoothing_algo)
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+        self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation, acc_data=new_acc_data)
+        if self.smoothing_algo.require_acceleration and type(new_acc_data) == type(None):
+            print("No acceleration data available. Horizon reference doesn't work without it.")
+        self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        #self.last_smooth = smooth
+
+        self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval)
 
-    def plot_sync(self, corrected_times, slicelength):
+    def multi_sync_init(self):
+        self.transform_times = []
+        self.transforms = []
+        self.sync_vtimes = []
+        self.sync_delays = []
+        self.sync_costs = []
+
+
+    def multi_sync_add_slice(self, slice_frame_start, slicelength = 50, debug_plots = True):
+        v1 = (slice_frame_start + slicelength/2) / self.fps
+        d1, cost1, times1, transforms1 = self.optical_flow_comparison(slice_frame_start, slicelength, debug_plots = debug_plots)
+
+        self.transform_times.append(times1)
+        self.transforms.append(transforms1)
+        self.sync_vtimes.append(v1)
+        self.sync_delays.append(d1)
+        self.sync_costs.append(cost1)
+
+        return cost1
+    
+    def multi_sync_delete_slice(self, idx):
+        if len(self.transform_times) > idx:
+            del self.transform_times[idx]
+            del self.transforms[idx]
+            del self.sync_vtimes[idx]
+            del self.sync_delays[idx]
+            del self.sync_costs[idx]
+
+            return True
+
+        return False
+
+
+    def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.02, piecewise_correction = False, debug_plots = True):
+
+        assert len(self.transform_times) == len(self.transforms) == len(self.sync_vtimes) == len(self.sync_delays) == len(self.sync_costs)
+
+        if piecewise_correction:
+            print("Not implemented yet")
+
+        N = len(self.transform_times)
+        if N == 0:
+            # no change
+            print("No valid syncpoints")
+            self.new_integrator = GyroIntegrator(self.gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=self.acc_data)
+        
+        elif N == 1:
+
+            new_gyro_data = np.copy(self.gyro_data)
+
+            # Shift the time
+            new_gyro_data[:,0] = self.integrator.get_raw_data("t") + self.sync_delays[0] # (new_gyro_data[:,0]+gyro_start) *correction_slope
+
+            if type(self.acc_data) != type(None):
+                new_acc_data = np.copy(self.acc_data)
+                new_acc_data[:,0] = new_gyro_data[:,0]
+            else:
+                new_acc_data = None
+            
+        else:
+            # N is two or above, use the weird non-random RANSAC fitting
+            times = np.array(self.sync_vtimes)
+            delays = np.array(self.sync_delays)
+            sync_costs = np.array(self.sync_costs)
+
+            chosen_indices = {}
+            num_chosen = 0
+            rsquared_best = 1000
+            chosen_coefs = None
+
+            #max_sync_cost = 6 # > 6 is nogo.
+
+            for i in range(N):
+                for j in range(i, N):
+                    if i != j:
+                        
+                        del_i = delays[i]
+                        del_j = delays[j]
+
+                        t_i = times[i]
+                        t_j = times[j]
+
+                        slope = (del_j - del_i) / (t_j - t_i)
+                        intersect = del_i - t_i * slope
+
+                        within_error = []
+                        est_curve = times * slope + intersect
+                        within_error = np.where(np.abs(est_curve - delays) < max_fitting_error)[0]
+
+                        
+
+                        if within_error.shape[0] >= num_chosen and set(within_error) != chosen_indices:
+                            #print(times[within_error])
+                            fit = np.polyfit(times[within_error], delays[within_error], 1, full=True)
+                            coefs = fit[0]
+
+                            close_constant = -0.1 < coefs[0] < 0.1
+
+                            if within_error.shape[0] > 2 and close_constant:
+                                rsquared = fit[1]
+
+                                if rsquared < rsquared_best:
+                                    rsquared_best = rsquared
+                                    chosen_coefs = coefs
+                                    num_chosen = within_error.shape[0]
+                                    chosen_indices = set(within_error)
+                            elif close_constant: # close to linear
+                                chosen_coefs = coefs
+                                num_chosen = within_error.shape[0]
+                                chosen_indices = set(within_error)
+
+                            
+            if type(chosen_coefs) == type(None):
+                return False
+
+            print(chosen_coefs)
+            print(chosen_indices)
+
+            new_gyro_data = np.copy(self.gyro_data)
+            new_gyro_data[:,0] = (self.integrator.get_raw_data("t") + chosen_coefs[1])/(1- chosen_coefs[0])
+
+            if debug_plots:
+                est_curve = times * chosen_coefs[0] + chosen_coefs[1]
+
+                self.plot_sync(new_gyro_data[:,0], 60, True)
+                plt.figure()
+                plt.scatter(times, delays)
+                plt.plot(times, est_curve)
+                plt.show(block=BLOCKING_PLOTS)
+
+            if type(self.acc_data) != type(None):
+                new_acc_data = np.copy(self.acc_data)
+                new_acc_data[:,0] = new_gyro_data[:,0]
+            else:
+                new_acc_data = None
+
+            self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=new_acc_data)
+            
+
+
+        if not self.smoothing_algo:
+            self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+        if self.smoothing_algo.require_acceleration and type(new_acc_data) == type(None):
+            print("No acceleration data available. Horizon reference doesn't work without it.")
+        self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+
+        self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+        return True
+
+
+    def full_auto_sync(self, max_fitting_error = 0.02, debug_plots=True):
+
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
+        self.multi_sync_init()
+
+        max_sync_cost_tot = 10 # > 10 is nogo.
+        
+
+        syncpoints = [] # save where to analyze. list of [frameindex, num_analysis_frames]
+        num_frames_analyze = 30
+        
+        max_sync_cost = 10 / 30 * num_frames_analyze
+        num_frames_offset = int(num_frames_analyze / 2)
+        end_delay = 3 # seconds buffer zone
+        end_frames = end_delay * self.fps # buffer zone
+
+        num_frames = self.num_frames
+        vid_length = num_frames / self.fps
+
+        inter_delay = 13 # second between syncs
+        inter_delay_frames = int(inter_delay * self.fps)
+
+        min_slices = 4
+
+        max_slices = 9
+
+
+
+        if vid_length < 4: # only one sync
+            syncpoints.append([5, max(60, int(num_frames-5-self.fps)) ])
+
+            num_syncs = 1
+
+        elif vid_length < 10: # two points
+            first_index = 30
+            last_index = num_frames - 30 - num_frames_analyze
+            syncpoints.append([first_index, num_frames_analyze])
+            syncpoints.append([last_index, num_frames_analyze])
+
+            num_syncs = 2
+
+        else:
+            # Analysis starts at first frame, so take this into account
+            # Add also motion analysis from logs here
+            first_index = end_frames - num_frames_offset
+            last_index = num_frames - end_frames - num_frames_offset
+
+            num_syncs = max(min(round((last_index - first_index)/inter_delay_frames), max_slices), min_slices)
+            inter_frames_actual = (last_index - first_index) / num_syncs
+
+            for i in range(num_syncs):
+                syncpoints.append([round(first_index + i * inter_frames_actual), num_frames_analyze])
+
+        # Analyze these slices
+
+        print(f"Analyzing {num_syncs} slices")
+
+        for frame_index, n_frames in syncpoints:
+            self.multi_sync_add_slice(frame_index, n_frames, False)
+
+            if self.sync_costs[-1] > max_sync_cost:
+                print("Removing slice due to large error")
+                self.multi_sync_delete_slice(-1)
+
+            elif np.sum( (np.abs(self.transforms[-1] * self.fps) < 0.05) ) >= (0.95 * self.transforms[-1].size):
+                print("Removing slice due to lack of movement")
+                self.multi_sync_delete_slice(-1) # if more than 95% of the slice doesn't have significant movement (<3 deg/s)
+
+
+
+        success = self.multi_sync_compute(max_fitting_error = max_fitting_error, debug_plots=debug_plots)
+
+        if not success:
+            success = self.multi_sync_compute(max_fitting_error = max_fitting_error * 2, debug_plots=debug_plots) # larger bound
+
+        if success:
+            print("Auto sync complete")
+            return True
+        else:
+            print("Auto sync failed to converge. Sorry about that")
+            return False
+
+
+    def plot_sync(self, corrected_times, slicelength, show=False):
         n = len(self.transform_times)
         fig, axes = plt.subplots(3, n, sharey=True)
         fig.set_size_inches(4 * n, 6)
@@ -252,55 +599,72 @@ class Stabilizer:
             axes[0][j].set(title=f"Syncpoint {j + 1}")
             for i, r in enumerate(['x', 'y', 'z']):
                 axes[i][j].plot(corrected_times[mask], self.integrator.get_raw_data(r)[mask], alpha=.8)
-                if r == 'z':
-                    axes[i][j].plot(self.transform_times[j], self.transforms[j][:, i] * self.fps, alpha=.8)
-                else:
+                if r == 'x':
                     axes[i][j].plot(self.transform_times[j], -self.transforms[j][:, i] * self.fps, alpha=.8)
+                else:
+                    axes[i][j].plot(self.transform_times[j], self.transforms[j][:, i] * self.fps, alpha=.8)
 
-        axes[0][0].set(ylabel="omega x [rad/s]")
+        axes[0][0].set(ylabel="omega x [rad/s]")    
         axes[1][0].set(ylabel="omega y [rad/s]")
         axes[2][0].set(ylabel="omega z [rad/s]")
         for i in range(n):
             axes[2][i].set(xlabel="time [s]")
         plt.tight_layout()
-        plt.show()
+        if show:
+            plt.show(block=BLOCKING_PLOTS)
+            
         return fig, axes
 
-
     def manual_sync_correction(self, d1, d2):
+
+
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
         v1 = self.v1
         v2 = self.v2
 
         print("v1: {}, v2: {}, d1: {}, d2: {}".format(v1, v2, d1, d2))
         g1 = v1 - d1
         g2 = v2 - d2
-        slope = (v2 - v1) / (g2 - g1)
+        if g1==g2:
+            slope = 1
+        else:
+            slope = (v2 - v1) / (g2 - g1)
         corrected_times = slope * (self.integrator.get_raw_data("t") - g1) + v1
         print("Gyro correction slope {}".format(slope))
 
-        self.plot_sync(corrected_times, slicelength=50)
+        self.plot_sync(corrected_times, slicelength=50, show=True)
 
         # Temp new integrator with corrected time scale
 
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
         new_gyro_data = np.copy(self.gyro_data)
 
         # Correct time scale
         new_gyro_data[:,0] = slope * (self.integrator.get_raw_data("t") - g1) + v1 # (new_gyro_data[:,0]+gyro_start) *correction_slope
 
-        new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation)
-        new_integrator.integrate_all()
-        #self.last_smooth = smooth
+        if type(self.acc_data) != type(None):
+            new_acc_data = np.copy(self.acc_data)
+            new_acc_data[:,0] = new_gyro_data[:,0]
+        else:
+            new_acc_data = None
+
 
         if not self.smoothing_algo:
             self.smoothing_algo = smoothing_algos.PlainSlerp()
 
-        new_integrator.set_smoothing_algo(self.smoothing_algo)
-        self.times, self.stab_transform = new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
+        self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=initial_orientation,acc_data=new_acc_data)
+        self.new_integrator.integrate_all(use_acc=self.smoothing_algo.require_acceleration)
+        #self.last_smooth = smooth
 
 
 
+        self.new_integrator.set_smoothing_algo(self.smoothing_algo)
+        self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
 
     def optical_flow_comparison(self, start_frame=0, analyze_length = 50, debug_plots = True):
         frame_times = []
@@ -320,7 +684,7 @@ class Stabilizer:
         if self.undistort.image_is_stretched():
             prev_gray = cv2.resize(prev_gray, self.process_dimension)
 
-        for i in range(analyze_length):
+        for i in tqdm(range(analyze_length), desc="Analyzing frame", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
@@ -332,8 +696,8 @@ class Stabilizer:
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
 
-            if i % 10 == 0:
-                print("Analyzing frame: {}/{}".format(i,analyze_length))
+            #if i % 10 == 0:
+            #    print("Analyzing frame: {}/{}".format(i,analyze_length))
 
             if succ and i % self.num_frames_skipped == 0:
                 # Only add if succeeded
@@ -378,16 +742,19 @@ class Stabilizer:
                 self.use_essential_matrix = True
 
                 if self.use_essential_matrix:
-                    R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+                    try:
+                        R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
 
-                    rot1 = Rotation.from_matrix(R1)
-                    rot2 = Rotation.from_matrix(R2)
+                        rot1 = Rotation.from_matrix(R1)
+                        rot2 = Rotation.from_matrix(R2)
 
-                    if rot1.magnitude() < rot2.magnitude():
-                        roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
-                    else:
-                        roteul = rot2.as_rotvec() # as_euler("xyz")
-
+                        if rot1.magnitude() < rot2.magnitude():
+                            roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
+                        else:
+                            roteul = rot2.as_rotvec() # as_euler("xyz")
+                    except:
+                        print("Couldn't recover motion for this frame")
+                        roteul = np.array([0,0,0])
 
                 #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
                 #dx = m[0,2]
@@ -404,9 +771,8 @@ class Stabilizer:
                 print("Frame {}".format(i))
 
         transforms = np.array(transforms)
-        estimated_offset = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
-        return estimated_offset, frame_times, transforms
-
+        estimated_offset, cost = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
+        return estimated_offset, cost, frame_times, transforms
 
     def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list, debug_plots = True):
         #print(prev_pts_list)
@@ -457,6 +823,7 @@ class Stabilizer:
 
 
         if debug_plots:
+            plt.figure()
             plt.plot(offsets, costs)
         #    plt.show()
         costs = []
@@ -490,18 +857,20 @@ class Stabilizer:
             costs.append(cost)
 
         better_offset = offsets[np.argmin(costs)]
+        cost = min(costs)
 
-        print("Better offset: {}".format(better_offset))
+        print("Better offset: {}, cost: {}".format(better_offset, cost))
 
         if debug_plots:
+            #plt.figure()
             plt.plot(offsets, costs)
             plt.xlabel("Offset [s]")
             plt.ylabel("Cost")
             plt.title(f"Syncpoint Offset Estimation\nCosts: {min(costs):.4f}, Offset: {better_offset:.4f}")
 
-            plt.show()
+            #plt.show()
 
-        return better_offset
+        return better_offset, cost
 
     def gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
@@ -546,7 +915,7 @@ class Stabilizer:
         new_OF_transforms = np.copy(OF_transforms) * self.fps
         # Optical flow movements gives pixel movement, not camera movement
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
-        new_OF_transforms[:,1] = -new_OF_transforms[:,1]
+        #new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
@@ -606,7 +975,6 @@ class Stabilizer:
         #plt.show()
         return sum_squared_diff
 
-
     def fast_gyro_cost_func(self, OF_times, OF_transforms, gyro_times, gyro_data):
 
 
@@ -619,7 +987,7 @@ class Stabilizer:
         new_OF_transforms = np.copy(OF_transforms) * self.fps
         # Optical flow movements gives pixel movement, not camera movement
         new_OF_transforms[:,0] = -new_OF_transforms[:,0]
-        new_OF_transforms[:,1] = -new_OF_transforms[:,1]
+        #new_OF_transforms[:,1] = -new_OF_transforms[:,1]
 
 
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
@@ -633,7 +1001,7 @@ class Stabilizer:
         sliced_gyro_data = gyro_data[mask,:]
         sliced_gyro_times = gyro_times[mask]
 
-        nearest = interpolate.interp1d(gyro_times, gyro_data, kind='nearest', assume_sorted=True, axis = 0)
+        nearest = interpolate.interp1d(gyro_times, gyro_data, kind='nearest', assume_sorted=True, axis = 0, fill_value=np.array([0,0,0]), bounds_error=False)
         gyro_dat_resampled = nearest(OF_times)
 
         squared_diff = (gyro_dat_resampled - new_OF_transforms)**2
@@ -668,7 +1036,7 @@ class Stabilizer:
         if frame_num >= len(self.stab_transform):
             frame_num = len(self.stab_transform)-1
             print("No more stabilization data. Using last frame")
-        
+
         return self.undistort.get_maps(self.map_func_scale,
             new_img_dim=(self.orig_dimension[0], self.orig_dimension[1]),
             output_dim=out_size,
@@ -679,15 +1047,15 @@ class Stabilizer:
     def set_map_func_scale(self, map_scale = 0.9):
         self.map_func_scale = map_scale
 
-    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = True,
+    def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = False,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingFocus=2.0, zoom=1.0, bg_color="#000000", audio=True):
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=4.0, zoom=1.0, bg_color="#000000", audio=True):
         if outpath == self.videopath:
             outpath = outpath.lower().replace(".mp4", "_gyroflow.mp4", )
         (out_width, out_height) = out_size
 
         #export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
-        
+
         borderMode = 0
         borderValue = 0
 
@@ -749,6 +1117,11 @@ class Stabilizer:
                 "-vcodec": "prores_ks",
                 "-profile:v": vprofile,
             }
+        elif vcodec == "v210":
+            output_params = {
+                "-input_framerate": self.fps,
+                "-vcodec": "v210"
+            }
         else:
             output_params = {}
 
@@ -774,7 +1147,7 @@ class Stabilizer:
         #output_params["-fps"] = self.fps
 
 
-        out = WriteGear(output_filename=outpath, logging=VIDGEAR_LOGGING, **output_params)
+        out = WriteGear(output_filename=outpath, logging=debug_text, **output_params)
 
         num_frames = int((stoptime - starttime) * self.fps)
 
@@ -795,7 +1168,7 @@ class Stabilizer:
         print("Done computing optimal Fov")
 
         #new_img_dim=(int(self.width * scale),int(self.height*scale))
-        
+
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, int(starttime * self.fps))
         time.sleep(0.1)
 
@@ -821,24 +1194,25 @@ class Stabilizer:
         num_not_success = 0
         num_not_success_lim = 5 # stop after 5 failures to read frame
 
-        while(True):
+        for i in tqdm(range(1, num_frames), desc="Rendering", colour="blue"):
+
             # Read next frame
             frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             success, frame = self.cap.read()
-            
+
             if self.do_video_rotation:
                 frame = cv2.rotate(frame, self.video_rotation_code)
             # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
                 fraction_done = i/num_frames
-                elapsed_time = time.time() - starttime # in seconds
+                elapsed_time = time.time() - starttime  # in seconds
                 est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
-                print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
-                
+                #print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
+
 
             if success:
-                i +=1
+                #i +=1
                 num_not_success = 0
             elif num_not_success >= num_not_success_lim:
                 # If unable to read multiple frames in a row
@@ -846,9 +1220,9 @@ class Stabilizer:
             else:
                 num_not_success += 1
 
+            #
             if i > num_frames:
-                break
-
+                break   # This condition will never happen
             elif frame_num >= len(self.stab_transform):
                 print("No more stabilization data. Stopping render here.")
                 break
@@ -884,12 +1258,12 @@ class Stabilizer:
                     # Process using integers for speed
                     frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
                                                 borderMode=borderMode, borderValue=borderValue)
-                    
+
                     if self.hyperlapse_num_blended_frames > 1:
                         # process using floats
                         frame_temp += 1/(self.hyperlapse_num_blended_frames) * frame_out.astype(np.float64)
-                    
-                    
+
+
                 if debug_text and ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
                     # Add debug text to last frame only
                     topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
@@ -927,7 +1301,7 @@ class Stabilizer:
                     else:
 
                         out.write(frame_out)
-                        
+
                         if display_preview:
                             if frame_out.shape[1] > 1280:
                                 frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
@@ -958,9 +1332,9 @@ class Stabilizer:
                 "-i",
                 self.videopath,
                 "-ss",
-                str(int(starttime * self.fps) / self.fps),
+                str(tstart / self.fps),
                 "-to",
-                str((int(starttime * self.fps) + num_frames) / self.fps),
+                str(tend / self.fps),
                 "-vn",
                 "-acodec",
                 "copy",
@@ -991,13 +1365,119 @@ class Stabilizer:
 
             print("Audio exported")
 
+    def export_gyroflow_file(self, filename=None, out_size = (1920,1080), smoothingFocus=2.0, zoom=1.0):
 
-    def export_gyroflow_file(self, filename=None):
+        print("Exporting gyroflow data file")
+
+        if type(self.undistort) == type(None) or type(self.integrator) == type(None) or type(self.new_integrator) == type(None) or type(self.stab_transform) == type(None):
+            print("Unable to export a data file")
+
+        gyroflow_data = {}
+        gyroflow_data["title"] = "Gyroflow data file"
+        gyroflow_data["videofile"] = os.path.split(self.videopath)[-1]
+        gyroflow_data["calibration_data"] = self.undistort.get_calibration_data()
+        gyroflow_data["video_rotate_code"] = self.video_rotate_code
+        gyroflow_data["gyro_lpf_cutoff"] = self.gyro_lpf_cutoff
+        gyroflow_data["date"] = str(date.today())
+
+        video_info = {
+            "orig_w": self.orig_dimension[0],
+            "orig_h": self.orig_dimension[1],
+            "process_w": self.process_dimension[0],
+            "process_h": self.process_dimension[0],
+            "fps": self.fps,
+            "num_frames": self.num_frames
+        }
+
+        gyroflow_data["video_info"] = video_info
+
+
+        gyroflow_data["sensor_DOF"] = 6 if type(self.acc_data) != type(None) else 3 # 6 DOF if acc is available
+        raw_imu = np.round(self.new_integrator.get_raw_gyro_acc(), 5)
+        gyroflow_data["raw_imu"] = raw_imu.tolist() # time is already corrected
+
+        gyroflow_data["stab_summary"] = self.smoothing_algo.get_summary()
+
+        stab_transform = np.array(self.stab_transform)
+
+        adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
+
+        fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
+                                                        smoothingFocus=smoothingFocus)
+
+        gyroflow_data["min_fcorr"] = np.min(fcorr)
+
+        #print(self.stab_transform)
+        #print(stab_transform)
+        # [index, time, smoothed_fov, w, x, y, z]
+        time_stab_transform = np.hstack([np.arange(stab_transform.shape[0])[...,None],
+                                         np.array(self.times)[...,None],
+                                         fcorr[...,None],
+                                         stab_transform])
+
+        time_stab_transform = np.round(time_stab_transform, 5)
+
+        gyroflow_data["stab_transform"] = time_stab_transform.tolist()
+
+        # General format description:
+        # Contains the following:
+        # * Gyroflow version info
+        # * General info, video filename, camera name
+        # * Camera parameters (Json from calibration utility)
+        # * raw gyro/acc data
+        # * Processed orientation data
+        # * Per frame
+        # Try to make
         if not filename:
             filename = self.videopath + ".gyroflow"
-        with open(filename, "r") as f:
-            f.writeline("Hello world")
 
+        with open(filename, 'w') as outfile:
+            json.dump(
+            gyroflow_data,
+            outfile,
+            indent=1,
+            separators=(',', ': ')
+        )
+
+        print("Finished exporting")
+
+    def import_gyroflow_file(self, filename="file.gyroflow"):
+        print("Loading Gyroflow data file")
+        # Load absolutely everything
+
+        with open(filename, "r") as infile:
+
+
+            try:
+                gyroflow_data = json.load(infile)
+                calibration_data = gyroflow_data["calibration_data"]
+                self.undistort.load_calibration_data(calibration_data,True)
+
+                self.video_rotate_code = gyroflow_data["video_rotate_code"]
+
+                initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+                initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
+
+                motion_dof = gyroflow_data["sensor_DOF"]
+                raw_imu = gyroflow_data["raw_imu"]
+                raw_imu = np.array(raw_imu)
+                self.gyro_data = raw_imu[:,[0,1,2,3]]
+                if motion_dof >= 6:
+                    self.acc_data = raw_imu[:,[0,4,5,6]]
+
+                self.integrator = GyroIntegrator(self.gyro_data, zero_out_time=False, initial_orientation=initial_orientation, acc_data=self.acc_data)
+                self.new_integrator = self.integrator
+
+                self.new_integrator.integrate_all(use_acc=False)
+
+                #self.times = None
+                #self.stab_transform = None
+                self.use_gyroflow_data_file = True
+
+            except KeyError: # TODO change?
+                print("Couldn't load gyroflow data file")
+                return False
+            return True
 
     def release(self):
         self.cap.release()
@@ -1166,16 +1646,15 @@ class GPMFStabilizer(Stabilizer):
             self.gyro_data[:,3] = self.gyro_data[:,3]
             self.gyro_data[:,[2, 3]] = self.gyro_data[:,[3, 2]]
 
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
 
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
         # Other attributes
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+        initial_orientation = Rotation.from_euler('xyz', [0, 0, 180], degrees=True).as_quat()
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
-        self.integrator.integrate_all()
+        self.integrator.integrate_all(use_acc=False)
         self.times = None
         self.stab_transform = None
 
@@ -1202,9 +1681,6 @@ class GPMFStabilizer(Stabilizer):
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
-
-
-
 class InstaStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, gyro_path, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1, InstaType=""):
 
@@ -1228,8 +1704,6 @@ class InstaStabilizer(Stabilizer):
 
         hero = 0
 
-
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
 
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
@@ -1281,11 +1755,66 @@ class InstaStabilizer(Stabilizer):
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
+class MultiStabilizer(Stabilizer):
+    def __init__(self, videopath, calibrationfile, logpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, gyro_lpf_cutoff = 100, logtype="Gyroflow IMU log", logvariant="", video_rotation = -1):
+
+        super().__init__(videopath, calibrationfile, logpath, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
+
+        # Get gyro data
+        print(logpath)
+
+        # quick fix
+        # TODO: integrate with gyrolog.py for modularity
+
+        self.log_reader = gyrolog.get_log_reader_by_name(logtype)
+        if not self.log_reader:
+            print(f"Failed to initiate log reader of type {logtype}")
+            return
+
+        self.log_reader.set_variant(logvariant)
+        self.log_reader.set_cam_up_angle(cam_angle_degrees, degrees=True)
+
+        extracted = self.log_reader.extract_log(logpath)
+
+        if not extracted:
+            print("Failed to extract and parse motion data")
+            return
+
+        self.gyro_data = self.log_reader.get_transformed_gyro()
+
+        # If no data:
+        if type(self.gyro_data) == type(None):
+            print("No valid gyro data")
+            return
+        elif self.gyro_data.shape[0] < 2:
+            print("No valid gyro data")
+            return
+        self.gyro_data = impute_gyro_data(self.gyro_data)
+        self.acc_data = self.log_reader.get_transformed_acc()
+        if type(self.acc_data) != type(None):
+            self.acc_data = impute_gyro_data(self.acc_data)
+
+
+
+        if self.gyro_lpf_cutoff > 0:
+            self.filter_gyro()
+
+        # Other attributes
+        initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
+        initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
+
+
+        self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation, acc_data=self.acc_data)
+        self.integrator.integrate_all(use_acc=False)
+        self.times = None
+        self.stab_transform = None
+
+        self.initial_offset = initial_offset
 
 
 class BBLStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, bblpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, use_csv=False, gyro_lpf_cutoff = 200, logtype="", video_rotation = -1, use_raw_gyro_data=False):
-        
+
         super().__init__(videopath, calibrationfile, bblpath, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
 
         # Get gyro data
@@ -1434,8 +1963,6 @@ class BBLStabilizer(Stabilizer):
         #self.gyro_data[:,2] = self.gyro_data[:,2]
         #self.gyro_data[:,3] = -self.gyro_data[:,3]
 
-        self.gyro_lpf_cutoff = gyro_lpf_cutoff
-
         if self.gyro_lpf_cutoff > 0:
             self.filter_gyro()
 
@@ -1475,8 +2002,6 @@ class BBLStabilizer(Stabilizer):
 
 
         #self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(smooth=smooth,start=-gyro_start,interval = interval) # 2.2/30 , -1/30
-
-
 
 
 class OpticalStabilizer:
@@ -1545,7 +2070,7 @@ class OpticalStabilizer:
         _, prev = self.cap.read()
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
 
-        for i in range(analyze_length):
+        for i in tqdm(range(analyze_length), desc="Analyzing frame", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
@@ -1556,8 +2081,8 @@ class OpticalStabilizer:
             succ, curr = self.cap.read()
 
 
-            if i % 10 == 0:
-                print("Analyzing frame: {}/{}".format(i,analyze_length))
+            #if i % 10 == 0:
+            #    print("Analyzing frame: {}/{}".format(i,analyze_length))
 
             if succ:
                 # Only add if succeeded
@@ -1698,10 +2223,28 @@ class OpticalStabilizer:
         self.cap.release()
 
 
+def find_gyroflow_data_file(videofile="in.mp4"):
+    if os.path.isfile(videofile + ".gyroflow"):
+        return videofile + ".gyroflow"
 
+    return ""
 
 
 if __name__ == "__main__":
+    infile_path = "test_clips/Runcam/RC_0036_filtered.MP4"
+    log_guess, log_type, variant = gyrolog.guess_log_type_from_video(infile_path)
+    if not log_guess:
+        print("Can't guess log")
+        exit()
+
+    stab = MultiStabilizer(infile_path, "camera_presets/RunCam/DEV_Runcam_5_Orange_4K_30FPS_XV_16by9_stretched.json", log_guess, gyro_lpf_cutoff = 50, logtype=log_type, logvariant=variant)
+
+    stab.full_auto_sync()
+
+    stab.export_gyroflow_file()
+
+    stab.renderfile(30, 70, "autosync_1.mp4", out_size = (1920,1080))
+
     # insta360 test
 
     #stab = InstaStabilizer("test_clips/insta360.mp4", "camera_presets/SMO4K_4K_Wide43.json", gyrocsv="test_clips/insta360_gyro.csv")
@@ -1715,13 +2258,13 @@ if __name__ == "__main__":
 
     #stab = BBLStabilizer("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json", "test_clips/starling.csv", use_csv=False, logtype = "gyroflow")
 
-    undistortTest = OnlyUndistort("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json",fov_scale=1)
-    undistortTest.renderfile(0, 5, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
+    #undistortTest = OnlyUndistort("test_clips/MasterTim17_caddx.mp4", "camera_presets/Nikon/Nikon_D5100_Nikkor_35mm_F_1_8_1280x720.json",fov_scale=1)
+    #undistortTest.renderfile(0, 5, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     exit()
     #stab.stabilization_settings(smooth = 0.8)
     # stab.auto_sync_stab(0.89,25*30, (2 * 60 + 22) * 30, 50) Gopro clips
 
-    stab.auto_sync_stab(0.21,1*30, 25 * 30, 50) # FPV clip
+    #stab.auto_sync_stab(0.21,1*30, 25 * 30, 50) # FPV clip
     #stab.stabilization_settings()
 
     # Visual stabilizer test
@@ -1735,7 +2278,7 @@ if __name__ == "__main__":
 
 
     #stab.renderfile(24, 63, "parkinglot_stab_3.mp4",out_size = (1920,1080))
-    stab.renderfile(0, 25, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
+    #stab.renderfile(0, 25, "mastertim_out.mp4",out_size = (1920,1080), split_screen = False, scale=1, display_preview = True)
     #stab.stabilization_settings(smooth=0.6)
     #stab.renderfile(113, 130, "nurk_stabi3.mp4",out_size = (3072,1728))
 
