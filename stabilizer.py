@@ -512,11 +512,13 @@ class Stabilizer:
 
         self.multi_sync_init()
 
-        max_sync_cost = 10 # > 10 is nogo.
-
+        max_sync_cost_tot = 10 # > 10 is nogo.
+        
 
         syncpoints = [] # save where to analyze. list of [frameindex, num_analysis_frames]
         num_frames_analyze = 30
+        
+        max_sync_cost = 10 / 30 * num_frames_analyze
         num_frames_offset = int(num_frames_analyze / 2)
         end_delay = 3 # seconds buffer zone
         end_frames = end_delay * self.fps # buffer zone
@@ -566,7 +568,13 @@ class Stabilizer:
             self.multi_sync_add_slice(frame_index, n_frames, False)
 
             if self.sync_costs[-1] > max_sync_cost:
+                print("Removing slice due to large error")
                 self.multi_sync_delete_slice(-1)
+
+            elif np.sum( (np.abs(self.transforms[-1] * self.fps) < 0.05) ) >= (0.95 * self.transforms[-1].size):
+                print("Removing slice due to lack of movement")
+                self.multi_sync_delete_slice(-1) # if more than 95% of the slice doesn't have significant movement (<3 deg/s)
+
 
 
         success = self.multi_sync_compute(max_fitting_error = max_fitting_error, debug_plots=debug_plots)
