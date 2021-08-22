@@ -609,6 +609,13 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
         self.calib_controls_layout.addWidget(self.del_frame_button)
         
+        # button for recomputing image stretching maps
+        self.process_frames_btn = QtWidgets.QPushButton("Process loaded frames")
+        self.process_frames_btn.setMinimumHeight(self.button_height)
+        self.process_frames_btn.setEnabled(False)
+        self.process_frames_btn.clicked.connect(self.calibrate_frames)
+        self.calib_controls_layout.addWidget(self.process_frames_btn)
+
         # button for auto lens calibration. TODO: Move to menu
         #self.start_lens_calibration_btn = QtWidgets.QPushButton("Start lens calibration")
         #self.start_lens_calibration_btn.setMinimumHeight(self.button_height)
@@ -743,6 +750,14 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.show_chessboard.triggered.connect(self.chessboard_func)
         filemenu.addAction(self.show_chessboard)
 
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_MediaPlay)
+        self.start_lens_calibration_btn = QtWidgets.QAction(icon, 'Start auto calibration', self)
+        self.start_lens_calibration_btn.triggered.connect(self.start_lens_calibration)
+        self.start_lens_calibration_btn.setEnabled(False)
+        filemenu.addAction(self.start_lens_calibration_btn)
+
+        
+
 
 
         self.chess_window = None
@@ -774,7 +789,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         self.video_viewer.set_video_path(path[0])
 
         self.video_viewer.next_frame()
-        #self.start_lens_calibration_btn.setEnabled(True)
+        self.start_lens_calibration_btn.setEnabled(True)
         # reset calibrator and info
         self.calibrator = calibrate_video.FisheyeCalibrator(chessboard_size=self.chessboard_size)
         self.update_calib_info()
@@ -910,6 +925,27 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
     def show_warning(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+
+
+    def add_current_frame(self):
+        print("Adding frame")
+
+        ret, self.calib_msg, corners = self.calibrator.add_calib_image(self.video_viewer.thread.frame)
+
+        if ret:
+            self.video_viewer.set_cv_frame(cv2.drawChessboardCorners(self.video_viewer.thread.frame, self.calibrator.chessboard_size,corners,True) )
+
+        self.update_calib_info()
+
+        if self.calibrator.num_images > 0:
+            self.process_frames_btn.setEnabled(True)
+
+    def remove_frame(self):
+        """Remove last calibration frame
+        """
+        self.calibrator.remove_calib_image()
+
+        self.update_calib_info()
 
     def start_lens_calibration(self):
         self.calibrator.new_calibration()
