@@ -64,6 +64,8 @@ class FisheyeCalibrator:
         # num images used in last calibration
         self.num_images_used = 0
 
+        self.num_processed_images = 0
+
         self.first_image_processed = False
         # Equal if no stretching is applied
         self.orig_dimension = np.array([0, 0])
@@ -83,6 +85,13 @@ class FisheyeCalibrator:
 
         # when loading a preset file
         self.extra_cam_info = None
+
+    def new_calibration(self):
+        self.objpoints = []
+        self.imgpoints = []
+        self.num_images = 0
+        self.num_images_used = 0
+        self.num_processed_images = 0
 
     def set_horizontal_stretch(self, new_stretch = 1):
         # For handling anamorphic or squeezed footage.
@@ -165,9 +174,8 @@ class FisheyeCalibrator:
         self.objpoints.append(self.objp)
 
         corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),self.subpix_criteria)
-        print(corners2)
-        
-        print(corners2)
+        # print(corners2)
+
 
         # horizontal scaling
 
@@ -213,8 +221,8 @@ class FisheyeCalibrator:
             raise Exception("No calibration data")
 
         # recompute only if new images added
-        if self.num_images_used == self.num_images:
-            return self.RMS_error
+        # if self.num_images_used == self.num_images:
+        #     return self.RMS_error
 
         num_corners = self.chessboard_size[0]*self.chessboard_size[1]
 
@@ -814,8 +822,8 @@ class StandardCalibrator:
             raise Exception("No calibration data")
 
         # recompute only if new images added
-        if self.num_images_used == self.num_images:
-            return self.RMS_error
+        # if self.num_images_used == self.num_images:
+        #     return self.RMS_error
 
         num_corners = self.chessboard_size[0]*self.chessboard_size[1]
 
