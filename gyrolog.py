@@ -206,6 +206,8 @@ class GyrologReader:
         self.default_filter = -1
         self.default_search_size = 10 # expected range of gyro/video offset
 
+        self.pre_filter = -1
+
         self.filename = ""
 
         # Extra settings
@@ -222,6 +224,10 @@ class GyrologReader:
         self.current_orientation_preset = ""
 
         self.filename_pattern = ""
+
+    def set_pre_filter(self, cutoff = -1):
+        # Filter is applied before orientation transformation
+        self.pre_filter = cutoff
 
     def post_init(self):
         # Run after init
@@ -313,6 +319,10 @@ class GyrologReader:
 
                     self.standard_gyro = np.copy(self.gyro)
 
+                    if self.pre_filter > 0:
+                        sosgyro = signal.butter(1, self.pre_filter, "lowpass", fs=self.gyro_sample_rate, output="sos")
+                        self.standard_gyro[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro[:,1:4], 0) # Filter along "vertical" time axis
+
                     self.apply_variant_rotation_in_place(self.standard_gyro)
 
 
@@ -374,44 +384,93 @@ class GyrologReader:
         mat = np.linalg.inv(rotmat)
         pass
 
-    def plot_gyro(self):
-        #xplot = plt.subplot(311)
+    def plot_gyro(self, blocking=False):
+        
+        
+        xplot = plt.subplot(321)
 
-        #plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,1])
-        #plt.ylabel("omega x [rad/s]")
+        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,1])
+        plt.ylabel("omega x [rad/s]")
+        plt.grid()
 
-        # plt.subplot(312, sharex=xplot)
+        plt.subplot(323, sharex=xplot)
 
-        # plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,2])
-        # plt.ylabel("omega y [rad/s]")
+        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,2])
+        plt.ylabel("omega y [rad/s]")
+        plt.grid()
 
-        # plt.subplot(313, sharex=xplot)
+        plt.subplot(325, sharex=xplot)
 
-        # plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,3])
-        # #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
-        # plt.xlabel("time [s]")
-        # plt.ylabel("omega z [rad/s]")
+        plt.plot(self.standard_gyro[:,0], self.standard_gyro[:,3])
+        #plt.plot(self.integrator.get_raw_data("t") + d2, self.integrator.get_raw_data("z"))
+        plt.xlabel("time [s]")
+        plt.ylabel("omega z [rad/s]")
+        plt.grid()
 
+        #plt.show(block=blocking)
 
-
-        #plt.show()
+        #plt.figure()
+        xplot = plt.subplot(222)
 
         N = self.standard_gyro.shape[0]
         T = (self.standard_gyro[-1,0] - self.standard_gyro[0,0]) /  N
         freq = 1/T
+
         x = self.standard_gyro[:,0]
-        y = self.standard_gyro[:,3]
+        y = self.standard_gyro[:,1]
         
         yf = fft(y)
         xf = fftfreq(N, T)[:N//2]
 
-        sosgyro = signal.butter(1, 0.0015, "lowpass", fs=freq/N, output="sos")
+        alpha = 0.7
 
-        yf = signal.sosfiltfilt(sosgyro, yf, 0) # Filter along "vertical" time axis
+        f, Pxx_den = signal.welch(y, freq, nperseg=1024)
+        plt.plot(f, Pxx_den)
+        plt.legend("x")
 
-        plt.plot(xf, 2.0/N * np.abs(yf[0:N//2]))
+        y = self.standard_gyro[:,2]
+        yf = fft(y)
+        xf = fftfreq(N, T)[:N//2]
+        
+        f, Pxx_den = signal.welch(y, freq, nperseg=1024)
+        plt.plot(f, Pxx_den)
+        plt.legend("y")
+
+        y = self.standard_gyro[:,3]
+        yf = fft(y)
+        xf = fftfreq(N, T)[:N//2]
+        
+        f, Pxx_den = signal.welch(y, freq, nperseg=1024)
+        plt.plot(f, Pxx_den)
+        plt.legend(["x", "y", "z"])
         plt.grid()
-        #plt.show()
+        plt.ylabel("Power density")
+
+        plt.subplot(224, sharex=xplot)
+        y = self.standard_gyro[:,1]
+        
+        yf = fft(y)
+        xf = fftfreq(N, T)[:N//2]
+
+        plt.plot(xf, 2.0/N * np.abs(yf[0:N//2]), alpha=alpha)
+        plt.legend("x")
+
+        y = self.standard_gyro[:,2]
+        yf = fft(y)
+        xf = fftfreq(N, T)[:N//2]
+        plt.plot(xf, 2.0/N * np.abs(yf[0:N//2]), alpha=alpha)
+        plt.legend("y")
+
+        y = self.standard_gyro[:,3]
+        yf = fft(y)
+        xf = fftfreq(N, T)[:N//2]
+        plt.plot(xf, 2.0/N * np.abs(yf[0:N//2]), alpha=alpha)
+        plt.legend(["x", "y", "z"])
+
+        plt.grid()
+        plt.ylabel("FFT")
+        plt.xlabel("Frequency [Hz]")
+        plt.show(block=blocking)
 
     def plot_acc(self):
         if type(self.acc) != type(None):

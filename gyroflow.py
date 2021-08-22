@@ -1276,6 +1276,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_as_log_button.clicked.connect(self.video_as_log_func)
         self.input_controls_layout.addWidget(self.video_as_log_button)
 
+
         explaintext = QtWidgets.QLabel("<b>Note:</b> BBL and CSV files in video folder with identical names are detected automatically.<br>If BBL doesn't work, use exported CSV file from blackbox explorer")
         explaintext.setWordWrap(True)
         explaintext.setMinimumHeight(60)
@@ -1364,6 +1365,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_lpf_control.setToolTip('Enable the filter if excessive noise is seen in the gyro data. Frequencies below the cutoff are kept, so lower value means more filtering. 50 Hz is a good starting point.')
         self.input_controls_layout.addWidget(self.input_lpf_control)
 
+
+        self.input_plot_button = QtWidgets.QPushButton("Plot and analyze gyro data")
+        self.input_plot_button.setMinimumHeight(30)
+        self.input_plot_button.clicked.connect(self.input_gyro_plot)
+        self.input_controls_layout.addWidget(self.input_plot_button)
 
         line = QtWidgets.QFrame()
         line.setFrameShape(QtWidgets.QFrame.HLine)
@@ -1990,7 +1996,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if insta360_util.isInsta360Video(self.infile_path):
             self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("Insta360 IMU metadata"))
             #self.camera_type_control.setCurrentText('smo4k')
-            self.input_lpf_control.setValue(25)
+            self.input_lpf_control.setValue(40)
 
         else: # Probably gopro
             self.gyro_log_format_select.setCurrentIndex(self.gyro_log_format_select.findData("GoPro GPMF metadata"))
@@ -2005,6 +2011,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             preset_path = "camera_presets/" + selected_text
             self.preset_path = preset_path
             self.display_preset_info()
+
 
     def display_video_info(self):
 
@@ -2077,9 +2084,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                 self.aspect_warning_text.setText("")
 
 
-
-
-
     def update_gyro_input_settings(self):
         # display/hide relevant gyro log settings
 
@@ -2117,6 +2121,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.gyro_variant_control.addItems(self.log_reader.get_variants())
             self.gyro_variant_control.setCurrentIndex(self.gyro_variant_control.findText(self.log_reader.variant))
             self.input_lpf_control.setValue(self.log_reader.default_filter)
+            self.sync_search_size.setValue(self.log_reader.default_search_size)
 
     def update_gyro_input_settings_dropdown(self):
         selected_log_format = self.gyro_log_format_select.currentData()
@@ -2163,6 +2168,30 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.update_gyro_input_settings()
+
+
+    def input_gyro_plot(self):
+        if self.use_gyroflow_data_file:
+            print("N/A for .gyroflow data file")
+            return
+
+        if not self.gyro_log_path:
+            print("No input log file")
+            return
+
+        selected_log_type = self.gyro_log_format_select.currentData()
+        logvariant = self.gyro_variant_control.currentText()
+
+        temp_log_reader = gyrolog.get_log_reader_by_name(selected_log_type)
+        temp_log_reader.set_variant(logvariant)
+        temp_log_reader.set_pre_filter(self.input_lpf_control.value())
+        success = temp_log_reader.extract_log(self.gyro_log_path)
+
+        if not success:
+            print("Log extraction failed")
+            return
+
+        temp_log_reader.plot_gyro(blocking=stabilizer.BLOCKING_PLOTS)
 
 
     def closeEvent(self, event):
@@ -2543,7 +2572,7 @@ class StabUtility(StabUtilityBarebone):
 
         super().__init__(False)
 
-        self.preview_fov_scale =2.5
+        self.preview_fov_scale = 3.0
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
@@ -2615,8 +2644,8 @@ class StabUtility(StabUtilityBarebone):
         self.preview_fov_text = QtWidgets.QLabel("FOV scale ({}):".format(self.preview_fov_scale))
         self.preview_fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.preview_fov_slider.setMinimum(8)
-        self.preview_fov_slider.setValue(25)
-        self.preview_fov_slider.setMaximum(50)
+        self.preview_fov_slider.setValue(round(self.preview_fov_scale * 10))
+        self.preview_fov_slider.setMaximum(70)
         self.preview_fov_slider.setMaximumWidth(300)
         self.preview_fov_slider.setSingleStep(1)
         self.preview_fov_slider.setTickInterval(1)

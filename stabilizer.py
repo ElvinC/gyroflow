@@ -385,7 +385,7 @@ class Stabilizer:
         return False
 
 
-    def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.02, piecewise_correction = False):
+    def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.02, piecewise_correction = False, debug_plots = True):
 
         assert len(self.transform_times) == len(self.transforms) == len(self.sync_vtimes) == len(self.sync_delays) == len(self.sync_costs)
 
@@ -395,6 +395,7 @@ class Stabilizer:
         N = len(self.transform_times)
         if N == 0:
             # no change
+            print("No valid syncpoints")
             self.new_integrator = GyroIntegrator(self.gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=self.acc_data)
         
         elif N == 1:
@@ -415,9 +416,6 @@ class Stabilizer:
             times = np.array(self.sync_vtimes)
             delays = np.array(self.sync_delays)
             sync_costs = np.array(self.sync_costs)
-
-            plt.scatter(times, delays)
-            plt.show()
 
             chosen_indices = {}
             num_chosen = 0
@@ -475,6 +473,15 @@ class Stabilizer:
             new_gyro_data = np.copy(self.gyro_data)
             new_gyro_data[:,0] = (self.integrator.get_raw_data("t") + chosen_coefs[1])/(1- chosen_coefs[0])
 
+            if debug_plots:
+                est_curve = times * chosen_coefs[0] + chosen_coefs[1]
+
+                self.plot_sync(new_gyro_data[:,0], 60, True)
+                plt.figure()
+                plt.scatter(times, delays)
+                plt.plot(times, est_curve)
+                plt.show(block=BLOCKING_PLOTS)
+
             if type(self.acc_data) != type(None):
                 new_acc_data = np.copy(self.acc_data)
                 new_acc_data[:,0] = new_gyro_data[:,0]
@@ -497,7 +504,7 @@ class Stabilizer:
         return True
 
 
-    def full_auto_sync(self, max_fitting_error):
+    def full_auto_sync(self, max_fitting_error = 0.02, debug_plots=True):
 
         if self.use_gyroflow_data_file:
             self.update_smoothing()
@@ -505,11 +512,11 @@ class Stabilizer:
 
         self.multi_sync_init()
 
-        max_sync_cost = 6 # > 6 is nogo.
+        max_sync_cost = 10 # > 10 is nogo.
 
 
         syncpoints = [] # save where to analyze. list of [frameindex, num_analysis_frames]
-        num_frames_analyze = 25
+        num_frames_analyze = 30
         num_frames_offset = int(num_frames_analyze / 2)
         end_delay = 3 # seconds buffer zone
         end_frames = end_delay * self.fps # buffer zone
@@ -522,7 +529,7 @@ class Stabilizer:
 
         min_slices = 4
 
-        max_slices = 8
+        max_slices = 9
 
 
 
@@ -558,18 +565,21 @@ class Stabilizer:
         for frame_index, n_frames in syncpoints:
             self.multi_sync_add_slice(frame_index, n_frames, False)
 
-        success = self.multi_sync_compute(max_fitting_error = max_fitting_error)
+            if self.sync_costs[-1] > max_sync_cost:
+                self.multi_sync_delete_slice(-1)
+
+
+        success = self.multi_sync_compute(max_fitting_error = max_fitting_error, debug_plots=debug_plots)
+
+        if not success:
+            success = self.multi_sync_compute(max_fitting_error = max_fitting_error * 2, debug_plots=debug_plots) # larger bound
+
         if success:
             print("Auto sync complete")
             return True
         else:
             print("Auto sync failed to converge. Sorry about that")
             return False
-
-
-        
-
-
 
 
     def plot_sync(self, corrected_times, slicelength, show=False):
