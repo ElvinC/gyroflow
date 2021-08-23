@@ -163,8 +163,18 @@ class Stabilizer:
         self.width, self.height = self.process_dimension
 
         # Sync stuff
+
+        # No longer used:
         self.d1 = 0
         self.d2 = 0
+
+        # Syncpoints
+        self.transform_times = []
+        self.transforms = []
+        self.sync_inputs = [] # consists of pairs of (frame_start, slice_length)
+        self.sync_vtimes = []
+        self.sync_delays = []
+        self.sync_costs = []
 
     def set_initial_offset(self, initial_offset):
         self.initial_offset = initial_offset
@@ -355,6 +365,7 @@ class Stabilizer:
     def multi_sync_init(self):
         self.transform_times = []
         self.transforms = []
+        self.sync_inputs = [] # consists of pairs of (frame_start, slice_length)
         self.sync_vtimes = []
         self.sync_delays = []
         self.sync_costs = []
@@ -363,12 +374,25 @@ class Stabilizer:
     def multi_sync_add_slice(self, slice_frame_start, slicelength = 50, debug_plots = True):
         v1 = (slice_frame_start + slicelength/2) / self.fps
         d1, cost1, times1, transforms1 = self.optical_flow_comparison(slice_frame_start, slicelength, debug_plots = debug_plots)
+        N = len(self.sync_inputs)
+        # Find where to insert
+        idx = 0
+        if N == 0:
+            pass
+        elif slice_frame_start > self.sync_inputs[-1][0]:
+            idx = N
+        else:
+            for i in range(len(self.sync_inputs)):
+                if self.sync_inputs[i][0] > slice_frame_start:
+                    idx = i
+                    break
 
-        self.transform_times.append(times1)
-        self.transforms.append(transforms1)
-        self.sync_vtimes.append(v1)
-        self.sync_delays.append(d1)
-        self.sync_costs.append(cost1)
+        self.sync_inputs.insert(idx, (slice_frame_start, slicelength))
+        self.transform_times.insert(idx, times1)
+        self.transforms.insert(idx, transforms1)
+        self.sync_vtimes.insert(idx, v1)
+        self.sync_delays.insert(idx, d1)
+        self.sync_costs.insert(idx, cost1)
 
         return cost1
     
@@ -376,6 +400,7 @@ class Stabilizer:
         if len(self.transform_times) > idx:
             del self.transform_times[idx]
             del self.transforms[idx]
+            del self.sync_inputs[idx]
             del self.sync_vtimes[idx]
             del self.sync_delays[idx]
             del self.sync_costs[idx]
@@ -384,6 +409,12 @@ class Stabilizer:
 
         return False
 
+    def multi_sync_change_offset(self, idx, newoffset=0):
+        if len(self.transform_times) > idx:
+            self.sync_delays[idx] = newoffset
+            return True
+
+        return False
 
     def multi_sync_compute(self, max_cost = 5, max_fitting_error = 0.02, piecewise_correction = False, debug_plots = True):
 
@@ -518,7 +549,7 @@ class Stabilizer:
         syncpoints = [] # save where to analyze. list of [frameindex, num_analysis_frames]
         num_frames_analyze = 30
         
-        max_sync_cost = 10 / 30 * num_frames_analyze
+        max_sync_cost = max_sync_cost_tot / 30 * num_frames_analyze
         num_frames_offset = int(num_frames_analyze / 2)
         end_delay = 3 # seconds buffer zone
         end_frames = end_delay * self.fps # buffer zone
@@ -1271,7 +1302,7 @@ class Stabilizer:
                     frame_out = cv2.rectangle(frame_out, topleft,
                                                          bottomright, (255,0,0), 3)
 
-                    frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({}) | tau={:.1f}".format(__version__, frame_num/self.fps, frame_num, self.last_smooth),
+                    frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({})".format(__version__, frame_num/self.fps, frame_num),
                                             (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
 
 

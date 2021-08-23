@@ -22,6 +22,7 @@ import stabilizer
 import smoothing_algos
 from datetime import datetime
 import gyrolog
+from UI_elements import sync_ui
 
 # area for environment variables
 try:
@@ -1385,6 +1386,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_video_rotate_select.addItem("90° Clockwise", cv2.ROTATE_90_CLOCKWISE) # 0
         self.input_video_rotate_select.addItem("90° Counterclockwise", cv2.ROTATE_90_COUNTERCLOCKWISE) # 2
         self.input_video_rotate_select.addItem("180°", cv2.ROTATE_180) # 1
+        self.input_video_rotate_select.currentIndexChanged.connect(self.reset_stab)
         self.input_controls_layout.addWidget(self.input_video_rotate_select)
         
         data =  [(name, name) for name in gyrolog.get_log_reader_names()]
@@ -1418,6 +1420,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fpv_tilt_control.setMinimum(-90)
         self.fpv_tilt_control.setMaximum(180)
         self.fpv_tilt_control.setValue(0)
+        self.fpv_tilt_control.valueChanged.connect(self.reset_stab)
 
 
         # Only show when blackbox file is loaded
@@ -1441,6 +1444,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.gyro_variant_text)
 
         self.gyro_variant_control = QtWidgets.QComboBox()
+        self.gyro_variant_control.currentIndexChanged.connect(self.reset_stab)
         self.gyro_variant_control.clear()
         
         self.log_reader = gyrolog.GyroflowGyroLog()
@@ -1460,6 +1464,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_lpf_control.setMaximum(1000)
         self.input_lpf_control.setValue(-1)
         self.input_lpf_control.setToolTip('Enable the filter if excessive noise is seen in the gyro data. Frequencies below the cutoff are kept, so lower value means more filtering. 50 Hz is a good starting point.')
+        self.input_lpf_control.valueChanged.connect(self.reset_stab)
         self.input_controls_layout.addWidget(self.input_lpf_control)
 
 
@@ -1562,20 +1567,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.fpv_tilt_control.setValue(0)
 
 
-
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Auto sync timestamp 1 (video time in seconds. Shaky parts of video work best)"))
-        self.sync1_control = QtWidgets.QDoubleSpinBox(self)
-        self.sync1_control.setMinimum(0)
-        self.sync1_control.setMaximum(10000)
-        self.sync1_control.setValue(5)
-        self.sync_controls_layout.addWidget(self.sync1_control)
-
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Auto sync timestamp 2"))
-        self.sync2_control = QtWidgets.QDoubleSpinBox(self)
-        self.sync2_control.setMinimum(0)
-        self.sync2_control.setMaximum(10000)
-        self.sync2_control.setValue(30)
-        self.sync_controls_layout.addWidget(self.sync2_control)
+        #self.sync_controls_layout.addWidget(QtWidgets.QLabel("Auto sync timestamp 2"))
+        #self.sync2_control = QtWidgets.QDoubleSpinBox(self)
+        #self.sync2_control.setMinimum(0)
+        #self.sync2_control.setMaximum(10000)
+        #self.sync2_control.setValue(30)
+        #self.sync_controls_layout.addWidget(self.sync2_control)
 
         # How many frames to analyze using optical flow each slice
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Number of frames to analyze per slice using optical flow:"))
@@ -1627,20 +1624,41 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         # slider for adjusting non linear crop
-        self.fov_text = QtWidgets.QLabel("FOV scale (1.5):")
-        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
-        self.fov_slider.setMinimum(10)
-        self.fov_slider.setValue(15)
-        self.fov_slider.setMaximum(40)
-        self.fov_slider.setSingleStep(1)
-        self.fov_slider.setTickInterval(1)
-        self.fov_slider.valueChanged.connect(self.fov_scale_changed)
-        self.fov_text.setVisible(False)
-        self.fov_slider.setVisible(False)
+        #self.fov_text = QtWidgets.QLabel("FOV scale (1.5):")
+        #self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        #self.fov_slider.setMinimum(10)
+        #self.fov_slider.setValue(15)
+        #self.fov_slider.setMaximum(40)
+        #self.fov_slider.setSingleStep(1)
+        #self.fov_slider.setTickInterval(1)
+        #self.fov_slider.valueChanged.connect(self.fov_scale_changed)
+        #self.fov_text.setVisible(False)
+        #self.fov_slider.setVisible(False)
 
 
-        self.sync_controls_layout.addWidget(self.fov_text)
-        self.sync_controls_layout.addWidget(self.fov_slider)
+        #self.sync_controls_layout.addWidget(self.fov_text)
+        #self.sync_controls_layout.addWidget(self.fov_slider)
+
+
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Sync timestamp (video time in seconds)"))
+        self.sync1_control = QtWidgets.QDoubleSpinBox(self)
+        self.sync1_control.setMinimum(0)
+        self.sync1_control.setMaximum(10000)
+        self.sync1_control.setValue(5)
+        self.sync_controls_layout.addWidget(self.sync1_control)
+
+        # button for (re)computing sync
+        self.add_sync_button_barebone = QtWidgets.QPushButton("Add sync at specified timestamp")
+        self.add_sync_button_barebone.setMinimumHeight(30)
+        self.add_sync_button_barebone.clicked.connect(self.add_sync_barebone_handler)
+        self.sync_controls_layout.addWidget(self.add_sync_button_barebone)
+
+
+
+        self.multiSyncUI = sync_ui.MultiSyncUI(None)
+        self.sync_controls_layout.addWidget(self.multiSyncUI)
+
+        #self.multiSyncUI.update_from_stab_data()
 
         self.sync_debug_select = QtWidgets.QCheckBox("Display sync plots")
         self.sync_debug_select.setChecked(False)
@@ -1652,36 +1670,36 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.recompute_stab_button.clicked.connect(self.recompute_stab)
         self.sync_controls_layout.addWidget(self.recompute_stab_button)
 
-        explaintext = QtWidgets.QLabel("<b>Note:</b> Check console for info after clicking. A number of plots will appear during the" \
-                                        " process showing the difference between gyro and optical flow. Just close these after you're done looking at them.")
-        explaintext.setWordWrap(True)
-        explaintext.setMinimumHeight(60)
-        self.sync_controls_layout.addWidget(explaintext)
+        #explaintext = QtWidgets.QLabel("<b>Note:</b> Check console for info after clicking. A number of plots will appear during the" \
+        #                                " process showing the difference between gyro and optical flow. Just close these after you're done looking at them.")
+        #explaintext.setWordWrap(True)
+        #explaintext.setMinimumHeight(60)
+        #self.sync_controls_layout.addWidget(explaintext)
 
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 1"))
-        self.d1_control = QtWidgets.QDoubleSpinBox(self)
-        self.d1_control.setDecimals(5)
-        self.d1_control.setMinimum(-1000)
-        self.d1_control.setMaximum(1000)
-        self.d1_control.setValue(0)
-        self.d1_control.setSingleStep(0.01)
-        self.sync_controls_layout.addWidget(self.d1_control)
+        #self.sync_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 1"))
+        #self.d1_control = QtWidgets.QDoubleSpinBox(self)
+        #self.d1_control.setDecimals(5)
+        #self.d1_control.setMinimum(-1000)
+        #self.d1_control.setMaximum(1000)
+        #self.d1_control.setValue(0)
+        #self.d1_control.setSingleStep(0.01)
+        #self.sync_controls_layout.addWidget(self.d1_control)
 
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 2"))
-        self.d2_control = QtWidgets.QDoubleSpinBox(self)
-        self.d2_control.setDecimals(5)
-        self.d2_control.setMinimum(-1000)
-        self.d2_control.setMaximum(1000)
-        self.d2_control.setValue(0)
-        self.d2_control.setSingleStep(0.01)
-        self.sync_controls_layout.addWidget(self.d2_control)
+        #self.sync_controls_layout.addWidget(QtWidgets.QLabel("Delay for sync 2"))
+        #self.d2_control = QtWidgets.QDoubleSpinBox(self)
+        #self.d2_control.setDecimals(5)
+        #self.d2_control.setMinimum(-1000)
+        #self.d2_control.setMaximum(1000)
+        #self.d2_control.setValue(0)
+        #self.d2_control.setSingleStep(0.01)
+        #self.sync_controls_layout.addWidget(self.d2_control)
 
 
-        self.sync_correction_button = QtWidgets.QPushButton("Sync correction/update smoothness")
-        self.sync_correction_button.setMinimumHeight(30)
-        self.sync_correction_button.setEnabled(False)
-        self.sync_correction_button.clicked.connect(self.correct_sync)
-        self.sync_controls_layout.addWidget(self.sync_correction_button)
+        #self.sync_correction_button = QtWidgets.QPushButton("Sync correction/update smoothness")
+        #self.sync_correction_button.setMinimumHeight(30)
+        #self.sync_correction_button.setEnabled(False)
+        #self.sync_correction_button.clicked.connect(self.correct_sync)
+        #self.sync_controls_layout.addWidget(self.sync_correction_button)
 
 
        # Select method for doing low-pass filtering
@@ -1861,7 +1879,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_audio.setChecked(True)
         self.export_controls_layout.addWidget(self.export_audio)
 
-        self.export_debug_text = QtWidgets.QCheckBox("Render with debug info")
+        self.export_debug_text = QtWidgets.QCheckBox("Render with debug info and logging")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
@@ -2033,6 +2051,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.display_video_info()
 
+        # Reset the stabilizer
+        self.reset_stab()
+
         #no_suffix = os.path.splitext(self.infile_path)[0]
         # check if gyroflow data file exists
         gyroflow_data_path = stabilizer.find_gyroflow_data_file(self.infile_path)
@@ -2100,6 +2121,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             #self.camera_type_control.setCurrentText('hero8')
             self.input_lpf_control.setValue(-1)
 
+        # Reset the stabilizer
+        self.reset_stab()
+
         self.update_gyro_input_settings()
 
     def preset_search_handler(self):
@@ -2107,6 +2131,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if selected_text in self.preset_trunc_paths:
             preset_path = "camera_presets/" + selected_text
             self.preset_path = preset_path
+            self.reset_stab()
             self.display_preset_info()
 
 
@@ -2126,8 +2151,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.out_width_control.setValue(self.video_info_dict["width"])
         self.out_height_control.setValue(self.video_info_dict["height"])
         self.export_stoptime.setValue(int(self.video_info_dict["time"])) # round down
-        self.sync1_control.setValue(5)
-        self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
+        #self.sync1_control.setValue(5)
+        #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
         self.export_bitrate.setValue(max(int(self.video_info_dict["bitrate"]) / 1000, 20))
         
 
@@ -2141,6 +2166,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
         #print(path)
         self.preset_path = path[0]
+
+        # Reset the stabilizer
+        self.reset_stab()
+
 
         self.display_preset_info()
 
@@ -2223,6 +2252,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def update_gyro_input_settings_dropdown(self):
         selected_log_format = self.gyro_log_format_select.currentData()
 
+        self.reset_stab()
+
         if self.log_reader:
             if self.log_reader.name != selected_log_format:
                 self.log_reader = gyrolog.get_log_reader_by_name(selected_log_format)
@@ -2249,9 +2280,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.gyro_log_path = path[0]
 
+        
+
         if self.gyro_log_path.endswith(".gyroflow"):
             self.use_gyroflow_data_file = True
         else:
+            # Reset the stabilizer
+            self.reset_stab()
+
             self.use_gyroflow_data_file = False
 
             log_guess, log_type, variant = gyrolog.guess_log_type_from_log(self.gyro_log_path)
@@ -2289,6 +2325,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         temp_log_reader.plot_gyro(blocking=stabilizer.BLOCKING_PLOTS)
+
+    def reset_stab(self):
+        #print("Reset stabilization class")
+        if type(self.stab) != type(None):
+            self.stab.release()
+            self.stab = None
 
 
     def closeEvent(self, event):
@@ -2342,7 +2384,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.show_error("Hey, looks like you forgot to open a video file and/or camera calibration preset. I guess this button could've been grayed out, but whatever.")
             self.export_button.setEnabled(False)
             self.export_keyframes_button.setEnabled(False)
-            self.sync_correction_button.setEnabled(False)
+            #self.sync_correction_button.setEnabled(False)
             self.update_smoothness_button.setEnabled(False)
             return False
 
@@ -2352,18 +2394,58 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         
         return True
     
+    def add_sync_barebone_handler(self):
+        self.add_sync_at_time(self.sync1_control.value())
+
+    def add_sync_at_time(self, time=0):
+        if not self.check_inputs_valid():
+            return
+
+        fov_val = 1.4
+        #smoothness_time_constant = self.get_smoothness_timeconstant()
+        OF_slice_length = self.OF_frames_control.value()
+
+        gyro_lpf = self.input_lpf_control.value()
+
+        selected_log_type = self.gyro_log_format_select.currentData()
+        uptilt = self.fpv_tilt_control.value()
+        print("Going skiing?" if uptilt < 0 else "That's a lotta angle" if uptilt > 70 else "{} degree gyro/camera angle".format(uptilt))
+
+        rotate_code = self.input_video_rotate_select.currentData()
+        logvariant=self.gyro_variant_control.currentText()
+
+        if self.use_gyroflow_data_file:
+            if type(self.stab) == type(None):
+                self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
+        elif type(self.stab) == type(None):
+            self.stab = stabilizer.MultiStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
+                                            gyro_lpf_cutoff = gyro_lpf, logtype=selected_log_type, logvariant=logvariant, video_rotation=rotate_code)
+
+            self.stab.multi_sync_init()
+
+            self.multiSyncUI.update_stab_instance(self.stab)
+
+
+        self.stab.set_initial_offset(self.offset_control.value())
+        self.stab.set_rough_search(self.sync_search_size.value())
+        self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
+
+        if time * self.stab.fps + OF_slice_length + 10 > self.stab.num_frames:
+            print("Sync not allowed here")
+            return False
+
+        self.stab.multi_sync_add_slice(time * self.stab.fps, OF_slice_length, debug_plots = False)
+
+        self.multiSyncUI.update_from_stab_data()
+
     def auto_sync_start(self):
         if not self.check_inputs_valid():
             return
 
-        if not self.check_inputs_valid():
-            return
 
-
-        fov_val = self.fov_slider.value() / 10
+        fov_val = 1.4
         #smoothness_time_constant = self.get_smoothness_timeconstant()
         OF_slice_length = self.OF_frames_control.value()
-
 
         #cap = cv2.VideoCapture(self.infile_path)
         #width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -2374,7 +2456,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #cap.release()
 
         gyro_lpf = self.input_lpf_control.value()
-
 
         selected_log_type = self.gyro_log_format_select.currentData()
         uptilt = self.fpv_tilt_control.value()
@@ -2389,6 +2470,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         else:
             self.stab = stabilizer.MultiStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
                                                gyro_lpf_cutoff = gyro_lpf, logtype=selected_log_type, logvariant=logvariant, video_rotation=rotate_code)
+
+            self.multiSyncUI.update_stab_instance(self.stab)
 
         self.stab.set_initial_offset(self.offset_control.value())
         self.stab.set_rough_search(self.sync_search_size.value())
@@ -2405,12 +2488,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         print("Finished computing")
 
+        self.multiSyncUI.update_from_stab_data()
+
         #self.recompute_stab_button.setText("Recompute sync")
         self.export_button.setEnabled(True)
         self.export_keyframes_button.setEnabled(True)
 
         # Show estimated delays in UI
-        self.sync_correction_button.setEnabled(True)
+        #self.sync_correction_button.setEnabled(True)
         self.update_smoothness_button.setEnabled(True)
         #self.d1_control.setValue(self.stab.d1)
         #self.d2_control.setValue(self.stab.d2)
@@ -2428,8 +2513,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if not self.check_inputs_valid():
             return
 
-
-        fov_val = self.fov_slider.value() / 10
+        fov_val = 1.4
         #smoothness_time_constant = self.get_smoothness_timeconstant()
         OF_slice_length = self.OF_frames_control.value()
 
@@ -2442,14 +2526,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         cap.release()
 
-        sync1_frame = int(self.sync1_control.value() * fps)
-        sync2_frame = int(self.sync2_control.value() * fps)
+        #sync1_frame = int(self.sync1_control.value() * fps)
+        #sync2_frame = int(self.sync2_control.value() * fps)
 
         gyro_lpf = self.input_lpf_control.value()
 
-        if max(sync1_frame, sync2_frame) + OF_slice_length + 5 > num_frames:
-            self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
-            return
+        #if max(sync1_frame, sync2_frame) + OF_slice_length + 5 > num_frames:
+        #    self.show_error("You're trying to analyze frames after the end of video. Video length: {} s, latest allowable sync time: {}".format(num_frames/fps, (num_frames - OF_slice_length-1)/fps))
+        #    return
 
 
         selected_log_type = self.gyro_log_format_select.currentData()
@@ -2466,21 +2550,23 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.use_gyroflow_data_file:
             if type(self.stab) == type(None):
                 self.stab = stabilizer.Stabilizer(self.infile_path,gyroflow_file=self.gyro_log_path)
-        else:
+        elif type(self.stab) == type(None):
             self.stab = stabilizer.MultiStabilizer(self.infile_path, self.preset_path, self.gyro_log_path, fov_scale=fov_val, cam_angle_degrees=uptilt,
                                                gyro_lpf_cutoff = gyro_lpf, logtype=selected_log_type, logvariant=logvariant, video_rotation=rotate_code)
 
-        self.stab.set_initial_offset(self.offset_control.value())
-        self.stab.set_rough_search(self.sync_search_size.value())
-        self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
+        #self.stab.set_initial_offset(self.offset_control.value())
+        #self.stab.set_rough_search(self.sync_search_size.value())
+        #self.stab.set_num_frames_skipped(self.num_frames_skipped_control.value())
 
-        print("Starting sync. sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
-                self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
+        #print("Starting sync. sync1: {} (frame {}), sync2: {} (frame {}), OF slices of {} frames".format(
+        #        self.sync1_control.value(), sync1_frame, self.sync2_control.value(), sync2_frame, OF_slice_length))
 
 
         self.stab.set_smoothing_algo(self.stab_algo_instance_current)
-        self.stab.auto_sync_stab(sync1_frame, sync2_frame,
-                                 OF_slice_length, debug_plots=self.sync_debug_select.isChecked())
+        #self.stab.auto_sync_stab(sync1_frame, sync2_frame,
+        #                         OF_slice_length, debug_plots=self.sync_debug_select.isChecked())
+
+        self.stab.multi_sync_compute(debug_plots=self.sync_debug_select.isChecked())
 
         print("Finished computing")
 
@@ -2490,23 +2576,23 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_keyframes_button.setEnabled(True)
 
         # Show estimated delays in UI
-        self.sync_correction_button.setEnabled(True)
+        #self.sync_correction_button.setEnabled(True)
         self.update_smoothness_button.setEnabled(True)
-        self.d1_control.setValue(self.stab.d1)
-        self.d2_control.setValue(self.stab.d2)
+        #self.d1_control.setValue(self.stab.d1)
+        #self.d2_control.setValue(self.stab.d2)
 
         self.stab.set_map_func_scale(self.preview_fov_scale)
 
         self.analyzed = True
 
 
-    def correct_sync(self):
-        d1 = self.d1_control.value()
-        d2 = self.d2_control.value()
-        #smoothness = self.smooth_slider.value() / 100
-        self.stab.set_smoothing_algo(self.stab_algo_instance_current)
-        self.stab.manual_sync_correction(d1, d2)
-        print("Finished computing")
+    #def correct_sync(self):
+    #    d1 = self.d1_control.value()
+    #    d2 = self.d2_control.value()
+    #    #smoothness = self.smooth_slider.value() / 100
+    #    self.stab.set_smoothing_algo(self.stab_algo_instance_current)
+    #    self.stab.manual_sync_correction(d1, d2)
+    #    print("Finished computing")
 
     def update_smoothness(self):
         self.stab.set_smoothing_algo(self.stab_algo_instance_current)
@@ -2716,16 +2802,22 @@ class StabUtility(StabUtilityBarebone):
         self.info_text = QtWidgets.QLabel("[info]")
         self.calib_controls_layout.addWidget(self.info_text)
 
-        # button for recomputing image stretching maps
-        self.add_sync1_button = QtWidgets.QPushButton("Sync 1 here")
-        self.add_sync1_button.setMinimumHeight(self.button_height)
-        self.add_sync1_button.clicked.connect(self.synchere1)
-        self.calib_controls_layout.addWidget(self.add_sync1_button)
 
-        self.add_sync2_button = QtWidgets.QPushButton("Sync 2 here")
-        self.add_sync2_button.setMinimumHeight(self.button_height)
-        self.add_sync2_button.clicked.connect(self.synchere2)
-        self.calib_controls_layout.addWidget(self.add_sync2_button)
+        self.add_sync_button = QtWidgets.QPushButton("Add sync here")
+        self.add_sync_button.setMinimumHeight(self.button_height)
+        self.add_sync_button.clicked.connect(self.add_sync_here)
+        self.calib_controls_layout.addWidget(self.add_sync_button)
+
+        # button for recomputing image stretching maps
+        #self.add_sync1_button = QtWidgets.QPushButton("Sync 1 here")
+        #self.add_sync1_button.setMinimumHeight(self.button_height)
+        #self.add_sync1_button.clicked.connect(self.synchere1)
+        #self.calib_controls_layout.addWidget(self.add_sync1_button)
+
+        #self.add_sync2_button = QtWidgets.QPushButton("Sync 2 here")
+        #self.add_sync2_button.setMinimumHeight(self.button_height)
+        #self.add_sync2_button.clicked.connect(self.synchere2)
+        #self.calib_controls_layout.addWidget(self.add_sync2_button)
 
         self.trim_start_button = QtWidgets.QPushButton("Trim start")
         self.trim_start_button.setMinimumHeight(self.button_height)
@@ -2797,7 +2889,7 @@ class StabUtility(StabUtilityBarebone):
 
 
         self.recompute_stab_button.clicked.connect(self.update_player_maps)
-        self.sync_correction_button.clicked.connect(self.update_player_maps)
+        #self.sync_correction_button.clicked.connect(self.update_player_maps)
 
         icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileLinkIcon)
         self.open_preset = QtWidgets.QAction(icon, 'Open calibration preset', self)
@@ -2845,13 +2937,18 @@ class StabUtility(StabUtilityBarebone):
     def show_warning(self, msg):
         QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
 
-    def synchere1(self):
-        self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
-        #print(self.video_viewer.get_current_timestamp())
+    #def synchere1(self):
+    #    self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
+    #    #print(self.video_viewer.get_current_timestamp())
 
-    def synchere2(self):
-        self.sync2_control.setValue(self.video_viewer.get_current_timestamp())
-        #print(self.video_viewer.get_current_timestamp())
+    #def synchere2(self):
+    #    self.sync2_control.setValue(self.video_viewer.get_current_timestamp())
+    #    #print(self.video_viewer.get_current_timestamp())
+
+    def add_sync_here(self):
+        timestamp = self.video_viewer.get_current_timestamp()
+        self.add_sync_at_time(timestamp)
+        
 
     def trimstart(self):
         self.export_starttime.setValue(self.video_viewer.get_current_timestamp())
