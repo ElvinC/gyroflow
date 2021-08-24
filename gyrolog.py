@@ -1250,6 +1250,7 @@ def guess_log_type_from_log(logfile, check_data = False):
 if __name__ == "__main__":
 
     tests = [
+        "test_clips/badbbl.bbl",
         "test_clips/Runcam/gyroDate0006.csv"
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl",
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/gyroDate0010.csv",
@@ -1260,10 +1261,11 @@ if __name__ == "__main__":
     #reader.extract_log("C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl")
     #reader.plot_gyro()
 
-    reader = RuncamData()
-    reader.set_variant("iFlight GOCam GR")
-    reader.extract_log("test_clips/Runcam/gyroDate0029.csv")
-    reader.standard_gyro[:,0] += 80-57.16
+    #reader = RuncamData()
+    success, logtype, variant = guess_log_type_from_log(tests[0])
+    reader = get_log_reader_by_name(logtype)
+    reader.set_variant(variant)
+    reader.extract_log(tests[0])
     reader.plot_gyro()
     plt.show()
     exit()

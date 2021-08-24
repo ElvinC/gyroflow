@@ -128,6 +128,8 @@ class BlackboxExtractor:
             self.final_acc_data = np.array(self.final_acc_data, dtype=np.float64)
             self.final_acc_data[:,0] /= 1000000
             self.final_acc_data[:,1:] *= self.acc_scale
+        else:
+            self.final_acc_data = None
 
         # rough gyro rate assumed to be constant
 

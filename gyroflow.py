@@ -2329,6 +2329,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def reset_stab(self):
         #print("Reset stabilization class")
         if type(self.stab) != type(None):
+            self.multiSyncUI.reset()
             self.stab.release()
             self.stab = None
 

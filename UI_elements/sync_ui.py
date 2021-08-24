@@ -136,6 +136,10 @@ class MultiSyncList(QtWidgets.QListWidget):
     def has_valid_stab(self):
         return type(self.stab) != type(None)
 
+    def reset(self):
+        self.stab = None
+        self.clear()
+
 class MultiSyncUI(QtWidgets.QWidget):
     def __init__(self, stab=None):
         super().__init__()
@@ -187,6 +191,10 @@ class MultiSyncUI(QtWidgets.QWidget):
     def update_from_stab_data(self):
         # first, delete everything
         self.sync_list.update_from_stab_data()
+
+    def reset(self):
+        self.sync_list.reset()
+        self.stab = None
 
             
 
