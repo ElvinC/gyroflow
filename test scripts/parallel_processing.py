@@ -12,9 +12,6 @@ import cv2
 from calibrate_video import FisheyeCalibrator, StandardCalibrator
 
 
-
-
-
 def compute_cost(a,b,offset):
     c = (a + offset)* (b -offset) * -1 * a
     return sum(c)
@@ -27,7 +24,6 @@ def process_chunk(a,b,chunk):
         costs[i] = compute_cost(a,b,chunk[i])
 
     return costs
-
 
 
 def main():
@@ -82,7 +78,6 @@ def video_speed():
 
     undistort = FisheyeCalibrator()
     undistort.load_calibration_json("../camera_presets\RunCam\DEV_Runcam_5_Orange_4K_30FPS_XV_16by9_stretched.json", True)
-
 
 
     # Create a VideoCapture object and read from input file
