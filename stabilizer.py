@@ -20,6 +20,7 @@ from vidgear.gears import WriteGear
 from vidgear.gears import helper as vidgearHelper
 import gyrolog
 import json
+import multiprocessing as mp
 from _version import __version__
 
 from scipy import signal, interpolate
@@ -534,22 +535,9 @@ class Stabilizer:
         self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
         return True
 
+    def get_recommended_syncpoints(self, num_frames_analyze):
+        syncpoints = []
 
-    def full_auto_sync(self, max_fitting_error = 0.02, debug_plots=True):
-
-        if self.use_gyroflow_data_file:
-            self.update_smoothing()
-            return
-
-        self.multi_sync_init()
-
-        max_sync_cost_tot = 10 # > 10 is nogo.
-        
-
-        syncpoints = [] # save where to analyze. list of [frameindex, num_analysis_frames]
-        num_frames_analyze = 30
-        
-        max_sync_cost = max_sync_cost_tot / 30 * num_frames_analyze
         num_frames_offset = int(num_frames_analyze / 2)
         end_delay = 3 # seconds buffer zone
         end_frames = end_delay * self.fps # buffer zone
@@ -563,8 +551,6 @@ class Stabilizer:
         min_slices = 4
 
         max_slices = 9
-
-
 
         if vid_length < 4: # only one sync
             syncpoints.append([5, max(60, int(num_frames-5-self.fps)) ])
@@ -591,7 +577,25 @@ class Stabilizer:
             for i in range(num_syncs):
                 syncpoints.append([round(first_index + i * inter_frames_actual), num_frames_analyze])
 
+        return syncpoints
+
+    def full_auto_sync(self, max_fitting_error = 0.02, debug_plots=True):
+
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
+        self.multi_sync_init()
+
+        max_sync_cost_tot = 10 # > 10 is nogo.
+        num_frames_analyze = 30
+        syncpoints = self.get_recommended_syncpoints(num_frames_analyze)
+         # save where to analyze. list of [frameindex, num_analysis_frames]
+        
+        max_sync_cost = max_sync_cost_tot / 30 * num_frames_analyze
+        
         # Analyze these slices
+        num_syncs = len(syncpoints)
 
         print(f"Analyzing {num_syncs} slices")
 
@@ -607,7 +611,6 @@ class Stabilizer:
                 self.multi_sync_delete_slice(-1) # if more than 95% of the slice doesn't have significant movement (<3 deg/s)
 
 
-
         success = self.multi_sync_compute(max_fitting_error = max_fitting_error, debug_plots=debug_plots)
 
         if not success:
@@ -619,6 +622,45 @@ class Stabilizer:
         else:
             print("Auto sync failed to converge. Sorry about that")
             return False
+
+
+    def full_auto_sync_parallel(self, max_fitting_error = 0.02, debug_plots = True):
+        # TODO: Figure out why this fails
+        
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
+        self.multi_sync_init()
+
+        max_sync_cost_tot = 10 # > 10 is nogo.
+        num_frames_analyze = 30
+        syncpoints = self.get_recommended_syncpoints(num_frames_analyze)
+         # save where to analyze. list of [frameindex, num_analysis_frames]
+        
+        max_sync_cost = max_sync_cost_tot / 30 * num_frames_analyze
+        
+        # Analyze these slices
+        num_syncs = len(syncpoints)
+
+        print(f"Analyzing {num_syncs} slices in parallel")
+
+        # Analyze in parallel
+
+        n_proc = num_syncs # max about 10, should be fine
+
+        with mp.Pool(processes=n_proc) as pool:
+            # starts the sub-processes without blocking
+            # pass the chunk to each worker process
+            proc_results = [pool.apply_async(self.optical_flow_comparison_parallel,
+                                            args=(spoint[0],spoint[1],))
+                            for spoint in syncpoints]
+            # blocks until all results are fetched
+            result_chunks = [r.get() for r in proc_results]
+
+
+        print(result_chunks)
+
 
 
     def plot_sync(self, corrected_times, slicelength, show=False):
@@ -770,36 +812,126 @@ class Stabilizer:
                 roteul = None
                 smallest_mag = 1000
 
-                self.use_essential_matrix = True
+                try:
+                    R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
 
-                if self.use_essential_matrix:
-                    try:
-                        R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+                    rot1 = Rotation.from_matrix(R1)
+                    rot2 = Rotation.from_matrix(R2)
 
-                        rot1 = Rotation.from_matrix(R1)
-                        rot2 = Rotation.from_matrix(R2)
+                    if rot1.magnitude() < rot2.magnitude():
+                        roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
+                    else:
+                        roteul = rot2.as_rotvec() # as_euler("xyz")
+                except:
+                    print("Couldn't recover motion for this frame")
+                    roteul = np.array([0,0,0])
 
-                        if rot1.magnitude() < rot2.magnitude():
-                            roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
-                        else:
-                            roteul = rot2.as_rotvec() # as_euler("xyz")
-                    except:
-                        print("Couldn't recover motion for this frame")
-                        roteul = np.array([0,0,0])
-
-                #m, inliers = cv2.estimateAffine2D(src_pts, dst_pts)
-                #dx = m[0,2]
-                #dy = m[1,2]
-                # Extract rotation angle
-                #da = np.arctan2(m[1,0], m[0,0])
-                #transforms.append([dx,dy,da])
                 transforms.append(list(roteul/self.num_frames_skipped))
-
 
                 prev_gray = curr_gray
 
             else:
                 print("Frame {}".format(i))
+
+        transforms = np.array(transforms)
+        estimated_offset, cost = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
+        return estimated_offset, cost, frame_times, transforms
+
+
+    def optical_flow_comparison_parallel(self, start_frame=0, analyze_length = 50, debug_plots = False):
+        frame_times = []
+        frame_idx = []
+        transforms = []
+        prev_pts_lst = []
+        curr_pts_lst = []
+
+        cap = cv2.VideoCapture(self.videofile)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        time.sleep(0.05)
+
+
+        # Read first frame
+        _, prev = cap.read()
+        if self.do_video_rotation:
+            prev = cv2.rotate(prev, self.video_rotation_code)
+        prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
+        if self.undistort.image_is_stretched():
+            prev_gray = cv2.resize(prev_gray, self.process_dimension)
+
+        for i in range(analyze_length):
+            prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
+
+            succ, curr = cap.read()
+            if self.do_video_rotation:
+                curr = cv2.rotate(curr, self.video_rotation_code)
+
+            frame_id = (int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
+            frame_time = (cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
+
+            #if i % 10 == 0:
+            #    print("Analyzing frame: {}/{}".format(i,analyze_length))
+
+            if succ and i % self.num_frames_skipped == 0:
+                # Only add if succeeded
+                frame_idx.append(frame_id)
+                frame_times.append(frame_time)
+
+
+                curr_gray = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
+                if self.undistort.image_is_stretched():
+                    curr_gray = cv2.resize(curr_gray, self.process_dimension)
+                # Estimate transform using optical flow
+                curr_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_gray, curr_gray, prev_pts, None)
+
+                idx = np.where(status==1)[0]
+                prev_pts = prev_pts[idx]
+                curr_pts = curr_pts[idx]
+                assert prev_pts.shape == curr_pts.shape
+
+                prev_pts_lst.append(prev_pts)
+                curr_pts_lst.append(curr_pts)
+
+
+                # TODO: Try getting undistort + homography working for more accurate rotation estimation
+                src_pts = self.undistort.undistort_points(prev_pts, new_img_dim=(self.width,self.height))
+                dst_pts = self.undistort.undistort_points(curr_pts, new_img_dim=(self.width,self.height))
+
+                filtered_src = []
+                filtered_dst = []
+
+                for i in range(src_pts.shape[0]):
+                    # if both points are within frame
+                    if (0 < src_pts[i,0,0] < self.width) and (0 < dst_pts[i,0,0] < self.width) and (0 < src_pts[i,0,1] < self.height) and (0 < dst_pts[i,0,1] < self.height):
+                        filtered_src.append(src_pts[i,:])
+                        filtered_dst.append(dst_pts[i,:])
+
+                # rots contains for solutions for the rotation. Get one with smallest magnitude.
+                # https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
+                # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
+                roteul = None
+
+                try:
+                    R1, R2, t = self.undistort.recover_pose(np.array(filtered_src), np.array(filtered_dst), new_img_dim=(self.width,self.height))
+
+                    rot1 = Rotation.from_matrix(R1)
+                    rot2 = Rotation.from_matrix(R2)
+
+                    if rot1.magnitude() < rot2.magnitude():
+                        roteul = rot1.as_rotvec() #rot1.as_euler("xyz")
+                    else:
+                        roteul = rot2.as_rotvec() # as_euler("xyz")
+                except:
+                    print("Couldn't recover motion for this frame")
+                    roteul = np.array([0,0,0])
+
+                transforms.append(list(roteul/self.num_frames_skipped))
+
+                prev_gray = curr_gray
+
+            else:
+                print("Frame {}".format(i))
+
+        cap.release()
 
         transforms = np.array(transforms)
         estimated_offset, cost = self.estimate_gyro_offset(frame_times, transforms, prev_pts_lst, curr_pts_lst, debug_plots = debug_plots)
@@ -1247,6 +1379,7 @@ class Stabilizer:
                 num_not_success = 0
             elif num_not_success >= num_not_success_lim:
                 # If unable to read multiple frames in a row
+                print("Unable to read multiple frames")
                 break
             else:
                 num_not_success += 1
@@ -2270,7 +2403,7 @@ if __name__ == "__main__":
 
     stab = MultiStabilizer(infile_path, "camera_presets/RunCam/DEV_Runcam_5_Orange_4K_30FPS_XV_16by9_stretched.json", log_guess, gyro_lpf_cutoff = 50, logtype=log_type, logvariant=variant)
 
-    stab.full_auto_sync()
+    stab.full_auto_sync_parallel()
 
     stab.export_gyroflow_file()
 
