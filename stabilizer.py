@@ -752,7 +752,7 @@ class Stabilizer:
         # Read first frame
         _, prev = self.cap.read()
         if self.do_video_rotation:
-            prev = cv2.rotate(prev, self.video_rotation_code)
+            prev = cv2.rotate(prev, self.video_rotate_code)
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
         if self.undistort.image_is_stretched():
             prev_gray = cv2.resize(prev_gray, self.process_dimension)
@@ -764,7 +764,7 @@ class Stabilizer:
 
             succ, curr = self.cap.read()
             if self.do_video_rotation:
-                curr = cv2.rotate(curr, self.video_rotation_code)
+                curr = cv2.rotate(curr, self.video_rotate_code)
 
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
@@ -853,7 +853,7 @@ class Stabilizer:
         # Read first frame
         _, prev = cap.read()
         if self.do_video_rotation:
-            prev = cv2.rotate(prev, self.video_rotation_code)
+            prev = cv2.rotate(prev, self.video_rotate_code)
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
         if self.undistort.image_is_stretched():
             prev_gray = cv2.resize(prev_gray, self.process_dimension)
@@ -863,7 +863,7 @@ class Stabilizer:
 
             succ, curr = cap.read()
             if self.do_video_rotation:
-                curr = cv2.rotate(curr, self.video_rotation_code)
+                curr = cv2.rotate(curr, self.video_rotate_code)
 
             frame_id = (int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
@@ -1338,7 +1338,7 @@ class Stabilizer:
         # Generate initial black frame
         success, frame = self.cap.read()
         if self.do_video_rotation:
-            frame = cv2.rotate(frame, self.video_rotation_code)
+            frame = cv2.rotate(frame, self.video_rotate_code)
         frame_out = cv2.resize(frame, out_size, interpolation=cv2.INTER_LINEAR) * 0.0
 
         # temporary float frame
@@ -1364,7 +1364,7 @@ class Stabilizer:
             success, frame = self.cap.read()
 
             if self.do_video_rotation:
-                frame = cv2.rotate(frame, self.video_rotation_code)
+                frame = cv2.rotate(frame, self.video_rotate_code)
             # Getting frame_num _before_ cap.read gives index of the read frame.
 
             if i % 5 == 0:
