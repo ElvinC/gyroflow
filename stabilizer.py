@@ -443,6 +443,7 @@ class Stabilizer:
             else:
                 new_acc_data = None
             
+            self.new_integrator = GyroIntegrator(new_gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=new_acc_data)
         else:
             # N is two or above, use the weird non-random RANSAC fitting
             times = np.array(self.sync_vtimes)

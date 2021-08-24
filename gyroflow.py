@@ -2596,8 +2596,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     #    print("Finished computing")
 
     def update_smoothness(self):
+        print("Updating smoothness setting...")
         self.stab.set_smoothing_algo(self.stab_algo_instance_current)
         self.stab.update_smoothing()
+        print("Smoothness updated")
 
 
     def export_keyframes(self):
