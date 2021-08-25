@@ -117,7 +117,7 @@ class MultiSyncList(QtWidgets.QListWidget):
         self.clear()
 
         if type(self.stab) == type(None):
-            print("Stabilizer not initialized")
+            #print("Stabilizer not initialized")
             return False
 
         for i in range(len(self.stab.transform_times)):
@@ -136,7 +136,7 @@ class MultiSyncList(QtWidgets.QListWidget):
     def has_valid_stab(self):
         return type(self.stab) != type(None)
 
-    def reset(self):
+    def UI_reset(self):
         self.stab = None
         self.clear()
 
@@ -192,8 +192,8 @@ class MultiSyncUI(QtWidgets.QWidget):
         # first, delete everything
         self.sync_list.update_from_stab_data()
 
-    def reset(self):
-        self.sync_list.reset()
+    def UI_reset(self):
+        self.sync_list.UI_reset()
         self.stab = None
 
             
