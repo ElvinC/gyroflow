@@ -1340,7 +1340,7 @@ class Stabilizer:
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
                                                         smoothingFocus=smoothingFocus,
                                                         tstart = tstart, tend = tend,
-                                                        debug_plots=(smoothingFocus != -1), plot_blocking = BLOCKING_PLOTS)
+                                                        debug_plots=False, plot_blocking = BLOCKING_PLOTS)
         print("Done computing optimal Fov")
 
         #new_img_dim=(int(self.width * scale),int(self.height*scale))
@@ -1601,12 +1601,23 @@ class Stabilizer:
 
         gyroflow_data["stab_summary"] = self.smoothing_algo.get_summary()
 
+        #get_interpolated_orientations
+        interpolated_times, interpolated_orientations =  self.new_integrator.get_interpolated_orientations(start=0,interval = 1/self.fps)
+
+        # [index, time, w, x, y, z]
+        time_orientation = np.hstack([np.arange(interpolated_orientations.shape[0])[...,None],
+                                                np.array(interpolated_times)[...,None],
+                                                interpolated_orientations ])
+
+        gyroflow_data["frame_orientation"] = time_orientation.tolist()
+
+
         stab_transform = np.array(self.stab_transform)
 
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
 
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
-                                                        smoothingFocus=smoothingFocus)
+                                                        smoothingFocus=smoothingFocus, debug_plots=False)
 
         gyroflow_data["min_fcorr"] = np.min(fcorr)
 

@@ -95,6 +95,9 @@ class GyroIntegrator:
 
         self.smoothing_algo = None
 
+        self.interp_times = None
+        self.interp_orientations = None
+
 
     def integrate_all(self, use_acc = False):
         """go through each gyro sample and integrate to find orientation
@@ -152,7 +155,7 @@ class GyroIntegrator:
                         correctionWorld = np.cross(accWorldVec, self.grav_vec)
 
                         # high weight for first two seconds to "lock" it, then 
-                        weight = 10 if this_time - start_time < 1.5 else 0.5
+                        weight = 10 if this_time - start_time < 1.5 else 0.6
                         correctionBody = weight * quat.rotate_vector_fast(quat.conjugate(self.orientation), correctionWorld)
                         omega = omega + correctionBody
 
@@ -190,7 +193,7 @@ class GyroIntegrator:
 
             return (self.time_list, self.orientation_list)
 
-        return None
+        return None, None
 
     def set_smoothing_algo(self, algo):
         if not algo:
@@ -256,8 +259,74 @@ class GyroIntegrator:
 
         return (self.time_list, stab_rotations) 
 
+    def get_interpolated_orientations(self, start=0, interval=1/29.97):
+
+        time_list, smoothed_orientation = self.get_orientations()
         
+        time = start
+
+        out_times = []
+        slerped_rotations = []
+
+        while time < 0:
+            slerped_rotations.append(smoothed_orientation[0])
+            out_times.append(time)
+            time += interval
+
+        while time_list[0] >= time:
+            slerped_rotations.append(smoothed_orientation[0])
+            out_times.append(time)
+            time += interval
+
+
+        for i in range(len(time_list)-1):
+            while time_list[i] <= time < time_list[i+1]:
+
+                # interpolate between two quaternions
+                weight = (time - time_list[i])/(time_list[i+1]-time_list[i])
+                slerped_rotations.append(quat.single_slerp(smoothed_orientation[i],smoothed_orientation[i+1],weight))
+                out_times.append(time)
+
+                time += interval
+
+            if time < time_list[i]:
+                # continue even if missing gyro data
+                slerped_rotations.append(smoothed_orientation[i])
+                out_times.append(time)
+                time += interval
+
+        self.interp_times = np.array(out_times)
+        self.interp_orientations = np.array(slerped_rotations)
+
+        return (self.interp_times, self.interp_orientations)
+    
+
     def get_interpolated_stab_transform(self, start=0, interval=1/29.97):
+        if self.smoothing_algo:
+            if self.smoothing_algo.bypass_external_processing:
+                print("Bypassing quaternion orientation integration")
+                return self.get_interpolated_stab_transform_old(start=start, interval=interval)
+                #time_list, smoothed_orientation = self.smoothing_algo.get_stabilize_transform(self.gyro)
+        else:
+            self.smoothing_algo = smoothing_algos.PlainSlerp()
+
+
+        time_list, interp_orientations = self.get_interpolated_orientations(start=start, interval=interval)
+        time_list = np.array(time_list)
+        interp_orientations = np.array(interp_orientations)
+
+        _, smoothed_orientations = self.smoothing_algo.get_smooth_orientations(time_list, interp_orientations)
+        smoothed_orientations = np.array(smoothed_orientations)
+
+        stab_rotations = np.zeros(smoothed_orientations.shape)
+
+        for i in range(smoothed_orientations.shape[0]):
+            # rotation quaternion from smooth motion -> raw motion to counteract it
+            stab_rotations[i,:] = quat.rot_between(smoothed_orientations[i],interp_orientations[i])
+
+        return time_list, stab_rotations
+
+    def get_interpolated_stab_transform_old(self, start=0, interval=1/29.97):
         
         if self.smoothing_algo:
             if self.smoothing_algo.bypass_external_processing:
@@ -440,12 +509,6 @@ class FrameRotationIntegrator(GyroIntegrator):
         self.already_integrated = True
 
         return (self.time_list, self.orientation_list)
-
-    def integrate_complementary(self):
-        """
-        TODO: Implement this
-        """
-        # Useful ressource: https://josephmalloch.wordpress.com/portfolio/imu-sensor-fusion/
 
 
 class EulerIntegrator:
@@ -700,18 +763,3 @@ if __name__ == "__main__":
     #combined_rotation[0:3,0:3] = np.linalg.multi_dot([final_rotation, np.linalg.inv(combined_rotation[0:3,0:3]), np.linalg.inv(final_rotation)])
     #rot = Rotation([-q[1],-q[2],q[3],-q[0]]).as_matrix()
     print(rot)
-
-    # X *
-    #[[ 0.94925715  0.18321667  0.25562182]
-    #[ 0.23469608 -0.95372169 -0.18796992]
-    #[ 0.20935285  0.23842523 -0.94832737]]
-
-    #[[ 0.94913057  0.1822425  -0.25678557]
-    #[-0.23380831  0.95411913 -0.1870571 ]
-    #[ 0.21091427  0.23758021  0.94819345]]
-
-
-    # What I want
-    #[[ 0.93079128  0.28028112 -0.23467017]
-    #[-0.34033391  0.89874166 -0.27647107]
-    #[ 0.13341824  0.33720308  0.93193007]]
