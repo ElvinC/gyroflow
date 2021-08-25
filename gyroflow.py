@@ -31,6 +31,7 @@ try:
 except:
     pass
 
+
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
 cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Arri",
                     "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
@@ -2949,6 +2950,7 @@ class StabUtility(StabUtilityBarebone):
     #    #print(self.video_viewer.get_current_timestamp())
 
     def add_sync_here(self):
+        self.video_viewer.stop()
         timestamp = self.video_viewer.get_current_timestamp()
         self.add_sync_at_time(timestamp)
         

@@ -4,6 +4,12 @@ from datetime import date
 import cv2
 import csv
 import os
+
+for k, v in os.environ.items():
+    if k.startswith("QT_") and "cv2" in v:
+        print("deleting" + os.environ[k])
+        del os.environ[k]
+
 import platform
 from tqdm import tqdm
 
@@ -1220,6 +1226,12 @@ class Stabilizer:
 
         #export_out_size = (int(out_size[0]*2*scale) if split_screen else int(out_size[0]*scale), int(out_size[1]*scale))
 
+        # Should cover the valid ones even if not supported https://en.wikipedia.org/wiki/Video_file_format
+        if outpath.split(".")[-1].lower() not in ["webm", "flv", "vob", "ogv", "ogg", "drc", "gif", "mng", "avi", "mts", "m2ts", "ts", "mov", "qt", "yuv", "rmvb", "viv", "asf", "amv", "mp4", "m4p", "m4v", "mpg",
+                                                  "mpeg", "m2v", "svi", "3gp", "3g2", "mxf", "roq", "nsv", "flv"]:
+            print(f"{outpath} does not have a valid file extension")
+            return
+
         borderMode = 0
         borderValue = 0
 
@@ -1465,7 +1477,12 @@ class Stabilizer:
                             cv2.waitKey(2)
                     else:
 
-                        out.write(frame_out)
+                        try:
+                            out.write(frame_out)
+                        except Exception as e:
+                            print("Failed to write frame. Aborting render")
+                            print(e)
+                            break
 
                         if display_preview:
                             if frame_out.shape[1] > 1280:
