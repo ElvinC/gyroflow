@@ -314,8 +314,9 @@ class VideoPlayer(QtWidgets.QLabel):
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel)
         self.pixmap = QtGui.QPixmap(img)
         #self.setPixmap(self.pixmap)
+        self.setMinimumSize(1,1)
 
-        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
 
     def paintEvent(self, event = None):
