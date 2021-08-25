@@ -1219,7 +1219,7 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = False,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingFocus=4.0, zoom=1.0, bg_color="#000000", audio=True):
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=4.0, zoom=1.0, bg_color="#000000", audio=True, viewer_thread = None):
         if outpath == self.videopath:
             outpath = outpath.lower().replace(".mp4", "_gyroflow.mp4", )
         (out_width, out_height) = out_size
@@ -1370,6 +1370,12 @@ class Stabilizer:
         num_not_success = 0
         num_not_success_lim = 5 # stop after 5 failures to read frame
 
+        old_map_enable_setting = False
+        if type(viewer_thread) != type(None) and display_preview:
+            old_map_enable_setting = viewer_thread.map_function_enable
+            viewer_thread.map_function_enable = False
+
+
         for i in tqdm(range(1, num_frames), desc="Rendering", colour="blue"):
 
             # Read next frame
@@ -1487,10 +1493,21 @@ class Stabilizer:
                         if display_preview:
                             if frame_out.shape[1] > 1280:
                                 frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
+                            else:
+                                frame_preview = frame_out
+
+                            if type(viewer_thread) == type(None):
                                 cv2.imshow("Stabilized? Double press Q to stop render", frame_preview)
                             else:
-                                cv2.imshow("Stabilized? Double press Q to stop render", frame_out)
+                                try:
+                                    viewer_thread.frame = frame_preview
+                                    viewer_thread.update_once = True
+                                except Exception as e:
+                                    print("Failed to display preview")
+                                    print(e)
                             key = cv2.waitKey(1)
+
+                            
 
                             # Double press Q to exit
                             if key == 113 and quit_button:
@@ -1506,6 +1523,10 @@ class Stabilizer:
         print("Render finished")
         cv2.destroyAllWindows()
         out.close()
+    
+        if type(viewer_thread) != type(None):
+            viewer_thread.map_function_enable = old_map_enable_setting
+
 
         if audio:
             time.sleep(.5)

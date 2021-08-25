@@ -256,7 +256,7 @@ class VideoThread(QtCore.QThread):
                 self.update_frame()
 
             else:
-                time.sleep(1/10)
+                time.sleep(1/20)
 
 
     def update_frame(self):
@@ -2694,11 +2694,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         
         self.stab.set_hyperlapse(hyperlapse_multiplier = self.hyperlapse_multiplier.value(), hyperlapse_num_blended_frames = self.hyperlapse_blend.value())
 
+        viewer_thread = None
+        if self.has_player:
+            self.video_viewer.stop()
+            viewer_thread = self.video_viewer.thread
+
+
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
                              display_preview=preview, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
-                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color, audio=audio)
+                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color, audio=audio, viewer_thread=viewer_thread)
 
     def export_gyroflow(self):
         self.stab.export_gyroflow_file()
