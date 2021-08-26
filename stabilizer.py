@@ -1969,6 +1969,75 @@ class InstaStabilizer(Stabilizer):
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
+class OpenCameraSensors(Stabilizer):
+    def __init__(self, videopath, calibrationfile, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
+        root_dir = os.path.dirname(os.path.realpath(videopath))
+        file_name = videopath.replace(root_dir, '')
+        print(root_dir)
+        print(file_name)
+        gyro_path = os.path.join(root_dir, file_name.replace('VID_', '').split('.')[:-1])
+        super().__init__(videopath, calibrationfile, gyro_path, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
+        gyro_data_input = []
+        # Coverting gyro to XYZ to -Z,-X,Y
+        self.gyro_data = np.empty([len(gyro_data_input), 4])
+        self.gyro_data[:,0] = gyro_data_input[:,0][:]
+        self.gyro_data[:,1] = gyro_data_input[:,2][:] * -1
+        self.gyro_data[:,2] = gyro_data_input[:,3][:]
+        self.gyro_data[:,3] = gyro_data_input[:,1][:] * -1
+
+        hero = 0
+
+
+        if self.gyro_lpf_cutoff > 0:
+            self.filter_gyro()
+
+
+        # Other attributes
+        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
+
+        self.integrator = GyroIntegrator(self.gyro_data,zero_out_time=False,initial_orientation=initial_orientation)
+        self.integrator.integrate_all()
+        self.times = None
+        self.stab_transform = None
+
+
+        self.initial_offset = 0
+
+    def instaCSVGyro(self, csvfile):
+        gyrodata = []
+        with open(csvfile) as f:
+            reader = csv.reader(f, delimiter=",", quotechar='"')
+            next(reader, None)
+            for row in reader:
+                gyro = [float(row[0])] + [float(val) for val in row[2].split(" ")] # Time + gyro
+                gyrodata.append(gyro)
+
+        gyrodata = np.array(gyrodata)
+        print(gyrodata)
+        return gyrodata
+
+    def stabilization_settings(self, smooth = 0.95):
+
+
+        v1 = 20 / self.fps
+        v2 = 900 / self.fps
+        d1 = 0.042
+        d2 = -0.396
+
+        err_slope = (d2-d1)/(v2-v1)
+        correction_slope = err_slope + 1
+        gyro_start = (d1 - err_slope*v1)
+
+        interval = 1/(correction_slope * self.fps)
+
+
+        print("Start {}".format(gyro_start))
+
+        print("Interval {}, slope {}".format(interval, correction_slope))
+
+        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
+
+
 class MultiStabilizer(Stabilizer):
     def __init__(self, videopath, calibrationfile, logpath, fov_scale = 1.6, cam_angle_degrees=0, initial_offset=0, gyro_lpf_cutoff = 100, logtype="Gyroflow IMU log", logvariant="", video_rotation = -1):
 
