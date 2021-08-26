@@ -1797,7 +1797,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.enableAdaptiveZoom.clicked.connect(self.enableAdaptiveZoomClicked)
         self.export_controls_layout.addWidget(self.enableAdaptiveZoom)
 
-        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window Fov (sec): 4.0")
+        self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window FOV (sec): 4.0")
         self.export_controls_layout.addWidget(self.fov_smoothing_text)
         self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.fov_smoothing.setMinimum(0)
@@ -1808,12 +1808,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_smoothing.valueChanged.connect(self.fov_smoothing_changed)
         self.export_controls_layout.addWidget(self.fov_smoothing)
 
-        self.zoom_text = QtWidgets.QLabel("Zoom Factor (1 is minimum static crop without edges): 1.0")
+        self.zoom_text = QtWidgets.QLabel("Zoom Factor (with adaptive zoom) or FOV scale (same as preview): 1.0")
         self.export_controls_layout.addWidget(self.zoom_text)
         self.zoom = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
         self.zoom.setMinimum(5)
         self.zoom.setValue(10)
-        self.zoom.setMaximum(20)
+        self.zoom.setMaximum(70)
         self.zoom.setSingleStep(1)
         self.zoom.setTickInterval(1)
         self.zoom.valueChanged.connect(self.zoom_changed)
@@ -1871,6 +1871,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.split_screen_select = QtWidgets.QCheckBox("Export split screen (temporarily disabled)")
         self.split_screen_select.setChecked(False)
+        self.split_screen_select.setVisible(False)
         self.export_controls_layout.addWidget(self.split_screen_select)
 
         self.display_preview = QtWidgets.QCheckBox("Display preview during rendering")
@@ -2363,8 +2364,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_text.setText("FOV scale ({}):".format(fov_val))
 
     def fov_smoothing_changed(self):
-        val = self.fov_smoothing.value() / 10
-        self.fov_smoothing_text.setText("Smoothing Window Fov (sec): {}".format(val))
+        
+        if self.fov_smoothing.value() == self.fov_smoothing.maximum():
+            val = "fixed"
+        else:
+            val = self.fov_smoothing.value() / 10
+        self.fov_smoothing_text.setText("Smoothing Window FOV (sec): {}".format(val))
 
     def enableAdaptiveZoomClicked(self):
         if self.enableAdaptiveZoom.isChecked():
@@ -2374,7 +2379,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
     def zoom_changed(self):
         val = self.zoom.value() / 10
-        self.zoom_text.setText("Zoom Factor (1 is minimum static crop without edges): {}".format(val))
+        self.zoom_text.setText("Zoom Factor (with adaptive zoom) or FOV scale (same as preview): {}".format(val))
 
     def update_out_size(self):
         """Update export image size
@@ -2685,10 +2690,15 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         pix_fmt = self.pixfmt_select.text()
         custom_ffmpeg = self.custom_ffmpeg_pipeline.text()
         smoothingFocus=self.fov_smoothing.value()/10
-        if not self.enableAdaptiveZoom.isChecked():
-            smoothingFocus = -1
-        zoomVal = self.zoom.value() /10
 
+
+        zoomVal = self.zoom.value() /10
+        if not self.enableAdaptiveZoom.isChecked():
+            smoothingFocus = -2 # -2 means adaptive zoom is totally disabled
+            zoomVal = zoomVal * 1280 / self.out_width_control.value() # scale to match preview window. A bit hacky...
+        elif self.fov_smoothing.value() == self.fov_smoothing.maximum():
+            smoothingFocus = -1 # -1 means minimum sufficient cropping
+        
         bg_color = self.bg_color_select.text()
 
         
@@ -2705,7 +2715,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
                              split_screen = split_screen, bitrate_mbits = bitrate,
                              display_preview=preview, vcodec=vcodec, vprofile=vprofile,
                              pix_fmt = pix_fmt, debug_text=debug_text, custom_ffmpeg=custom_ffmpeg,
-                             smoothingFocus=smoothingFocus, zoom=zoomVal, bg_color=bg_color, audio=audio, viewer_thread=viewer_thread)
+                             smoothingFocus=smoothingFocus, fov_scale=zoomVal, bg_color=bg_color, audio=audio, viewer_thread=viewer_thread)
 
     def export_gyroflow(self):
         self.stab.export_gyroflow_file()

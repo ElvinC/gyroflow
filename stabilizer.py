@@ -1219,7 +1219,7 @@ class Stabilizer:
 
     def renderfile(self, starttime, stoptime, outpath = "Stabilized.mp4", out_size = (1920,1080), split_screen = False,
                    bitrate_mbits = 20, display_preview = False, scale=1, vcodec = "libx264", vprofile="main", pix_fmt = "",
-                   debug_text = False, custom_ffmpeg = "", smoothingFocus=4.0, zoom=1.0, bg_color="#000000", audio=True, viewer_thread = None):
+                   debug_text = False, custom_ffmpeg = "", smoothingFocus=4.0, fov_scale=1.0, bg_color="#000000", audio=True, viewer_thread = None):
         if outpath == self.videopath:
             outpath = outpath.lower().replace(".mp4", "_gyroflow.mp4", )
         (out_width, out_height) = out_size
@@ -1334,7 +1334,6 @@ class Stabilizer:
         #tempmap2 = cv2.resize(self.map2, (int(self.map2.shape[1]*scale), int(self.map2.shape[0]*scale)), interpolation=cv2.INTER_CUBIC)
 
 
-
         print("Starting to compute optimal Fov")
         adaptZ = AdaptiveZoom(fisheyeCalibrator=self.undistort)
         fcorr, focalCenter = adaptZ.compute(quaternions=self.stab_transform, output_dim=out_size, fps=self.fps,
@@ -1378,146 +1377,150 @@ class Stabilizer:
 
         for i in tqdm(range(1, num_frames), desc="Rendering", colour="blue"):
 
-            # Read next frame
-            frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
-            success, frame = self.cap.read()
+            try:
+                # Read next frame
+                frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+                success, frame = self.cap.read()
 
-            if self.do_video_rotation:
-                frame = cv2.rotate(frame, self.video_rotate_code)
-            # Getting frame_num _before_ cap.read gives index of the read frame.
+                if self.do_video_rotation:
+                    frame = cv2.rotate(frame, self.video_rotate_code)
+                # Getting frame_num _before_ cap.read gives index of the read frame.
 
-            if i % 5 == 0:
-                fraction_done = i/num_frames
-                elapsed_time = time.time() - starttime_render  # in seconds
-                est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
-                #print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
-
-
-            if success:
-                #i +=1
-                num_not_success = 0
-            elif num_not_success >= num_not_success_lim:
-                # If unable to read multiple frames in a row
-                print("Unable to read multiple frames")
-                break
-            else:
-                num_not_success += 1
-
-            #
-            if i > num_frames:
-                break   # This condition will never happen
-            elif frame_num >= len(self.stab_transform):
-                print("No more stabilization data. Stopping render here.")
-                break
-
-            if success and i > 0:
-
-                #if scale != 1:
-                #    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-
-                #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
-                #                              borderMode=cv2.BORDER_CONSTANT)
-
-                fac = zoom
-
-                tmap1, tmap2 = self.undistort.get_maps((1/fac)*fcorr[frame_num],
-                                                        new_img_dim=(self.orig_dimension[0], self.orig_dimension[1]),
-                                                        output_dim=out_size,
-                                                        update_new_K = False, quat = self.stab_transform[frame_num],
-                                                        focalCenter = focalCenter[frame_num])
-
-                #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
-
-                if (i-1) % self.hyperlapse_multiplier == 0 and self.hyperlapse_num_blended_frames > 1:
-                    # Reset frame at beginning of hyperlapse range
-                    print("reset")
-                    frame_temp = frame_temp * 0.0
+                if i % 5 == 0:
+                    fraction_done = i/num_frames
+                    elapsed_time = time.time() - starttime_render  # in seconds
+                    est_remain = (elapsed_time) * (1/max(fraction_done, 0.00001) - 1)
+                    #print("frame: {}, {}/{} ({}%), ~{} s remaining".format(frame_num, i, num_frames, round(100 * fraction_done,1), round(est_remain)))
 
 
-                #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
-                if (i-1) % self.hyperlapse_multiplier < self.hyperlapse_num_blended_frames:
-                    #print(f"adding frame {i}")
+                if success:
+                    #i +=1
+                    num_not_success = 0
+                elif num_not_success >= num_not_success_lim:
+                    # If unable to read multiple frames in a row
+                    print("Unable to read multiple frames")
+                    break
+                else:
+                    num_not_success += 1
 
-                    # Process using integers for speed
-                    frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
-                                                borderMode=borderMode, borderValue=borderValue)
+                #
+                if i > num_frames:
+                    break   # This condition will never happen
+                elif frame_num >= len(self.stab_transform):
+                    print("No more stabilization data. Stopping render here.")
+                    break
 
-                    if self.hyperlapse_num_blended_frames > 1:
-                        # process using floats
-                        frame_temp += 1/(self.hyperlapse_num_blended_frames) * frame_out.astype(np.float64)
+                if success and i > 0:
+
+                    #if scale != 1:
+                    #    frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+
+                    #frame_undistort = cv2.remap(frame, tempmap1, tempmap2, interpolation=cv2.INTER_LINEAR, # INTER_CUBIC
+                    #                              borderMode=cv2.BORDER_CONSTANT)
+
+                    fac = fov_scale
+
+                    tmap1, tmap2 = self.undistort.get_maps((fac)*fcorr[frame_num],
+                                                            new_img_dim=(self.orig_dimension[0], self.orig_dimension[1]),
+                                                            output_dim=out_size,
+                                                            update_new_K = False, quat = self.stab_transform[frame_num],
+                                                            focalCenter = focalCenter[frame_num])
+
+                    #tmap1, tmap2 = self.undistort.get_maps(self.undistort_fov_scale,new_img_dim=(int(self.width * scale),int(self.height*scale)), update_new_K = False, quat = self.stab_transform[frame_num])
+
+                    if (i-1) % self.hyperlapse_multiplier == 0 and self.hyperlapse_num_blended_frames > 1:
+                        # Reset frame at beginning of hyperlapse range
+                        print("reset")
+                        frame_temp = frame_temp * 0.0
 
 
-                if debug_text and ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
-                    # Add debug text to last frame only
-                    topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
-                    bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
-                    frame_out = cv2.rectangle(frame_out, topleft,
-                                                         bottomright, (255,0,0), 3)
+                    #frame = cv2.resize(frame, (int(self.width * scale),int(self.height*scale)), interpolation=cv2.INTER_LINEAR)
+                    if (i-1) % self.hyperlapse_multiplier < self.hyperlapse_num_blended_frames:
+                        #print(f"adding frame {i}")
 
-                    frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({})".format(__version__, frame_num/self.fps, frame_num),
-                                            (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
+                        # Process using integers for speed
+                        frame_out = cv2.remap(frame, tmap1, tmap2, interpolation=cv2.INTER_LINEAR, dst=frame_out, # INTER_CUBIC
+                                                    borderMode=borderMode, borderValue=borderValue)
+
+                        if self.hyperlapse_num_blended_frames > 1:
+                            # process using floats
+                            frame_temp += 1/(self.hyperlapse_num_blended_frames) * frame_out.astype(np.float64)
 
 
-                size = np.array(frame_out.shape)
+                    if debug_text and ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
+                        # Add debug text to last frame only
+                        topleft = ( int(out_width/2*(1-fac)), int(out_height/2*(1-fac)) )
+                        bottomright = ( int(out_width/2*(1+fac)), int(out_height/2*(1+fac)) )
+                        frame_out = cv2.rectangle(frame_out, topleft,
+                                                            bottomright, (255,0,0), 3)
 
-                # if last frame
-                if ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
+                        frame_out = cv2.putText(frame_out, "{} | {:0.1f} s ({})".format(__version__, frame_num/self.fps, frame_num),
+                                                (5,30),cv2.FONT_HERSHEY_SIMPLEX,1,(200,200,200),2)
 
-                    # Convert to int
-                    if self.hyperlapse_num_blended_frames > 1:
-                        frame_out = frame_temp.astype(np.uint8)
 
-                    if split_screen and False: # Disable for now
+                    size = np.array(frame_out.shape)
 
-                        # Fix border artifacts
-                        frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1]* scale, crop[0]:crop[0]+out_size[0]* scale]
-                        frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
-                        concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (int(out_size[0]*2*scale),int(out_size[1]*scale)))
+                    # if last frame
+                    if ((i-1) - self.hyperlapse_num_blended_frames + 1) % self.hyperlapse_multiplier == 0:
 
-                        out.write(concatted)
-                        if display_preview:
-                            # Resize if preview is huge
-                            if concatted.shape[1] > 1280:
-                                concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_NEAREST)
-                            cv2.imshow("Before and After", concatted)
-                            cv2.waitKey(2)
-                    else:
+                        # Convert to int
+                        if self.hyperlapse_num_blended_frames > 1:
+                            frame_out = frame_temp.astype(np.uint8)
 
-                        try:
-                            out.write(frame_out)
-                        except Exception as e:
-                            print("Failed to write frame. Aborting render")
-                            print(e)
-                            break
+                        if split_screen and False: # Disable for now
 
-                        if display_preview:
-                            if frame_out.shape[1] > 1280:
-                                frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
-                            else:
-                                frame_preview = frame_out
+                            # Fix border artifacts
+                            frame_undistort = frame_undistort[crop[1]:crop[1]+out_size[1]* scale, crop[0]:crop[0]+out_size[0]* scale]
+                            frame = cv2.resize(frame_undistort, ((int(size[1]), int(size[0]))))
+                            concatted = cv2.resize(cv2.hconcat([frame_out,frame],2), (int(out_size[0]*2*scale),int(out_size[1]*scale)))
 
-                            if type(viewer_thread) == type(None):
-                                cv2.imshow("Stabilized? Double press Q to stop render", frame_preview)
-                            else:
-                                try:
-                                    viewer_thread.frame = frame_preview
-                                    viewer_thread.update_once = True
-                                except Exception as e:
-                                    print("Failed to display preview")
-                                    print(e)
-                            key = cv2.waitKey(1)
+                            out.write(concatted)
+                            if display_preview:
+                                # Resize if preview is huge
+                                if concatted.shape[1] > 1280:
+                                    concatted = cv2.resize(concatted, (1280, int(concatted.shape[0] * 1280 / concatted.shape[1])), interpolation=cv2.INTER_NEAREST)
+                                cv2.imshow("Before and After", concatted)
+                                cv2.waitKey(2)
+                        else:
 
-                            
-
-                            # Double press Q to exit
-                            if key == 113 and quit_button:
+                            try:
+                                out.write(frame_out)
+                            except Exception as e:
+                                print("Failed to write frame. Aborting render")
+                                print(e)
                                 break
-                            elif key == 113:
-                                time.sleep(0.3)
-                                quit_button = True
-                            else:
-                                quit_button = False
 
+                            if display_preview:
+                                if frame_out.shape[1] > 1280:
+                                    frame_preview = cv2.resize(frame_out, (1280, int(frame_out.shape[0] * 1280 / frame_out.shape[1])), interpolation=cv2.INTER_NEAREST)
+                                else:
+                                    frame_preview = frame_out
+
+                                if type(viewer_thread) == type(None):
+                                    cv2.imshow("Stabilized? Double press Q to stop render", frame_preview)
+                                else:
+                                    try:
+                                        viewer_thread.frame = frame_preview
+                                        viewer_thread.update_once = True
+                                    except Exception as e:
+                                        print("Failed to display preview")
+                                        print(e)
+                                
+                                key = cv2.waitKey(1)
+                            
+                                # Double press Q to exit
+                                if key == 113 and quit_button:
+                                    break
+                                elif key == 113:
+                                    time.sleep(0.3)
+                                    quit_button = True
+                                else:
+                                    quit_button = False
+            
+            except KeyboardInterrupt:
+                print("terminating render")
+                break
+        
         # When everything done, release the capture
         #out.release()
         print("Render finished")
@@ -1610,6 +1613,21 @@ class Stabilizer:
                                                 interpolated_orientations ])
 
         gyroflow_data["frame_orientation"] = time_orientation.tolist()
+
+        if self.new_integrator.acc_available:
+            print("Exporting complementary filter orientations")
+            self.new_integrator.integrate_all(use_acc=True)
+
+            interpolated_times, interpolated_orientations =  self.new_integrator.get_interpolated_orientations(start=0,interval = 1/self.fps)
+
+            time_orientation = np.hstack([np.arange(interpolated_orientations.shape[0])[...,None],
+                                                np.array(interpolated_times)[...,None],
+                                                interpolated_orientations ])
+
+            gyroflow_data["frame_orientation_filtered"] = time_orientation.tolist()
+        else:
+            gyroflow_data["frame_orientation_filtered"] = []
+
 
 
         stab_transform = np.array(self.stab_transform)
