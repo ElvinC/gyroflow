@@ -4,6 +4,7 @@ from datetime import date
 import cv2
 import csv
 import os
+import math
 
 for k, v in os.environ.items():
     if k.startswith("QT_") and "cv2" in v:
@@ -1972,20 +1973,41 @@ class InstaStabilizer(Stabilizer):
 class OpenCameraSensors(Stabilizer):
     def __init__(self, videopath, calibrationfile, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
         root_dir = os.path.dirname(os.path.realpath(videopath))
-        file_name = videopath.replace(root_dir, '')
-        print(root_dir)
-        print(file_name)
-        gyro_path = os.path.join(root_dir, file_name.replace('VID_', '').split('.')[:-1])
+        file_name = videopath.split(os.sep)[-1]
+        date = file_name.replace('VID_', '').split('.')[0]
+        gyro_path = os.path.join(root_dir, date, 'VID_' + date + "gyro.csv")
+        acc_path = os.path.join(root_dir, date, 'VID_' + date + "accel.csv")
+        timestamp_path = os.path.join(root_dir, date, 'VID_' + date + "_timestamps.csv")
         super().__init__(videopath, calibrationfile, gyro_path, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
-        gyro_data_input = []
+        gyro_data_input = self.read_csv(gyro_path)
         # Coverting gyro to XYZ to -Z,-X,Y
-        self.gyro_data = np.empty([len(gyro_data_input), 4])
-        self.gyro_data[:,0] = gyro_data_input[:,0][:]
-        self.gyro_data[:,1] = gyro_data_input[:,2][:] * -1
-        self.gyro_data[:,2] = gyro_data_input[:,3][:]
-        self.gyro_data[:,3] = gyro_data_input[:,1][:] * -1
+        timestamps = self.read_csv(timestamp_path) * 1e-9
+        first_timestamp = timestamps[1][0]
+        last_timestamp = timestamps[-1][0]
+        duration = last_timestamp - first_timestamp
+        print(f"Video duration : {duration:>8.2f} s")
+        print(f"Framerate      : {len(timestamps)/duration:>8.2f} Hz")
+        idx_start = self.find_nearest(gyro_data_input[:,3][:] * 1e-9, first_timestamp)
+        idx_end = self.find_nearest(gyro_data_input[:,3][:] * 1e-9, last_timestamp) + 1
+        self.gyro_data = np.empty([idx_end - idx_start, 4])
+        self.gyro_data[:,0] = gyro_data_input[:,3][idx_start:idx_end] * 1e-9
+        self.gyro_data[:,1] = gyro_data_input[:,0][idx_start:idx_end]
+        self.gyro_data[:,2] = gyro_data_input[:,1][idx_start:idx_end]
+        self.gyro_data[:,3] = gyro_data_input[:,2][idx_start:idx_end]
+        print(f"Gyro rate      : {len(self.gyro_data[:,0])/(self.gyro_data[-1,0] - self.gyro_data[0,0]):>8.2f} Hz")
 
-        hero = 0
+        acc_data_input = self.read_csv(acc_path)
+        # Coverting gyro to XYZ to -Z,-X,Y
+        idx_start = self.find_nearest(acc_data_input[:,3][:] * 1e-9, first_timestamp)
+        idx_end = self.find_nearest(acc_data_input[:,3][:] * 1e-9, last_timestamp) + 1
+        self.acc_data = np.empty([idx_end - idx_start, 4])
+        self.acc_data[:,0] = acc_data_input[:,3][idx_start:idx_end] * 1e-9
+        self.acc_data[:,1] = acc_data_input[:,0][idx_start:idx_end]
+        self.acc_data[:,2] = acc_data_input[:,1][idx_start:idx_end]
+        self.acc_data[:,3] = acc_data_input[:,2][idx_start:idx_end]
+        print(f"Acc rate       : {len(self.acc_data[:,0])/(self.acc_data[-1,0] - self.acc_data[0,0]):>8.2f} Hz")
+
+
 
 
         if self.gyro_lpf_cutoff > 0:
@@ -2003,18 +2025,22 @@ class OpenCameraSensors(Stabilizer):
 
         self.initial_offset = 0
 
-    def instaCSVGyro(self, csvfile):
-        gyrodata = []
+    def read_csv(self, csvfile):
+        data = []
         with open(csvfile) as f:
             reader = csv.reader(f, delimiter=",", quotechar='"')
             next(reader, None)
             for row in reader:
-                gyro = [float(row[0])] + [float(val) for val in row[2].split(" ")] # Time + gyro
-                gyrodata.append(gyro)
+                data.append(row)
+        data = np.array(data, dtype=np.float)
+        return data
 
-        gyrodata = np.array(gyrodata)
-        print(gyrodata)
-        return gyrodata
+    def find_nearest(self, array, value):
+        idx = np.searchsorted(array, value, side="left")
+        if idx > 0 and (idx == len(array) or math.fabs(value - array[idx - 1]) < math.fabs(value - array[idx])):
+            return idx - 1
+        else:
+            return idx
 
     def stabilization_settings(self, smooth = 0.95):
 
