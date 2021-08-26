@@ -2699,6 +2699,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.video_viewer.stop()
             viewer_thread = self.video_viewer.thread
 
+        time.sleep(0.5)
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,

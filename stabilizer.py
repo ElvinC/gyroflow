@@ -1163,13 +1163,13 @@ class Stabilizer:
         axes_weight = np.array([0.7,0.7,1]) #np.array([0.5,0.5,1]) # Weight of the xyz in the cost function. pitch, yaw, roll. More weight to roll
 
 
-        t1 = OF_times[0]
-        t2 = OF_times[-1]
+        #t1 = OF_times[0]
+        #t2 = OF_times[-1]
 
-        mask = ((t1 <= gyro_times) & (gyro_times <= t2))
+        #mask = ((t1 <= gyro_times) & (gyro_times <= t2))
 
-        sliced_gyro_data = gyro_data[mask,:]
-        sliced_gyro_times = gyro_times[mask]
+        #sliced_gyro_data = gyro_data[mask,:]
+        #sliced_gyro_times = gyro_times[mask]
 
         nearest = interpolate.interp1d(gyro_times, gyro_data, kind='nearest', assume_sorted=True, axis = 0, fill_value=np.array([0,0,0]), bounds_error=False)
         gyro_dat_resampled = nearest(OF_times)
