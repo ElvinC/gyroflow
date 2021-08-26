@@ -1321,6 +1321,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.setAlignment(QtCore.Qt.AlignTop)
         self.sync_controls.setMinimumWidth(500)
 
+        # stab tab
+        self.stab_controls = QtWidgets.QWidget()
+        self.stab_controls_layout = QtWidgets.QVBoxLayout()
+        self.stab_controls.setLayout(self.stab_controls_layout)
+        self.stab_controls_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.stab_controls.setMinimumWidth(500)
+
         self.export_controls = QtWidgets.QWidget()
         self.export_controls_layout = QtWidgets.QVBoxLayout()
         self.export_controls.setLayout(self.export_controls_layout)
@@ -1446,6 +1453,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.gyro_variant_text)
 
         self.gyro_variant_control = QtWidgets.QComboBox()
+        self.gyro_variant_control.setToolTip('Different setups/models can have different gyro orientations. Make sure to select the right one!')
         self.gyro_variant_control.currentIndexChanged.connect(self.reset_stab)
         self.gyro_variant_control.clear()
         
@@ -1472,6 +1480,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         self.input_plot_button = QtWidgets.QPushButton("Plot and analyze gyro data")
         self.input_plot_button.setMinimumHeight(30)
+        self.input_plot_button.setToolTip('Click here if you want to analyze the frequencies in the gyro data after applying the filter')
         self.input_plot_button.clicked.connect(self.input_gyro_plot)
         self.input_controls_layout.addWidget(self.input_plot_button)
 
@@ -1531,13 +1540,51 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_layout.addWidget(text)
         #self.input_controls_layout.addStretch()
 
+
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds:"))
+
+        self.offset_control = QtWidgets.QDoubleSpinBox(self)
+        self.offset_control.setToolTip('Positive if gyro logging starts after video. Just has to be within a few seconds')
+        self.offset_control.setMinimum(-1000)
+        self.offset_control.setMaximum(1000)
+        self.offset_control.setValue(0)
+
+        self.sync_controls_layout.addWidget(self.offset_control)
+
+
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Sync search size (seconds)"))
+        self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
+        self.sync_search_size.setMinimum(0)
+        self.sync_search_size.setMaximum(60)
+        self.sync_search_size.setValue(10)
+        self.sync_controls_layout.addWidget(self.sync_search_size)
+
         self.sync_controls_layout.addWidget(QtWidgets.QLabel("Auto sync error margin (seconds):"))
         self.max_fitting_control = QtWidgets.QDoubleSpinBox(self)
         self.max_fitting_control.setMinimum(0)
         self.max_fitting_control.setMaximum(1)
         self.max_fitting_control.setValue(0.02)
+        self.max_fitting_control.setToolTip('Auto sync works by attempting to fit a line through all syncs. This value determines how close the points can be to the line')
 
         self.sync_controls_layout.addWidget(self.max_fitting_control)
+
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Max analysis slices:"))
+        self.max_sync_control = QtWidgets.QSpinBox(self)
+        self.max_sync_control.setToolTip('More points take longer to analyze, but can give better results')
+        self.max_sync_control.setMinimum(4)
+        self.max_sync_control.setMaximum(20)
+        self.max_sync_control.setValue(9)
+
+        self.sync_controls_layout.addWidget(self.max_sync_control)
+
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Analyze every Nth frame (increase for high fps footage)"))
+        self.num_frames_skipped_control = QtWidgets.QSpinBox(self)
+        self.num_frames_skipped_control.setMinimum(1)
+        self.num_frames_skipped_control.setMaximum(50)
+        self.num_frames_skipped_control.setValue(1)
+        self.num_frames_skipped_control.setToolTip("High fps means less movement between frames. This option allows for faster and more reliable sync of high speed footage. A value of 5 works fine for 300 fps")
+
+        self.sync_controls_layout.addWidget(self.num_frames_skipped_control)
 
         # button for (re)computing sync
         self.auto_sync_button = QtWidgets.QPushButton("Attempt auto sync")
@@ -1550,16 +1597,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         line.setFrameShape(QtWidgets.QFrame.HLine)
         line.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.sync_controls_layout.addWidget(line)
-
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Initial rough gyro offset in seconds:"))
-
-        self.offset_control = QtWidgets.QDoubleSpinBox(self)
-        self.offset_control.setMinimum(-1000)
-        self.offset_control.setMaximum(1000)
-        self.offset_control.setValue(0)
-
-        self.sync_controls_layout.addWidget(self.offset_control)
-
 
 
         #self.fpv_tilt_text = QtWidgets.QLabel("")
@@ -1577,30 +1614,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync_controls_layout.addWidget(self.sync2_control)
 
         # How many frames to analyze using optical flow each slice
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Number of frames to analyze per slice using optical flow:"))
+        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Number of frames to analyze per sync:"))
         self.OF_frames_control = QtWidgets.QSpinBox(self)
+        self.OF_frames_control.setToolTip("This number of frames is analyzed for each manual sync. More frames take longer, but can give a better sync. 60 is usually more than fine")
         self.OF_frames_control.setMinimum(10)
         self.OF_frames_control.setMaximum(600)
         self.OF_frames_control.setValue(60)
 
         self.sync_controls_layout.addWidget(self.OF_frames_control)
-
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Analyze every Nth frame (increase for high fps footage)"))
-        self.num_frames_skipped_control = QtWidgets.QSpinBox(self)
-        self.num_frames_skipped_control.setMinimum(1)
-        self.num_frames_skipped_control.setMaximum(50)
-        self.num_frames_skipped_control.setValue(1)
-        self.num_frames_skipped_control.setToolTip("High fps means less movement between frames. This option allows for faster and more reliable sync of high speed footage. A value of 5 works fine for 300 fps")
-
-        self.sync_controls_layout.addWidget(self.num_frames_skipped_control)
-
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Sync search size (seconds)"))
-        self.sync_search_size = QtWidgets.QDoubleSpinBox(self)
-        self.sync_search_size.setMinimum(0)
-        self.sync_search_size.setMaximum(60)
-        self.sync_search_size.setValue(10)
-        self.sync_controls_layout.addWidget(self.sync_search_size)
-
  
 
         # slider for adjusting smoothness. 0 = no stabilization. 100 = locked. Scaling is a bit weird still and depends on gyro sample rate.
@@ -1705,7 +1726,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
        # Select method for doing low-pass filtering
-        self.sync_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
+        self.stab_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
         self.stabilization_algo_select = QtWidgets.QComboBox()
 
         self.stab_algo_names = smoothing_algos.get_stab_algo_names()
@@ -1716,13 +1737,13 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             
         self.stabilization_algo_select.currentIndexChanged.connect(self.stab_algo_change)
 
-        self.sync_controls_layout.addWidget(self.stabilization_algo_select)
+        self.stab_controls_layout.addWidget(self.stabilization_algo_select)
 
         self.stab_algo_settings_widget = QtWidgets.QWidget()
         self.stab_algo_settings_widget_layout = QtWidgets.QVBoxLayout()
         self.stab_algo_settings_widget.setLayout(self.stab_algo_settings_widget_layout)
         self.stab_algo_settings_widget_layout.setAlignment(QtCore.Qt.AlignTop)
-        self.sync_controls_layout.addWidget(self.stab_algo_settings_widget)
+        self.stab_controls_layout.addWidget(self.stab_algo_settings_widget)
 
         for inst in self.stab_algo_instances:
             self.stab_algo_settings_widget_layout.addWidget(inst.get_ui_widget())
@@ -1734,7 +1755,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.update_smoothness_button.setMinimumHeight(30)
         self.update_smoothness_button.setEnabled(False)
         self.update_smoothness_button.clicked.connect(self.update_smoothness)
-        self.sync_controls_layout.addWidget(self.update_smoothness_button)
+        self.stab_controls_layout.addWidget(self.update_smoothness_button)
 
         # OUTPUT OPTIONS
 
@@ -1750,6 +1771,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.out_width_control.setMinimum(16)
         self.out_width_control.setMaximum(7680) # 8K max is probably fine
         self.out_width_control.setValue(1920)
+        self.out_width_control.setToolTip("For action cameras, try exporting to 16:9 if recorded in 4:3")
         self.out_width_control.valueChanged.connect(self.update_out_size)
 
 
@@ -1792,7 +1814,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_stoptime.setValue(30)
         self.export_controls_layout.addWidget(self.export_stoptime)
 
-        self.enableAdaptiveZoom = QtWidgets.QCheckBox("Adaptive zoom  (if disabled, use zoom to set desired Fov)")
+        self.enableAdaptiveZoom = QtWidgets.QCheckBox("Adaptive zoom  (if disabled, use zoom to set desired FOV)")
         self.enableAdaptiveZoom.setChecked(True)
         self.enableAdaptiveZoom.clicked.connect(self.enableAdaptiveZoomClicked)
         self.export_controls_layout.addWidget(self.enableAdaptiveZoom)
@@ -1800,6 +1822,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.fov_smoothing_text = QtWidgets.QLabel("Smoothing Window FOV (sec): 4.0")
         self.export_controls_layout.addWidget(self.fov_smoothing_text)
         self.fov_smoothing = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.fov_smoothing.setToolTip("Determines how fast dynamic zoom acts. Maximum value means a constant zoom")
         self.fov_smoothing.setMinimum(0)
         self.fov_smoothing.setValue(40)
         self.fov_smoothing.setMaximum(150)
@@ -1875,6 +1898,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.split_screen_select)
 
         self.display_preview = QtWidgets.QCheckBox("Display preview during rendering")
+        self.display_preview.setToolTip("Disabling this means a faster render")
         self.display_preview.setChecked(True)
         self.export_controls_layout.addWidget(self.display_preview)
 
@@ -1882,7 +1906,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_audio.setChecked(True)
         self.export_controls_layout.addWidget(self.export_audio)
 
-        self.export_debug_text = QtWidgets.QCheckBox("Render with debug info and logging")
+        self.export_debug_text = QtWidgets.QCheckBox("Render with extra info (for debugging)")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
 
@@ -1924,8 +1948,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.hyperlapse_text = QtWidgets.QLabel("Hyperlapse speed multipler")
         self.export_controls_layout.addWidget(self.hyperlapse_text)
         self.hyperlapse_multiplier = QtWidgets.QSpinBox(self)
+        self.hyperlapse_multiplier.setToolTip("What it says on the tin. How much to speed up the video by")
         self.hyperlapse_multiplier.setMinimum(1)
-        self.hyperlapse_multiplier.setMaximum(64)
+        self.hyperlapse_multiplier.setMaximum(128)
         self.hyperlapse_multiplier.setValue(1)
         self.hyperlapse_multiplier.setVisible(True)
         self.export_controls_layout.addWidget(self.hyperlapse_multiplier)
@@ -1933,8 +1958,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.hyperlapse_blend_text = QtWidgets.QLabel("Hyperlapse number of blended frames")
         self.export_controls_layout.addWidget(self.hyperlapse_blend_text)
         self.hyperlapse_blend = QtWidgets.QSpinBox(self)
+        self.hyperlapse_blend.setToolTip("Fakes motion blur. Set to half of the speed multiplier for a simulated 180 deg shutter")
         self.hyperlapse_blend.setMinimum(1)
-        self.hyperlapse_blend.setMaximum(64)
+        self.hyperlapse_blend.setMaximum(128)
         self.hyperlapse_blend.setValue(1)
         self.hyperlapse_blend.setVisible(True)
         self.export_controls_layout.addWidget(self.hyperlapse_blend)
@@ -1947,6 +1973,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(self.export_button)
 
         self.export_gyroflow_button = QtWidgets.QPushButton("Export Gyroflow Data")
+        self.export_gyroflow_button.setToolTip("This file contains the synced motion data, and can be loaded by Gyroflow again")
         self.export_gyroflow_button.setMinimumHeight(30)
         self.export_gyroflow_button.setEnabled(True)
         self.export_gyroflow_button.clicked.connect(self.export_gyroflow)
@@ -1982,6 +2009,12 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.sync_controls_scroll.setWidget(self.sync_controls)
         self.sync_controls_scroll.setWidgetResizable(True)
 
+        self.stab_controls_scroll = QtWidgets.QScrollArea()
+        self.stab_controls_scroll_layout = QtWidgets.QVBoxLayout(self.stab_controls_scroll.widget())
+        self.stab_controls_scroll.setLayout(self.stab_controls_scroll_layout)
+        self.stab_controls_scroll.setWidget(self.stab_controls)
+        self.stab_controls_scroll.setWidgetResizable(True)
+
         self.export_controls_scroll = QtWidgets.QScrollArea()
         self.export_controls_scroll_layout = QtWidgets.QVBoxLayout(self.export_controls_scroll.widget())
         self.export_controls_scroll.setLayout(self.export_controls_scroll_layout)
@@ -1989,7 +2022,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_scroll.setWidgetResizable(True)
 
         self.main_setting_widget.addTab(self.input_controls_scroll, "Input")
-        self.main_setting_widget.addTab(self.sync_controls_scroll, "Sync/stabilization")
+        self.main_setting_widget.addTab(self.sync_controls_scroll, "Sync")
+        self.main_setting_widget.addTab(self.stab_controls_scroll, "Stabilization")
         self.main_setting_widget.addTab(self.export_controls_scroll, "Export")
 
         self.infile_path = ""
@@ -2488,8 +2522,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.set_smoothing_algo(self.stab_algo_instance_current)
 
         max_fitting_error = self.max_fitting_control.value()
-
-        success = self.stab.full_auto_sync(max_fitting_error)
+        max_syncs = self.max_sync_control.value()
+        success = self.stab.full_auto_sync(max_fitting_error,max_syncs)
 
         if not success:
             return

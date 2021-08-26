@@ -36,8 +36,8 @@ import insta360_utility as insta360_util
 import smoothing_algos
 
 VIDGEAR_LOGGING = False
-
 BLOCKING_PLOTS = True
+
 if platform.system() == "Darwin":
     BLOCKING_PLOTS = False
 
@@ -542,7 +542,7 @@ class Stabilizer:
         self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
         return True
 
-    def get_recommended_syncpoints(self, num_frames_analyze):
+    def get_recommended_syncpoints(self, num_frames_analyze, max_points=9):
         syncpoints = []
 
         num_frames_offset = int(num_frames_analyze / 2)
@@ -557,7 +557,7 @@ class Stabilizer:
 
         min_slices = 4
 
-        max_slices = 9
+        max_slices = max_points
 
         if vid_length < 4: # only one sync
             syncpoints.append([5, max(60, int(num_frames-5-self.fps)) ])
@@ -586,7 +586,7 @@ class Stabilizer:
 
         return syncpoints
 
-    def full_auto_sync(self, max_fitting_error = 0.02, debug_plots=True):
+    def full_auto_sync(self, max_fitting_error = 0.02, max_points=9, debug_plots=True):
 
         if self.use_gyroflow_data_file:
             self.update_smoothing()
@@ -596,7 +596,7 @@ class Stabilizer:
 
         max_sync_cost_tot = 10 # > 10 is nogo.
         num_frames_analyze = 30
-        syncpoints = self.get_recommended_syncpoints(num_frames_analyze)
+        syncpoints = self.get_recommended_syncpoints(num_frames_analyze, max_points = max_points)
          # save where to analyze. list of [frameindex, num_analysis_frames]
         
         max_sync_cost = max_sync_cost_tot / 30 * num_frames_analyze
