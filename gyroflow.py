@@ -541,15 +541,15 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         super().__init__()
 
         calib_input = QtWidgets.QInputDialog.getText(self, "Calibration setting","Calibration chessboard size. w, h",
-                                                     QtWidgets.QLineEdit.Normal, "9,6")[0].split(",")
+                                                     QtWidgets.QLineEdit.Normal, "14,8")[0].split(",")
 
         try:
             w, h = [min(max(int(x), 1),30) for x in calib_input]
             self.chessboard_size = (w,h)
 
         except:
-            print("setting to default 9,6 pattern")
-            self.chessboard_size = (9,6)
+            print("setting to default 14,8 pattern")
+            self.chessboard_size = (14,8)
 
 
         # Initialize UI
