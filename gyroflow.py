@@ -1422,6 +1422,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.gyro_log_format_select)
 
 
+        self.gyro_variant_text = QtWidgets.QLabel('Gyro source variant')
+        self.input_controls_layout.addWidget(self.gyro_variant_text)
+
+        self.gyro_variant_control = QtWidgets.QComboBox()
+        self.gyro_variant_control.setToolTip('Different setups/models can have different gyro orientations. Make sure to select the right one!')
+        self.gyro_variant_control.currentIndexChanged.connect(self.reset_stab)
+        self.gyro_variant_control.clear()
+        
+        self.log_reader = gyrolog.GyroflowGyroLog()
+        #self.gyro_variant_control.addItem("hero5")
+        #self.gyro_variant_control.addItem("hero6")
+        #self.gyro_variant_control.addItem("hero7")
+        #self.gyro_variant_control.addItem("hero8")
+        #self.gyro_variant_control.addItem("hero9")
+
+        #self.gyro_variant_control.addItems(gyrolog.GyroflowGyroLog().get_variants())
+
+        self.input_controls_layout.addWidget(self.gyro_variant_control)
+
+
         self.fpv_tilt_text = QtWidgets.QLabel("Camera to gyro angle:")
         
         self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
@@ -1449,24 +1469,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_text)
         #self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_control)
 
-        self.gyro_variant_text = QtWidgets.QLabel('Gyro source variant')
-        self.input_controls_layout.addWidget(self.gyro_variant_text)
-
-        self.gyro_variant_control = QtWidgets.QComboBox()
-        self.gyro_variant_control.setToolTip('Different setups/models can have different gyro orientations. Make sure to select the right one!')
-        self.gyro_variant_control.currentIndexChanged.connect(self.reset_stab)
-        self.gyro_variant_control.clear()
-        
-        self.log_reader = gyrolog.GyroflowGyroLog()
-        #self.gyro_variant_control.addItem("hero5")
-        #self.gyro_variant_control.addItem("hero6")
-        #self.gyro_variant_control.addItem("hero7")
-        #self.gyro_variant_control.addItem("hero8")
-        #self.gyro_variant_control.addItem("hero9")
-
-        #self.gyro_variant_control.addItems(gyrolog.GyroflowGyroLog().get_variants())
-
-        self.input_controls_layout.addWidget(self.gyro_variant_control)
 
         self.input_controls_layout.addWidget(QtWidgets.QLabel('Input low-pass filter cutoff (Hz). Set to -1 to disable'))
         self.input_lpf_control = QtWidgets.QSpinBox(self)
@@ -2187,6 +2189,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # set default sync and export options
         self.out_width_control.setValue(self.video_info_dict["width"])
         self.out_height_control.setValue(self.video_info_dict["height"])
+        self.export_starttime.setValue(0)
         self.export_stoptime.setValue(int(self.video_info_dict["time"])) # round down
         #self.sync1_control.setValue(5)
         #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
