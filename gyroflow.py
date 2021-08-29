@@ -1764,8 +1764,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_controls_layout.addWidget(text)
 
         # output size choice presets
-        names = ["4k", "2.7k", "1080p", "720p"]
-        self.resolutions = [(3840, 2160), (2704, 1520), (1920, 1080), (1280, 720)]
+        names = ["4k", "2.7k", "1440p", "1080p", "720p"]
+        self.resolutions = [(3840, 2160), (2704, 1520), (2560, 1440), (1920, 1080), (1280, 720)]
         self.export_controls_layout.addWidget(QtWidgets.QLabel("Preset video resolutions (16:9):"))
         self.preset_resolution_combo = QtWidgets.QComboBox()
         self.preset_resolution_combo.addItem(f"Original")
