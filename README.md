@@ -60,16 +60,8 @@ Note: Try the dev branch for the newest features.
 * Support for high speed video
 * GoPro/Insta360 as gyro logger for cinema cameras.
 * Basic prores import/export through ffmpeg
-
-**Work in progress:**
 * Modular/improved smoothing methods
 * Support for non-square pixel aspect ratios
-
-
-**Not working (yet) and _potential_ future additions and ideas:**
-* Incorporate acceleration data in orientation estimation for horizon lock (Probably just a complementary filter. Kalman is overkill but could be fun to learn).
-* Automatic camera alignment identification with respect to gyro
-* Try different calibration pattern? Asymmetric circles/ChArUco?
-* Rolling shutter correction (and determination?) + RS-aware gyro sync.
-* other cameras with internal gyro (freefly wave? sony A7 series?)
+* Incorporate acceleration data in orientation estimation for horizon lock
 * Audio handling
+* .gyroflow file with synced data
