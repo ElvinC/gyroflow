@@ -2191,7 +2191,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync1_control.setValue(5)
         #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
         self.export_bitrate.setValue(max(int(self.video_info_dict["bitrate"]) / 1000, 20))
-        
+        print(self.stab)
 
         self.check_aspect()
 
@@ -2362,6 +2362,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         temp_log_reader.plot_gyro(blocking=stabilizer.BLOCKING_PLOTS)
+
 
     def reset_stab(self):
         #print("Reset stabilization class")

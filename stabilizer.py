@@ -4,6 +4,9 @@ from datetime import date
 import cv2
 import csv
 import os
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
+import itertools
 
 for k, v in os.environ.items():
     if k.startswith("QT_") and "cv2" in v:
@@ -151,6 +154,10 @@ class Stabilizer:
         self.undistort = FisheyeCalibrator()
 
         self.video_rotate_code = video_rotation
+
+        self.trim = None
+        self.smooth_parts = None
+        self.smooth_parts_duration = None
 
         if type(gyroflow_file) != type(None):
             success = self.import_gyroflow_file(gyroflow_file)
@@ -542,7 +549,84 @@ class Stabilizer:
         self.times, self.stab_transform = self.new_integrator.get_interpolated_stab_transform(start=0,interval = 1/self.fps)
         return True
 
+
+    def gyro_analysis(self, minimum_time=1):
+        x = self.gyro_data[:, 1]
+        y = self.gyro_data[:, 2]
+        z = self.gyro_data[:, 3]
+        t = self.gyro_data[:, 0]
+        tot = (x ** 2 + y ** 2 + z ** 2) ** .5
+        still_threshold = .05
+        flippy_threshold = 8
+        trim_offset = 1
+        still_mask = tot <= still_threshold
+        flippy_mask = tot > flippy_threshold
+        smooth_mask = (still_threshold < tot) & (tot < flippy_threshold)
+        rate = len(t) / (t[-1] - t[0])
+
+        still = np.zeros(len(t))
+        still[still_mask] = 1
+        end_points = np.where(np.diff(still) == -1)[0]
+        start_points = np.where(np.diff(still) == 1)[0]
+        duration = np.array([sum(1 for _ in group) for key, group in itertools.groupby(still_mask)])[
+                   -(int(still[0]) - 1)::2]
+        long_still = np.where(duration > rate * minimum_time)[0]
+        trim_start = 0
+        trim_end = t[-1]
+        if len(long_still) == 1:
+            if end_points[long_still[0]] > len(t) / 2:
+                trim_end = start_points[long_still[-1]] / rate
+            else:
+                trim_start = end_points[long_still[0]] / rate
+
+        elif len(long_still) > 1:
+            trim_start = end_points[long_still[0]] / rate
+            trim_end = start_points[long_still[-1]] / rate
+        video_end = int(t[-1])
+        trim_start = max(trim_start - trim_offset, 0)
+        trim_end = min(trim_end + trim_offset, int(video_end))
+
+        print("Trim start: ", trim_start)
+        print("Trim end: ", trim_end)
+
+
+        smooth = np.zeros(len(t))
+        smooth[smooth_mask] = 1
+        start_points = np.where(np.diff(smooth) == 1)[0]
+        duration = np.array([sum(1 for _ in group) for key, group in itertools.groupby(smooth_mask)])[
+                   -(int(smooth[0]) - 1)::2]
+        long_smooth = np.where(duration > rate * 1)[0]
+        print("\nStart Duration")
+        for pt in long_smooth:
+            print(f"{start_points[pt - 1] / rate:.2f} {duration[pt] / rate:.2f}")
+
+        fig, ax = plt.subplots(1, 1, sharey=True, sharex=True)
+        alpha = .02
+        ax.plot(t[still_mask], len(t[still_mask]) * [-1], '.k', markersize=1, alpha=alpha)
+        ax.plot(t[smooth_mask], len(t[smooth_mask]) * [-.75], marker='.', color='lime', markersize=1, alpha=alpha)
+        ax.plot(t[flippy_mask], len(t[flippy_mask]) * [-.5], '.r', markersize=2, alpha=alpha*5)
+        ax.plot(t, tot, 'b')
+        ax.set(xlabel="time [s]", ylabel="omega_total [rad/s]")
+        ax.axvline(trim_start, color='orange')
+        ax.axvline(trim_end, color='darkviolet')
+        plt.grid()
+        black_patch = mpatches.Patch(color='black', label='still')
+        green_patch = mpatches.Patch(color='lime', label='smooth')
+        red_patch = mpatches.Patch(color='red', label='flippy')
+        orange_line = mlines.Line2D([], [], color='orange', label='trim start')
+        teal_line = mlines.Line2D([], [], color='darkviolet', label='trim end')
+        blue_line = mlines.Line2D([], [], color='blue', label='gyro omega_total')
+        plt.legend(handles=[blue_line, red_patch, green_patch, black_patch, orange_line, teal_line])
+
+        plt.show()
+        self.trim = (trim_start, trim_end)
+        self.smooth_parts = start_points.tolist()
+        self.smooth_parts_duration = duration.tolist()
+
     def get_recommended_syncpoints(self, num_frames_analyze, max_points=9):
+        analyzed_time = num_frames_analyze / self.fps
+        self.gyro_analysis(analyzed_time)
+
         syncpoints = []
 
         num_frames_offset = int(num_frames_analyze / 2)
@@ -582,9 +666,19 @@ class Stabilizer:
             inter_frames_actual = (last_index - first_index) / num_syncs
 
             for i in range(num_syncs):
-                syncpoints.append([round(first_index + i * inter_frames_actual), num_frames_analyze])
+                frame_time = (first_index + i * inter_frames_actual) * self.fps
+
+                suggested_idx = (np.abs(np.asarray(self.smooth_parts) - frame_time)).argmin()
+                frame = round(self.smooth_parts[suggested_idx])
+                # remove analyzed point from smooth parts when part to short
+                # if self.smooth_parts_duration < 3 * analyzed_time:
+                del self.smooth_parts[suggested_idx]
+                del self.smooth_parts_duration[suggested_idx]
+
+                syncpoints.append([frame, num_frames_analyze])
 
         return syncpoints
+
 
     def full_auto_sync(self, max_fitting_error = 0.02, max_points=9, debug_plots=True):
 

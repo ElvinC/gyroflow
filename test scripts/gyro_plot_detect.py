@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import pandas as pd
+import itertools
+
 file = r"D:\git\FPV\videos\GH011155.MP4"
 
 stab = stabilizer.GPMFStabilizer(file, r"D:\git\FPV\GoPro_Hero6_2160p_43.json", file, hero=6, fov_scale = 1.6, gyro_lpf_cutoff = -1)
@@ -13,7 +15,7 @@ z = stab.integrator.get_raw_data('z')
 t = stab.integrator.get_raw_data('t')
 tot = (x**2 + y**2 + z**2)**.5
 time = 3
-still_threshold = .02
+still_threshold = .01
 flippy_threshold = 8
 trim_offset = 1
 still_mask = tot <= still_threshold
@@ -39,7 +41,7 @@ fig, ax = plt.subplots(1, 1, sharey=True, sharex=True)
 alpha = .02
 ax.plot(t[still_mask], len(t[still_mask])*[-1], '.k', markersize=1, alpha=alpha)
 ax.plot(t[smooth_mask], len(t[smooth_mask])*[-.75], marker='.', color='lime', markersize=1, alpha=alpha)
-ax.plot(t[flippy_mask], len(t[flippy_mask])*[-.5], '.r', markersize=1, alpha=alpha)
+ax.plot(t[flippy_mask], len(t[flippy_mask])*[-.5], '.r', markersize=2, alpha=alpha*4)
 ax.plot(t, tot, 'b')
 ax.set(xlabel="time [s]", ylabel="omega_total [rad/s]")
 plt.grid()
@@ -51,7 +53,6 @@ teal_line = mlines.Line2D([], [], color='darkviolet', label='trim end')
 blue_line = mlines.Line2D([], [], color='blue', label='gyro omega_total')
 plt.legend(handles=[blue_line, red_patch, green_patch, black_patch, orange_line, teal_line])
 # plt.legend()
-import itertools
 # df = pd.DataFrame(data=[t, x, y, z, tot], )
 still = np.zeros(len(t))
 still[still_mask] = 1

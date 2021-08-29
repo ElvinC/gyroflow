@@ -11,6 +11,7 @@ import logging
 from scipy import signal, interpolate
 from scipy.fft import fft, fftfreq
 
+
 import insta360_utility as insta360_util
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor as GPMFExtractor
