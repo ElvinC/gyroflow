@@ -251,8 +251,8 @@ class Stabilizer:
     def set_smoothing_algo(self, algo = None):
         if not algo:
             algo = smoothing_algos.PlainSlerp() # Default
-        else:
-            self.smoothing_algo = algo
+
+        self.smoothing_algo = algo
 
     def update_smoothing(self):
 
@@ -1981,30 +1981,25 @@ class OpenCameraSensors(Stabilizer):
         super().__init__(videopath, calibrationfile, gyro_path, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
         gyro_data_input = self.read_csv(gyro_path)
         # Coverting gyro to XYZ to -Z,-X,Y
-        timestamps = self.read_csv(timestamp_path) * 1e-9
-        first_timestamp = timestamps[1][0]
-        last_timestamp = timestamps[-1][0]
+        self.timestamps = self.read_csv(timestamp_path) * 1e-9
+        first_timestamp = self.timestamps[1][0]
+        last_timestamp = self.timestamps[-1][0]
         duration = last_timestamp - first_timestamp
         print(f"Video duration : {duration:>8.2f} s")
-        print(f"Framerate      : {len(timestamps)/duration:>8.2f} Hz")
-        idx_start = self.find_nearest(gyro_data_input[:,3][:] * 1e-9, first_timestamp)
-        idx_end = self.find_nearest(gyro_data_input[:,3][:] * 1e-9, last_timestamp) + 1
-        self.gyro_data = np.empty([idx_end - idx_start, 4])
-        self.gyro_data[:,0] = gyro_data_input[:,3][idx_start:idx_end] * 1e-9
-        self.gyro_data[:,1] = gyro_data_input[:,0][idx_start:idx_end]
-        self.gyro_data[:,2] = gyro_data_input[:,1][idx_start:idx_end]
-        self.gyro_data[:,3] = gyro_data_input[:,2][idx_start:idx_end]
+        print(f"Framerate      : {len(self.timestamps)/duration:>8.2f} Hz")
+        self.gyro_data = np.empty([len(gyro_data_input), 4])
+        self.gyro_data[:,0] = gyro_data_input[:,3][:] * 1e-9 - first_timestamp
+        self.gyro_data[:,1] = gyro_data_input[:,1][:] * -1
+        self.gyro_data[:,2] = gyro_data_input[:,0][:]
+        self.gyro_data[:,3] = gyro_data_input[:,2][:]
         print(f"Gyro rate      : {len(self.gyro_data[:,0])/(self.gyro_data[-1,0] - self.gyro_data[0,0]):>8.2f} Hz")
 
         acc_data_input = self.read_csv(acc_path)
-        # Coverting gyro to XYZ to -Z,-X,Y
-        idx_start = self.find_nearest(acc_data_input[:,3][:] * 1e-9, first_timestamp)
-        idx_end = self.find_nearest(acc_data_input[:,3][:] * 1e-9, last_timestamp) + 1
-        self.acc_data = np.empty([idx_end - idx_start, 4])
-        self.acc_data[:,0] = acc_data_input[:,3][idx_start:idx_end] * 1e-9
-        self.acc_data[:,1] = acc_data_input[:,0][idx_start:idx_end]
-        self.acc_data[:,2] = acc_data_input[:,1][idx_start:idx_end]
-        self.acc_data[:,3] = acc_data_input[:,2][idx_start:idx_end]
+        self.acc_data = np.empty([len(gyro_data_input), 4])
+        self.acc_data[:,0] = (acc_data_input[:,3][:len(gyro_data_input)]) * 1e-9 - first_timestamp
+        self.acc_data[:,1] = acc_data_input[:,1][:len(gyro_data_input)] * -1
+        self.acc_data[:,2] = acc_data_input[:,0][:len(gyro_data_input)]
+        self.acc_data[:,3] = acc_data_input[:,2][:len(gyro_data_input)]
         print(f"Acc rate       : {len(self.acc_data[:,0])/(self.acc_data[-1,0] - self.acc_data[0,0]):>8.2f} Hz")
 
 
@@ -2041,27 +2036,6 @@ class OpenCameraSensors(Stabilizer):
             return idx - 1
         else:
             return idx
-
-    def stabilization_settings(self, smooth = 0.95):
-
-
-        v1 = 20 / self.fps
-        v2 = 900 / self.fps
-        d1 = 0.042
-        d2 = -0.396
-
-        err_slope = (d2-d1)/(v2-v1)
-        correction_slope = err_slope + 1
-        gyro_start = (d1 - err_slope*v1)
-
-        interval = 1/(correction_slope * self.fps)
-
-
-        print("Start {}".format(gyro_start))
-
-        print("Interval {}, slope {}".format(interval, correction_slope))
-
-        self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
 
 
 class MultiStabilizer(Stabilizer):
