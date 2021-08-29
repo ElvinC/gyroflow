@@ -1,5 +1,5 @@
 ---
-title: "Gyroflow"
+title: "Gyroflow 0.3.0-beta is out!"
 layout: splash
 date: 2016-03-23T11:48:41-04:00
 header:
@@ -12,7 +12,7 @@ header:
     - label: "Download"
       url: "/download/"
       class: "btn--primary"
-excerpt: "A work-in-progress gyro-assisted video stabilization tool for aerial videography and stuff"
+excerpt: "Breaking news: The world's most tedious stabilization software could lose that title"
 intro: 
   - excerpt: "Ever wanted to be smooth like [insert favourite FPV pilot] without the skills or budget? This tool probably won't do that, but it might do something..."
 feature_row:
@@ -23,7 +23,7 @@ feature_row:
   - image_path: /assets/images/sync_picture.jpg
     alt: "placeholder image 2"
     title: "Alright stabilization"
-    excerpt: "Might've been almost state of the art back in 2011, still way behind other (commercial) implementations"
+    excerpt: "Might've been almost state of the art back in 2011, still way behind other (commercial) implementations when it comes to how commercial it is."
     # url: "#test-link"
     # btn_label: "Read More"
     # btn_class: "btn--primary"

@@ -14,7 +14,8 @@ Probably not, but I haven't tried SteadXP.
 * [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) By jaromeyer. Similar to BlackboxToGPMF but specifically for Hero 7 files.
 * [Virtual Gimbal](https://github.com/yossato/virtualGimbal) by Yoshiaki Sato. Another gyro-assisted stabilization tool that is in many ways much more advanced than Gyroflow at the moment (has rolling shutter correction). Although it has no graphical UI and I haven't tried it myself.
 * [FPV stabilization tools Facebook group](https://www.facebook.com/groups/fpvtools)
-* [RSgoBlackbox discord server](https://discord.gg/6Yk2dJQv)
+* [RSgoBlackbox discord server](https://discord.gg/2He3XTjtpt)
+* I also know that at least two other people are working on something similar, so that's pretty neat.
 
 ## Are these questions actually "frequently asked"?
 No, but they could be.
@@ -29,7 +30,7 @@ This [companion video](https://youtu.be/I54X4NRuB-Q) to the the paper _Digital V
 Watch the [tutorial](https://youtu.be/NFsTb_f7y8s) if you haven't and try asking in the Discord or Facebook group.
 
 ## There is no lens profile for X. What do I do?
-Create a new lens profile by following the guide (in the works). If it works well, please submit it to be added as a default profile so others can use it.
+Create a new lens profile by following the guide. It only takes a few minutes. If it works well, please submit it to be added as a default profile so others can use it.
 Since you can add a name to the profile, future users can tell who the awesome calibrator was.
 
 ## I tried out a lens profile for my camera, but it doesn't work very well?
