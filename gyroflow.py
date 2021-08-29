@@ -2724,7 +2724,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
-
+        time.sleep(0.5) # Time to close file dialog
         # Handled in stabilizer
         #if filename[0] == self.infile_path:
         #    self.show_error("You can't overwride the input file")
@@ -2765,7 +2765,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.video_viewer.stop()
             viewer_thread = self.video_viewer.thread
 
-        time.sleep(0.5)
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
