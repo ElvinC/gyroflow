@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import pandas as pd
-file = r"D:\git\FPV\videos\GH011160.MP4"
+file = r"D:\git\FPV\videos\GH011155.MP4"
 
 stab = stabilizer.GPMFStabilizer(file, r"D:\git\FPV\GoPro_Hero6_2160p_43.json", file, hero=6, fov_scale = 1.6, gyro_lpf_cutoff = -1)
 x = stab.integrator.get_raw_data('x')
@@ -14,10 +14,11 @@ t = stab.integrator.get_raw_data('t')
 tot = (x**2 + y**2 + z**2)**.5
 time = 3
 still_threshold = .02
+flippy_threshold = 8
 trim_offset = 1
 still_mask = tot <= still_threshold
-flippy_mask = tot > 1
-smooth_mask = (still_threshold < tot) & (tot < 1)
+flippy_mask = tot > flippy_threshold
+smooth_mask = (still_threshold < tot) & (tot < flippy_threshold)
 rate = len(t) / (t[-1] - t[0])
 print(rate)
 fig, ax = plt.subplots(1, 1, sharey=True, sharex=True)
