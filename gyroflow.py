@@ -1727,7 +1727,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync_controls_layout.addWidget(self.sync_correction_button)
 
 
-       # Select method for doing low-pass filtering
+        # Select method for doing low-pass filtering
         self.stab_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
         self.stabilization_algo_select = QtWidgets.QComboBox()
 
@@ -1765,9 +1765,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         text.setAlignment(QtCore.Qt.AlignCenter)
         self.export_controls_layout.addWidget(text)
 
-        # output size choice
-        self.out_size_text = QtWidgets.QLabel("Output dimensions: ")
-        self.export_controls_layout.addWidget(self.out_size_text)
+        # output size choice presets
+        names = ["4k", "2.7k", "1440p", "1080p", "720p"]
+        self.resolutions = [(3840, 2160), (2704, 1520), (2560, 1440), (1920, 1080), (1280, 720)]
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("Preset video resolutions (16:9):"))
+        self.preset_resolution_combo = QtWidgets.QComboBox()
+        self.preset_resolution_combo.addItem(f"Original")
+        for name, res in zip(names, self.resolutions):
+            self.preset_resolution_combo.addItem(f"{name} ({res[0]}x{res[1]}px)")
+        self.preset_resolution_combo.currentIndexChanged.connect(self.preset_resolution_selected)
+
+        self.export_controls_layout.addWidget(self.preset_resolution_combo)
 
         self.out_width_control = QtWidgets.QSpinBox(self)
         self.out_width_control.setMinimum(16)
@@ -1778,6 +1786,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         # output size choice
+        self.out_size_text = QtWidgets.QLabel("Output dimensions: ")
+        self.export_controls_layout.addWidget(self.out_size_text)
         self.out_height_control = QtWidgets.QSpinBox(self)
         self.out_height_control.setMinimum(9)
         self.out_height_control.setMaximum(4320)
@@ -2417,6 +2427,15 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def zoom_changed(self):
         val = self.zoom.value() / 10
         self.zoom_text.setText("Zoom Factor (with adaptive zoom) or FOV scale (same as preview): {}".format(val))
+
+    def preset_resolution_selected(self):
+        index = self.preset_resolution_combo.currentIndex()
+        if index == 0:
+            self.out_width_control.setValue(self.video_info_dict["width"])
+            self.out_height_control.setValue(self.video_info_dict["height"])
+        else:
+            self.out_width_control.setValue(self.resolutions[index - 1][0])
+            self.out_height_control.setValue(self.resolutions[index - 1][1])
 
     def update_out_size(self):
         """Update export image size
