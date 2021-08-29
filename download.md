@@ -22,6 +22,7 @@ Here are the downloads for the latest stable-ish release. If you want the latest
 * Lens preset search
 * Bunch of bug fixes
 * [New video tutorial/update!](https://youtu.be/f4YD5pGmnxM)
+
 ### Windows executable:
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-win64.exe" class="btn btn--info btn--large">gyroflow-0.3.0-beta-win64.exe</a>
 ### Mac executable:
