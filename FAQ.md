@@ -7,6 +7,12 @@ title: FAQ
 Make sure you have FFmpeg installed. If problem persist, export with debug info enabled, which should narrow down the problem.
 
 
+## Will this work with a GoPro Hero 5/7 on a drone
+Hero 7 should work fine with Gyroflow for handheld footage, but has fundamental (hardware?) issues with gyro noise and aliasing, so motion data is essentially lost when hardmounted on a drone due to the vibrations. You can use softmounting e.g: https://www.thingiverse.com/thing:3842261 or use an external gyro source.
+
+Something similar is the case for the SMO4k, which also has noisy motion data.
+
+
 ## Is this better than Reelsteady Go for GoPro?
 No.
 
