@@ -3,6 +3,10 @@ layout: single
 title: FAQ
 ---
 
+## My export doesn't work with hardware acceleration?
+Make sure you have FFmpeg installed. If problem persist, export with debug info enabled, which should narrow down the problem.
+
+
 ## Is this better than Reelsteady Go for GoPro?
 No.
 
