@@ -44,8 +44,8 @@ class QTimeSlider(QtWidgets.QSlider):
      
     def mousePressEvent(self, event):
         #Jump to click position
-        self.sliderPressed.emit()
         self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
 
         #print(event)
     def mouseReleaseEvent(self, event):
@@ -54,8 +54,8 @@ class QTimeSlider(QtWidgets.QSlider):
 
     def mouseMoveEvent(self, event):
         #Jump to pointer position while moving
-        self.sliderPressed.emit()
         self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
 
 
 class Launcher(QtWidgets.QWidget):
