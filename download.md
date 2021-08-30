@@ -24,7 +24,7 @@ Here are the downloads for the latest stable-ish release. If you want the latest
 * [New video tutorial/update!](https://youtu.be/f4YD5pGmnxM)
 
 ### Windows executable:
-Only works with Windows 8 and up. Will add one later for Windows support.
+Only works with Windows 8 and up. Will add one for Windows 7 support soon.
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-win64.exe" class="btn btn--info btn--large">gyroflow-0.3.0-beta-win64.exe</a>
 ### Mac executable:
 <a href="#" class="btn btn--info btn--large">Check back in a day or two</a>
