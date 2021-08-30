@@ -3094,4 +3094,4 @@ if __name__ == "__main__":
     # pyside2-rcc images.qrc -o bundled_images.py
     # poetry run pyinstaller -F --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
     # -F == one file, -w == no command window
-    # Alternative: pyinstaller gyroflow.py -F --icon=media\icon.ico
+    # Alternative: pyinstaller gyroflow.py -F --icon=media\icon.ico --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python39\python39.dll

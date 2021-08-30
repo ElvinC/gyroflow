@@ -1,6 +1,6 @@
-# Gyroflow - Video stabilization using gyroscope data targeting drone footage (WIP)
+# Gyroflow - Video stabilization using gyroscope data targeting drone footage
 
-## [In-depth video guide](https://youtu.be/NFsTb_f7y8s)
+## [In-depth video guide for 0.3.x-beta](https://youtu.be/f4YD5pGmnxM)
 
 ## [Website with more info](http://gyroflow.xyz/)
 
@@ -37,7 +37,7 @@ Note: Try the dev branch for the newest features.
 
 **Sample clips:**
 * [0.2.x-alpha results](https://youtu.be/xkVtbYQnH04)
-* [In-depth video guide](https://youtu.be/NFsTb_f7y8s)
+* [In-depth video guide](https://youtu.be/f4YD5pGmnxM)
 
 
 **Working:**
