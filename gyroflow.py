@@ -37,6 +37,27 @@ cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RE
                     "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
                     "Phone"]
 
+
+class QTimeSlider(QtWidgets.QSlider):
+    def __init__(self, parent = None):
+        super(QTimeSlider, self).__init__(QtCore.Qt.Horizontal, parent)
+     
+    def mousePressEvent(self, event):
+        #Jump to click position
+        self.sliderPressed.emit()
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+
+        #print(event)
+    def mouseReleaseEvent(self, event):
+        self.sliderReleased.emit()
+        #print(event)
+
+    def mouseMoveEvent(self, event):
+        #Jump to pointer position while moving
+        self.sliderPressed.emit()
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+
+
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
     """
@@ -352,7 +373,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
 
         # seek bar with value from 0-200
-        self.time_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.time_slider = QTimeSlider(self)
         self.time_slider.setMinimum(0)
         self.time_slider.setValue(0)
 
@@ -467,6 +488,12 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.is_seeking = True
         self.was_playing_before = self.thread.playing
         self.stop()
+
+        # Update timestamp
+        slider_val = self.time_slider.value()
+        frame_pos = slider_val * (max(self.num_frames, 1))/self.seek_ticks 
+        timestamp = frame_pos / self.fps 
+        self.time_stamp_display.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
 
     def stop_seek(self):
         self.is_seeking = False
