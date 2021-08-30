@@ -936,7 +936,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
 
     def add_current_frame(self):
@@ -2783,14 +2783,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         err_window.show()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     def get_available_encoders(self):
         if(get_valid_ffmpeg_path()):  # Helper function from VidGear
             ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
             return ffmpeg_encoders_sp.stdout
         else:
-            self.show_warning("Could not find FFmpeg installation")
+            self.show_warning("FFmpeg not found, encoding options are limited. <a href='https://ffmpeg.org/download.html'>Download FFmpeg</a>")
             return ""
 
     def update_profile_select(self):
@@ -3012,7 +3012,7 @@ class StabUtility(StabUtilityBarebone):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     #def synchere1(self):
     #    self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
