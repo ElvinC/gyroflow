@@ -595,10 +595,13 @@ class Stabilizer:
         start_points = np.where(np.diff(smooth) == 1)[0]
         duration = np.array([sum(1 for _ in group) for key, group in itertools.groupby(smooth_mask)])[
                    -(int(smooth[0]) - 1)::2]
-        long_smooth = np.where(duration > rate * 1)[0]
+        long_smooth = np.where(duration > rate * minimum_time)[0]
+        start_points = start_points[long_smooth - 1] / rate
+        duration = duration[long_smooth] / rate
         print("\nStart Duration")
-        for pt in long_smooth:
-            print(f"{start_points[pt - 1] / rate:.2f} {duration[pt] / rate:.2f}")
+        # start_points = np.delete(start_points, 0)
+        for pt in range(len(start_points)):
+            print(f"{start_points[pt]:.2f} {duration[pt]:.2f}")
 
         fig, ax = plt.subplots(1, 1, sharey=True, sharex=True)
         alpha = .02
@@ -672,8 +675,9 @@ class Stabilizer:
                 frame = round(self.smooth_parts[suggested_idx])
                 # remove analyzed point from smooth parts when part to short
                 # if self.smooth_parts_duration < 3 * analyzed_time:
-                del self.smooth_parts[suggested_idx]
-                del self.smooth_parts_duration[suggested_idx]
+                if len(self.smooth_parts) > 1:
+                    del self.smooth_parts[suggested_idx]
+                    del self.smooth_parts_duration[suggested_idx]
 
                 syncpoints.append([frame, num_frames_analyze])
 
@@ -849,16 +853,17 @@ class Stabilizer:
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
         time.sleep(0.05)
-
-        # Read first frame
-        _, prev = self.cap.read()
+        # Read first valid frame
+        ret = False
+        while not ret:
+            ret, prev = self.cap.read()
         if self.do_video_rotation:
             prev = cv2.rotate(prev, self.video_rotate_code)
         prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
         if self.undistort.image_is_stretched():
             prev_gray = cv2.resize(prev_gray, self.process_dimension)
 
-        for i in tqdm(range(analyze_length), desc="Analyzing frame", colour="blue"):
+        for i in tqdm(range(analyze_length), desc=f"Analyzing frames (start: {start_frame}", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
