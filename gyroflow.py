@@ -2776,11 +2776,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.export_gyroflow_file()
 
     def show_error(self, msg):
-        err_window = QtWidgets.QMessageBox(self)
-        err_window.setIcon(QtWidgets.QMessageBox.Critical)
-        err_window.setText(msg)
-        err_window.setWindowTitle("Something's gone awry")
-        err_window.show()
+        QtWidgets.QMessageBox.warning(self, "Something's gone awry", msg)
 
     def show_warning(self, msg):
         QtWidgets.QMessageBox.warning(self, "Warning", msg)
@@ -2790,7 +2786,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
             return ffmpeg_encoders_sp.stdout
         else:
-            self.show_warning("FFmpeg not found, encoding options are limited. <a href='https://ffmpeg.org/download.html'>Download FFmpeg</a>")
+            self.show_error("FFmpeg not found. Some features won't work correctly. <a href='https://ffmpeg.org/download.html'>Download FFmpeg</a>")
             return ""
 
     def update_profile_select(self):
