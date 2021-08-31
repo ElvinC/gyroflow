@@ -6,6 +6,8 @@ title: FAQ
 ## My export doesn't work with hardware acceleration?
 Make sure you have FFmpeg installed. If problem persist, export with debug info enabled, which should narrow down the problem.
 
+## I get a weird JSON decode error during processing
+You probably accidentally downloaded the whole HTML website instead of the json preset. I recommend downloading and placing the camera_presets folder from the downloads page, and place it together with the executable.
 
 ## Will this work with a GoPro Hero 5/7 on a drone
 Hero 7 should work fine with Gyroflow for handheld footage, but has fundamental (hardware?) issues with gyro noise and aliasing, so motion data is essentially lost when hardmounted on a drone due to the vibrations. You can use softmounting e.g: https://www.thingiverse.com/thing:3842261 or use an external gyro source.

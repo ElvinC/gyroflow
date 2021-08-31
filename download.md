@@ -33,7 +33,7 @@ Here's a version that should work with windows 7:
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-win7-64.exe" class="btn btn--info btn--large">gyroflow-0.3.0-beta-win7-64.exe</a>
 
 ### Mac executable:
-<a href="#" class="btn btn--info btn--large">Check back in a day or two</a>
+<a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-macOS.dmg" class="btn btn--info btn--large">gyroflow-0.3.0-beta-macOS.dmg</a>
 ### Ubuntu executable:
 The Ubuntu version below can in theory be run by extracting, adding +X with chmod, and using ./gyroflow, but it's not really tested, and it might be easier for most Linux users to run the python program directly since the package is hilariously big for some reason.
 
