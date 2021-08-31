@@ -6,6 +6,10 @@ title: FAQ
 ## My export doesn't work with hardware acceleration?
 Make sure you have FFmpeg installed. If problem persist, export with debug info enabled, which should narrow down the problem.
 
+## I'm getting an error with `Unable to read multiple frames` when trying to render a video
+Sometimes there are a couple frames right at the beginning of video files which can't be read for some reason. Try setting the render range to a different part of the video from where the error occured.
+
+
 ## I get a weird JSON decode error during processing
 You probably accidentally downloaded the whole HTML website instead of the json preset. I recommend downloading and placing the camera_presets folder from the downloads page, and place it together with the executable.
 
