@@ -669,15 +669,24 @@ class Stabilizer:
             inter_frames_actual = (last_index - first_index) / num_syncs
 
             for i in range(num_syncs):
-                frame_time = (first_index + i * inter_frames_actual) * self.fps
+                frame_time = round(first_index + i * inter_frames_actual) / self.fps
 
-                suggested_idx = (np.abs(np.asarray(self.smooth_parts) - frame_time)).argmin()
-                frame = round(self.smooth_parts[suggested_idx])
                 # remove analyzed point from smooth parts when part to short
                 # if self.smooth_parts_duration < 3 * analyzed_time:
-                if len(self.smooth_parts) > 1:
-                    del self.smooth_parts[suggested_idx]
-                    del self.smooth_parts_duration[suggested_idx]
+                if len(self.smooth_parts) > 0:
+                    suggested_idx = (np.abs(np.asarray(self.smooth_parts) - frame_time)).argmin()
+                    frame = round(self.smooth_parts[suggested_idx] * self.fps)
+                    # remove smooth part if there is not enough time left for another sync point
+                    if self.smooth_parts_duration[suggested_idx] < 3 * (num_frames_analyze / self.fps):
+                        del self.smooth_parts[suggested_idx]
+                        del self.smooth_parts_duration[suggested_idx]
+                    # shorten the smooth part a bit more than the analyzed time
+                    else:
+                        self.smooth_parts[suggested_idx] = self.smooth_parts[suggested_idx] + 2 * (num_frames_analyze / self.fps)
+                        self.smooth_parts_duration[suggested_idx] - 2 * (num_frames_analyze / self.fps)
+                else:
+                    frame = round(frame_time * self.fps)
+                print(f"Normal: {frame_time:.2f} Used: {frame / self.fps:.2f}")
 
                 syncpoints.append([frame, num_frames_analyze])
 
@@ -863,7 +872,7 @@ class Stabilizer:
         if self.undistort.image_is_stretched():
             prev_gray = cv2.resize(prev_gray, self.process_dimension)
 
-        for i in tqdm(range(analyze_length), desc=f"Analyzing frames (start: {start_frame}", colour="blue"):
+        for i in tqdm(range(analyze_length), desc=f"Analyzing frames (start: {start_frame / self.fps: .2f} s)", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
 
