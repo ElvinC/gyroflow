@@ -767,8 +767,6 @@ class Stabilizer:
         for i in tqdm(range(analyze_length), desc="Analyzing frame", colour="blue"):
             prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
 
-
-
             succ, curr = self.cap.read()
             if self.do_video_rotation:
                 curr = cv2.rotate(curr, self.video_rotate_code)
@@ -776,11 +774,24 @@ class Stabilizer:
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
             frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
 
+            if type(prev_pts) == type(None) or prev_pts.shape[0] < 2:
+                print("Not enough image features, skipping frame")
+                roteul = np.array([0,0,0])
+                transforms.append(list(roteul/self.num_frames_skipped))
+                prev_pts_lst.append(None)
+                curr_pts_lst.append(None)
+                frame_idx.append(frame_id)
+                frame_times.append(frame_time)
+                continue # Skip rest of loop
+
             #if i % 10 == 0:
             #    print("Analyzing frame: {}/{}".format(i,analyze_length))
 
             if succ and i % self.num_frames_skipped == 0:
                 # Only add if succeeded
+                
+                roteul = None
+                
                 frame_idx.append(frame_id)
                 frame_times.append(frame_time)
 
@@ -789,6 +800,7 @@ class Stabilizer:
                 if self.undistort.image_is_stretched():
                     curr_gray = cv2.resize(curr_gray, self.process_dimension)
                 # Estimate transform using optical flow
+
                 curr_pts, status, err = cv2.calcOpticalFlowPyrLK(prev_gray, curr_gray, prev_pts, None)
 
                 idx = np.where(status==1)[0]
@@ -800,7 +812,6 @@ class Stabilizer:
                 curr_pts_lst.append(curr_pts)
 
 
-                # TODO: Try getting undistort + homography working for more accurate rotation estimation
                 src_pts = self.undistort.undistort_points(prev_pts, new_img_dim=(self.width,self.height))
                 dst_pts = self.undistort.undistort_points(curr_pts, new_img_dim=(self.width,self.height))
 
@@ -816,7 +827,7 @@ class Stabilizer:
                 # rots contains for solutions for the rotation. Get one with smallest magnitude.
                 # https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
                 # https://en.wikipedia.org/wiki/Essential_matrix#Extracting_rotation_and_translation
-                roteul = None
+                
                 smallest_mag = 1000
 
                 try:
