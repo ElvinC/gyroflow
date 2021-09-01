@@ -3,6 +3,9 @@ layout: single
 title: FAQ
 ---
 
+## Something doesn't work and I didn't watch the tutorial video in full. Halp!?
+Apparently only 15% of viewers watched the full video. Please do so if you haven't before asking for help since it contains a lot of tips and tricks: [tutorial](https://youtu.be/f4YD5pGmnxM). 
+
 ## My export doesn't work with hardware acceleration?
 Make sure you have FFmpeg installed. If problem persist, export with debug info enabled, which should narrow down the problem.
 
