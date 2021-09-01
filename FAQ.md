@@ -9,12 +9,31 @@ Make sure you have FFmpeg installed. If problem persist, export with debug info 
 ## I'm getting an error with `Unable to read multiple frames` when trying to render a video
 Sometimes there are a couple frames right at the beginning of video files which can't be read for some reason. Try setting the render range to a different part of the video from where the error occured.
 
+## Which smoothing method should I use?
+Default, 3D smoothing: For general use, but doesn't work for fast moves (image movement is not limited)
+
+Yaw pitch roll smoothing: Lets you decide how much you're smoothing in each axis. It can look nicer to smooth more in the roll axis.
+
+Horizon lock: Attempts to keep the horizon level. Works best for flight without fast rotational moves since some gyros can be maxed out.
+
+3D smoothing with smooth angle limit (Aphobius): Limits how much stabilization is applied during fast flips/rolls. The best option for "freestyle" FPV flight.
+
+3D smoothing with sharp angle limit: Similar to the above, but a different (worse) implementation. Use 3D smoothing with smooth angle limit instead.
+
+Nothing: Does nothing
+
+## Trying to stabilize footage from my camera with IBIS results in footage that still wobbly sometimes.
+Sorry mate, the sensor is bouncing around so the gyro doesn't match the image anymore. Nothing can be done on the software side, but if you're feeling adventurous, there are supposedly options to lock the sensor in place with glue or 3D prints.
+
+
+
+
 
 ## I get a weird JSON decode error during processing
 You probably accidentally downloaded the whole HTML website instead of the json preset. I recommend downloading and placing the camera_presets folder from the downloads page, and place it together with the executable.
 
 ## Will this work with a GoPro Hero 5/7 on a drone
-Hero 7 should work fine with Gyroflow for handheld footage, but has fundamental (hardware?) issues with gyro noise and aliasing, so motion data is essentially lost when hardmounted on a drone due to the vibrations. You can use softmounting e.g: https://www.thingiverse.com/thing:3842261 or use an external gyro source.
+Hero 7 should work fine with Gyroflow for handheld footage, but has fundamental (hardware?) issues with gyro noise and aliasing, so motion data is essentially lost when hardmounted on a drone due to the vibrations. You can use softmounting e.g: [https://www.thingiverse.com/thing:3842261](https://www.thingiverse.com/thing:3842261) or use an external gyro source.
 
 Something similar is the case for the SMO4k, which also has noisy motion data.
 
@@ -38,12 +57,12 @@ No, but they could be.
 
 ## How does gyro-based image stabilization work?
 Not sure how many are wondering this, but I'm going to answer anyways :). Classic video stabilization methods work by estimating the camera motion using optical flow, but this involves "guesswork" so to speak.
-MEMS gyroscopes can be used to determine the rotation of the camera very accurately. The first step is to sync the gyro and the video. Then a virtual camera cam be created that moves just like the physical camera, which "projects" the image onto an imaginary plane or sphere. Another (smoothed) camera can recapture the view, resulting in a stabilized video. In practice the projection and recapture can be combined using some fancy mathematics. 
+MEMS gyroscopes can be used to determine the rotation of the camera very accurately. The first step is to sync the gyro and the video. Then a virtual camera can be created that moves just like the physical camera, which "projects" the image onto an imaginary plane or sphere. Another (smoothed) camera can recapture the view, resulting in a stabilized video. In practice the projection and recapture can be combined using some fancy mathematics. 
 
 This [companion video](https://youtu.be/I54X4NRuB-Q) to the the paper _Digital Video Stabilization and Rolling Shutter Correction using Gyroscopes_ by Karpenko et al. explains the basic concepts quite well. 
 
 ## I can't get X to work, what do?
-Watch the [tutorial](https://youtu.be/NFsTb_f7y8s) if you haven't and try asking in the Discord or Facebook group.
+Watch the [tutorial](https://www.youtube.com/watch?v=f4YD5pGmnxM) if you haven't and try asking in the Discord or Facebook group.
 
 ## There is no lens profile for X. What do I do?
 Create a new lens profile by following the guide. It only takes a few minutes. If it works well, please submit it to be added as a default profile so others can use it.
