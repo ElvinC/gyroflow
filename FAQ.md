@@ -9,7 +9,7 @@ Make sure you have FFmpeg installed. If problem persist, export with debug info 
 ## I'm getting an error with `Unable to read multiple frames` when trying to render a video
 Sometimes there are a couple frames right at the beginning of video files which can't be read for some reason. Try setting the render range to a different part of the video from where the error occured.
 
-## Which smoothing method should I use?
+## Which smoothing method should I use? Or: The render is all zoomed in!?!?
 Default, 3D smoothing: For general use, but doesn't work for fast moves (image movement is not limited)
 
 Yaw pitch roll smoothing: Lets you decide how much you're smoothing in each axis. It can look nicer to smooth more in the roll axis.
