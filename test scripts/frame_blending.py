@@ -3,7 +3,7 @@ import numpy as np
 import os
    
 # Create a VideoCapture object and read from input file
-f = '../test_clips/C0214-4.2.2.10bit.MP4'
+f = 'D:/DCIM/100RUNCAM/RC_0005_210823153931.MP4'
 if os.path.isfile(f):
     print("IS FILE")
 else:
@@ -13,11 +13,16 @@ cap = cv2.VideoCapture(f,cv2.CAP_FFMPEG)
 #cap.set(cv2.CAP_PROP_POS_FRAMES, 60 * 10)
 
 ret, frame_out = cap.read()
+frame_out = cv2.resize(frame_out, (1920,1080))
 
 frame_out = (frame_out * 0).astype(np.float64)
 
-mult = 3
-num_blend = 3
+out = cv2.VideoWriter('outpy5.mp4',-1, 30, (1920,1080))
+
+mult = 60
+num_blend = 14
+
+diff = mult - num_blend
 
 i = 1
 
@@ -26,8 +31,10 @@ while(cap.isOpened()):
         
     # Capture frame-by-frame
     ret, frame = cap.read()
-    print(frame.shape)
+    #print(frame.shape)
+    
     if ret == True:
+        frame = cv2.resize(frame, (1920,1080), interpolation=cv2.INTER_NEAREST)
         
         # Display the resulting frame
         
@@ -41,12 +48,15 @@ while(cap.isOpened()):
         if (i-1) % mult < num_blend:
             print(f"adding {i}")
             frame_out += 1/(num_blend) * frame.astype(np.float64)
-
+        elif (i-1) % mult == num_blend:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(cap.get(cv2.CAP_PROP_POS_FRAMES) + diff-1) )
+            i += diff - 1
 
         if ((i-1) - num_blend + 1) % mult == 0:
-            cv2.imshow('Frame', frame_out.astype(np.uint8))
+            #cv2.imshow('Frame', frame_out.astype(np.uint8))
+            out.write(frame_out.astype(np.uint8))
 
-            cv2.waitKey(5)
+            #cv2.waitKey(5)
 
 
         i += 1
