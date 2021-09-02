@@ -1422,6 +1422,26 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.input_controls_layout.addWidget(self.gyro_log_format_select)
 
 
+        self.gyro_variant_text = QtWidgets.QLabel('Gyro source variant')
+        self.input_controls_layout.addWidget(self.gyro_variant_text)
+
+        self.gyro_variant_control = QtWidgets.QComboBox()
+        self.gyro_variant_control.setToolTip('Different setups/models can have different gyro orientations. Make sure to select the right one!')
+        self.gyro_variant_control.currentIndexChanged.connect(self.reset_stab)
+        self.gyro_variant_control.clear()
+        
+        self.log_reader = gyrolog.GyroflowGyroLog()
+        #self.gyro_variant_control.addItem("hero5")
+        #self.gyro_variant_control.addItem("hero6")
+        #self.gyro_variant_control.addItem("hero7")
+        #self.gyro_variant_control.addItem("hero8")
+        #self.gyro_variant_control.addItem("hero9")
+
+        #self.gyro_variant_control.addItems(gyrolog.GyroflowGyroLog().get_variants())
+
+        self.input_controls_layout.addWidget(self.gyro_variant_control)
+
+
         self.fpv_tilt_text = QtWidgets.QLabel("Camera to gyro angle:")
         
         self.fpv_tilt_control = QtWidgets.QDoubleSpinBox(self)
@@ -1449,24 +1469,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_text)
         #self.input_controls_layout.addWidget(self.gyro_log_use_raw_data_control)
 
-        self.gyro_variant_text = QtWidgets.QLabel('Gyro source variant')
-        self.input_controls_layout.addWidget(self.gyro_variant_text)
-
-        self.gyro_variant_control = QtWidgets.QComboBox()
-        self.gyro_variant_control.setToolTip('Different setups/models can have different gyro orientations. Make sure to select the right one!')
-        self.gyro_variant_control.currentIndexChanged.connect(self.reset_stab)
-        self.gyro_variant_control.clear()
-        
-        self.log_reader = gyrolog.GyroflowGyroLog()
-        #self.gyro_variant_control.addItem("hero5")
-        #self.gyro_variant_control.addItem("hero6")
-        #self.gyro_variant_control.addItem("hero7")
-        #self.gyro_variant_control.addItem("hero8")
-        #self.gyro_variant_control.addItem("hero9")
-
-        #self.gyro_variant_control.addItems(gyrolog.GyroflowGyroLog().get_variants())
-
-        self.input_controls_layout.addWidget(self.gyro_variant_control)
 
         self.input_controls_layout.addWidget(QtWidgets.QLabel('Input low-pass filter cutoff (Hz). Set to -1 to disable'))
         self.input_lpf_control = QtWidgets.QSpinBox(self)
@@ -1725,7 +1727,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync_controls_layout.addWidget(self.sync_correction_button)
 
 
-       # Select method for doing low-pass filtering
+        # Select method for doing low-pass filtering
         self.stab_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
         self.stabilization_algo_select = QtWidgets.QComboBox()
 
@@ -1763,9 +1765,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         text.setAlignment(QtCore.Qt.AlignCenter)
         self.export_controls_layout.addWidget(text)
 
-        # output size choice
-        self.out_size_text = QtWidgets.QLabel("Output dimensions: ")
-        self.export_controls_layout.addWidget(self.out_size_text)
+        # output size choice presets
+        names = ["4K", "2.7K", "1440p", "1080p", "720p", "4K 2.39:1"]
+        self.resolutions = [(3840, 2160), (2704, 1520), (2560, 1440), (1920, 1080), (1280, 720), (4096, 1716)]
+        self.export_controls_layout.addWidget(QtWidgets.QLabel("Preset video resolutions:"))
+        self.preset_resolution_combo = QtWidgets.QComboBox()
+        self.preset_resolution_combo.addItem(f"Original")
+        for name, res in zip(names, self.resolutions):
+            self.preset_resolution_combo.addItem(f"{name} ({res[0]}x{res[1]}px)")
+        self.preset_resolution_combo.currentIndexChanged.connect(self.preset_resolution_selected)
+
+        self.export_controls_layout.addWidget(self.preset_resolution_combo)
 
         self.out_width_control = QtWidgets.QSpinBox(self)
         self.out_width_control.setMinimum(16)
@@ -1776,6 +1786,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         # output size choice
+        self.out_size_text = QtWidgets.QLabel("Output dimensions: ")
+        self.export_controls_layout.addWidget(self.out_size_text)
         self.out_height_control = QtWidgets.QSpinBox(self)
         self.out_height_control.setMinimum(9)
         self.out_height_control.setMaximum(4320)
@@ -2187,6 +2199,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # set default sync and export options
         self.out_width_control.setValue(self.video_info_dict["width"])
         self.out_height_control.setValue(self.video_info_dict["height"])
+        self.export_starttime.setValue(0)
         self.export_stoptime.setValue(int(self.video_info_dict["time"])) # round down
         #self.sync1_control.setValue(5)
         #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
@@ -2415,6 +2428,15 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
     def zoom_changed(self):
         val = self.zoom.value() / 10
         self.zoom_text.setText("Zoom Factor (with adaptive zoom) or FOV scale (same as preview): {}".format(val))
+
+    def preset_resolution_selected(self):
+        index = self.preset_resolution_combo.currentIndex()
+        if index == 0:
+            self.out_width_control.setValue(self.video_info_dict["width"])
+            self.out_height_control.setValue(self.video_info_dict["height"])
+        else:
+            self.out_width_control.setValue(self.resolutions[index - 1][0])
+            self.out_height_control.setValue(self.resolutions[index - 1][1])
 
     def update_out_size(self):
         """Update export image size
@@ -2708,7 +2730,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
-
+        time.sleep(0.5) # Time to close file dialog
         # Handled in stabilizer
         #if filename[0] == self.infile_path:
         #    self.show_error("You can't overwride the input file")
@@ -2749,7 +2771,6 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.video_viewer.stop()
             viewer_thread = self.video_viewer.thread
 
-        time.sleep(0.5)
 
         self.stab.renderfile(start_time, stop_time, filename[0], out_size = out_size,
                              split_screen = split_screen, bitrate_mbits = bitrate,
@@ -3079,4 +3100,4 @@ if __name__ == "__main__":
     # pyside2-rcc images.qrc -o bundled_images.py
     # poetry run pyinstaller -F --icon=media\icon.ico gyroflow.py --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg440_64.dll;.
     # -F == one file, -w == no command window
-    # Alternative: pyinstaller gyroflow.py -F --icon=media\icon.ico
+    # Alternative: pyinstaller gyroflow.py -F --icon=media\icon.ico --add-binary C:\Users\elvin\AppData\Local\Programs\Python\Python39\python39.dll
