@@ -2524,7 +2524,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         max_fitting_error = self.max_fitting_control.value()
         max_syncs = self.max_sync_control.value()
-        success = self.stab.full_auto_sync(max_fitting_error,max_syncs)
+        success = self.stab.full_auto_sync(max_fitting_error, max_syncs)
 
         if not success:
             return
@@ -2548,6 +2548,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.has_player:
             self.update_player_maps()
         self.analyzed = True
+
+        if self.export_starttime.value() == 0:
+            self.export_starttime.setValue(self.stab.get_trim_start())
+        if self.export_stoptime.value() == int(self.video_info_dict["time"]):
+            self.export_stoptime.setValue(self.stab.get_trim_end(int(self.video_info_dict["time"])))
 
     def recompute_stab(self):
         """Update sync and stabilization
