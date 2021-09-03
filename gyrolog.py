@@ -37,95 +37,95 @@ ORIENTATIONS = [[[1, 0, 0], # 0 = identity
                 [0, 1, 0],
                 [0, 0, 1]],
 
-                [[ 1,  0,  0],
+                [[ 1,  0,  0],  # 1
                 [ 0,  0, -1],
                 [ 0,  1,  0]],
 
-                [[ 1,  0,  0],
+                [[ 1,  0,  0],  # 2
                 [ 0, -1,  0],
                 [ 0,  0, -1]],
 
-                [[ 1,  0,  0],
+                [[ 1,  0,  0],  # 3
                 [ 0,  0,  1],
                 [ 0, -1,  0]],
 
-                [[ 0,  1,  0],
+                [[ 0,  1,  0],  # 4
                 [ 1,  0,  0],
                 [ 0,  0, -1]],
 
-                [[0, 0, 1],
+                [[0, 0, 1],     # 5
                 [1, 0, 0],
                 [0, 1, 0]],
 
-                [[ 0, -1,  0],
+                [[ 0, -1,  0],  # 6
                 [ 1,  0,  0],
                 [ 0,  0,  1]],
 
-                [[ 0,  0, -1],
+                [[ 0,  0, -1],  # 7
                 [ 1,  0,  0],
                 [ 0, -1,  0]],
 
-                [[0, 1, 0],
+                [[0, 1, 0],     # 8
                 [0, 0, 1],
                 [1, 0, 0]],
 
-                [[ 0,  0, -1],
+                [[ 0,  0, -1],  # 9
                 [ 0,  1,  0],
                 [ 1,  0,  0]],
 
-                [[ 0, -1,  0],
+                [[ 0, -1,  0],  # 10
                 [ 0,  0, -1],
                 [ 1,  0,  0]],
 
-                [[ 0,  0,  1],
+                [[ 0,  0,  1],  # 11
                 [ 0, -1,  0],
                 [ 1,  0,  0]],
 
-                [[-1,  0,  0],
+                [[-1,  0,  0],  # 12
                 [ 0,  1,  0],
                 [ 0,  0, -1]],
 
-                [[-1,  0,  0],
+                [[-1,  0,  0],  # 13
                 [ 0,  0,  1],
                 [ 0,  1,  0]],
 
-                [[-1,  0,  0],
+                [[-1,  0,  0],  # 14
                 [ 0, -1,  0],
                 [ 0,  0,  1]],
 
-                [[-1,  0,  0],
+                [[-1,  0,  0],  # 15
                 [ 0,  0, -1],
                 [ 0, -1,  0]],
 
-                [[ 0,  1,  0],
+                [[ 0,  1,  0],  # 16
                 [-1,  0,  0],
                 [ 0,  0,  1]],
 
-                [[ 0,  0, -1],
+                [[ 0,  0, -1],  # 17
                 [-1,  0,  0],
                 [ 0,  1,  0]],
 
-                [[ 0, -1,  0],
+                [[ 0, -1,  0],  # 18
                 [-1,  0,  0],
                 [ 0,  0, -1]],
 
-                [[ 0,  0,  1],
+                [[ 0,  0,  1],  # 19
                 [-1,  0,  0],
                 [ 0, -1,  0]],
 
-                [[ 0,  1,  0],
+                [[ 0,  1,  0],  # 20
                 [ 0,  0, -1],
                 [-1,  0,  0]],
 
-                [[ 0,  0,  1],
+                [[ 0,  0,  1],  # 21
                 [ 0,  1,  0],
                 [-1,  0,  0]],
 
-                [[ 0, -1,  0],
+                [[ 0, -1,  0],  # 22
                 [ 0,  0,  1],
                 [-1,  0,  0]],
 
-                [[ 0,  0, -1],
+                [[ 0,  0, -1],  # 23
                 [ 0, -1,  0],
                 [-1,  0,  0]]]
 
@@ -1123,6 +1123,106 @@ class GyroflowGyroLog(GyrologReader):
         return True
 
 
+class OpenCameraSensorsLog(GyrologReader):
+    def __init__(self):
+        super().__init__("OpenCameraSensors file")
+        self.filename_pattern = ".*\.csv"
+        self.gyro_path = None
+        self.acc_path = None
+        self.timestamp_path = None
+        self.first_timestamp = None
+        self.path = None
+        self.date = None
+        self.variants = {
+            "Landscape": [6],
+            "Portrait": [0]
+        }
+        self.variant = "Portrait"
+
+        self.default_filter = -1
+        self.default_search_size = 0  # should be synced
+
+        self.post_init()
+
+    def check_log_type(self, filename):
+        self.guess_log_from_videofile(filename)
+        if os.path.isfile(self.gyro_path) and os.path.isfile(self.acc_path) and os.path.isfile(self.timestamp_path):
+            # fname = os.path.split(filename)[-1]
+            # firstlines = ["time,x,y,z,ax,ay,az", "time,rx,ry,rz,ax,ay,az", "time,x,y,z"]  # Different firmware versions
+            # if self.filename_matches(fname):
+            #     # open and check first line
+            #     with open(filename, "r") as f:
+            #         firstline = f.readline().strip()
+            #         # print(firstline)
+            #         if firstline in firstlines:
+            #             return True
+            return True
+
+        return False
+
+    def guess_log_from_videofile(self, videofile):
+        self.get_paths(videofile)
+        if os.path.isfile(self.gyro_path):
+            return self.gyro_path # os.path.split(self.gyro_path)[-1]
+        else:
+            return False
+
+    def get_paths(self, filename):
+        ext = filename.split('.')[-1].lower()
+        if ext =='mp4':
+            self.path, fname = os.path.split(filename)
+            self.date = fname.replace('VID_', '').replace('gyro', '').split('.')[0]
+        if ext == 'csv':
+            p, fname = os.path.split(filename)
+            self.path= os.path.split(p)[0]
+            self.date = fname.replace('VID_', '').replace('gyro', '').split('.')[0]
+
+        self.gyro_path = os.path.join(self.path, self.date, 'VID_' + self.date + "gyro.csv")
+        self.acc_path = os.path.join(self.path, self.date, 'VID_' + self.date + "accel.csv")
+        self.timestamp_path = os.path.join(self.path, self.date, 'VID_' + self.date + "_timestamps.csv")
+
+    def extract_log_internal(self, filename):
+        self.get_paths(filename)
+        with open(self.timestamp_path) as file:
+            self.first_timestamp = int(file.readline()) * 1e-9
+
+        self.gyro = self.read_csv(self.gyro_path)
+        self.acc = self.read_csv(self.acc_path)
+        self.has_acc = True
+        if self.gyro.shape[0] > self.acc.shape[0]:
+            self.gyro = self.gyro[:,:self.acc.shape[0]]
+        else:
+            self.acc = self.acc[:,:self.gyro.shape[0]]
+
+        return True
+
+    def read_csv(self, csvfile):
+        data = []
+        with open(csvfile) as f:
+            reader = csv.reader(f, delimiter=",", quotechar='"')
+            next(reader, None)
+            for row in reader:
+                time = float(row[3]) * 1e-9 - self.first_timestamp
+                if time > 0:
+                    data.append([time,
+                                 # float(row[1]) * -1,
+                                 # float(row[0]),
+                                 # float(row[2])])
+                                 float(row[0]),
+                                 float(row[1]),
+                                 float(row[2])])
+        data = np.array(data, dtype=float)
+        return data
+
+    # def find_nearest(self, array, value):
+    #     idx = np.searchsorted(array, value, side="left")
+    #     if idx > 0 and (idx == len(array) or math.fabs(value - array[idx - 1]) < math.fabs(value - array[idx])):
+    #         return idx - 1
+    #     else:
+    #         return idx
+
+
+
 class FakeData(GyrologReader):
     def __init__(self):
         super().__init__()
@@ -1172,7 +1272,8 @@ log_reader_classes = [GyroflowGyroLog,
                       BlackboxRawData,
                       RuncamData,
                       Insta360Log,
-                      GPMFLog]
+                      GPMFLog,
+                      OpenCameraSensorsLog]
 
 print("Available log types")
 for alg in log_reader_classes:
@@ -1251,9 +1352,10 @@ if __name__ == "__main__":
 
     tests = [
         "test_clips/badbbl.bbl",
-        "test_clips/Runcam/gyroDate0006.csv"
+        "test_clips/Runcam/gyroDate0006.csv",
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl",
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/gyroDate0010.csv",
+        r"D:\git\FPV\videos\opencamera\VID_20210827_211112.mp4"
     ]
 
     #reader = BlackboxRawData()
@@ -1262,10 +1364,11 @@ if __name__ == "__main__":
     #reader.plot_gyro()
 
     #reader = RuncamData()
-    success, logtype, variant = guess_log_type_from_log(tests[0])
+    case = 4
+    success, logtype, variant = guess_log_type_from_log(tests[case])
     reader = get_log_reader_by_name(logtype)
     reader.set_variant(variant)
-    reader.extract_log(tests[0])
+    reader.extract_log(tests[case])
     reader.plot_gyro()
     plt.show()
     exit()
