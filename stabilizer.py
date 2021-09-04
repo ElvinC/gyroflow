@@ -588,7 +588,6 @@ class Stabilizer:
         return syncpoints
 
     def full_auto_sync(self, max_fitting_error = 0.02, debug_plots=True):
-
         if self.use_gyroflow_data_file:
             self.update_smoothing()
             return
@@ -606,17 +605,17 @@ class Stabilizer:
         num_syncs = len(syncpoints)
 
         print(f"Analyzing {num_syncs} slices")
+        if self.rough_sync_search_interval != 0:
+            for frame_index, n_frames in syncpoints:
+                self.multi_sync_add_slice(frame_index, n_frames, False)
 
-        for frame_index, n_frames in syncpoints:
-            self.multi_sync_add_slice(frame_index, n_frames, False)
+                if self.sync_costs[-1] > max_sync_cost:
+                    print("Removing slice due to large error")
+                    self.multi_sync_delete_slice(-1)
 
-            if self.sync_costs[-1] > max_sync_cost:
-                print("Removing slice due to large error")
-                self.multi_sync_delete_slice(-1)
-
-            elif np.sum( (np.abs(self.transforms[-1] * self.fps) < 0.05) ) >= (0.95 * self.transforms[-1].size):
-                print("Removing slice due to lack of movement")
-                self.multi_sync_delete_slice(-1) # if more than 95% of the slice doesn't have significant movement (<3 deg/s)
+                elif np.sum( (np.abs(self.transforms[-1] * self.fps) < 0.05) ) >= (0.95 * self.transforms[-1].size):
+                    print("Removing slice due to lack of movement")
+                    self.multi_sync_delete_slice(-1) # if more than 95% of the slice doesn't have significant movement (<3 deg/s)
 
 
         success = self.multi_sync_compute(max_fitting_error = max_fitting_error, debug_plots=debug_plots)
@@ -1968,74 +1967,6 @@ class InstaStabilizer(Stabilizer):
         print("Interval {}, slope {}".format(interval, correction_slope))
 
         self.times, self.stab_transform = self.integrator.get_interpolated_stab_transform(start=-gyro_start,interval = interval) # 2.2/30 , -1/30
-
-
-class OpenCameraSensors(Stabilizer):
-    def __init__(self, videopath, calibrationfile, fov_scale = 1.6, gyro_lpf_cutoff = -1, video_rotation = -1):
-        root_dir = os.path.dirname(os.path.realpath(videopath))
-        file_name = videopath.split(os.sep)[-1]
-        date = file_name.replace('VID_', '').split('.')[0]
-        gyro_path = os.path.join(root_dir, date, 'VID_' + date + "gyro.csv")
-        acc_path = os.path.join(root_dir, date, 'VID_' + date + "accel.csv")
-        timestamp_path = os.path.join(root_dir, date, 'VID_' + date + "_timestamps.csv")
-        super().__init__(videopath, calibrationfile, gyro_path, fov_scale = fov_scale, gyro_lpf_cutoff = gyro_lpf_cutoff, video_rotation = video_rotation)
-        gyro_data_input = self.read_csv(gyro_path)
-        # Coverting gyro to XYZ to -Z,-X,Y
-        self.timestamps = self.read_csv(timestamp_path) * 1e-9
-        first_timestamp = self.timestamps[1][0]
-        last_timestamp = self.timestamps[-1][0]
-        duration = last_timestamp - first_timestamp
-        print(f"Video duration : {duration:>8.2f} s")
-        print(f"Framerate      : {len(self.timestamps)/duration:>8.2f} Hz")
-        self.gyro_data = np.empty([len(gyro_data_input), 4])
-        self.gyro_data[:,0] = gyro_data_input[:,3][:] * 1e-9 - first_timestamp
-        self.gyro_data[:,1] = gyro_data_input[:,1][:] * -1
-        self.gyro_data[:,2] = gyro_data_input[:,0][:]
-        self.gyro_data[:,3] = gyro_data_input[:,2][:]
-        print(f"Gyro rate      : {len(self.gyro_data[:,0])/(self.gyro_data[-1,0] - self.gyro_data[0,0]):>8.2f} Hz")
-
-        acc_data_input = self.read_csv(acc_path)
-        self.acc_data = np.empty([len(gyro_data_input), 4])
-        self.acc_data[:,0] = (acc_data_input[:,3][:len(gyro_data_input)]) * 1e-9 - first_timestamp
-        self.acc_data[:,1] = acc_data_input[:,1][:len(gyro_data_input)] * -1
-        self.acc_data[:,2] = acc_data_input[:,0][:len(gyro_data_input)]
-        self.acc_data[:,3] = acc_data_input[:,2][:len(gyro_data_input)]
-        print(f"Acc rate       : {len(self.acc_data[:,0])/(self.acc_data[-1,0] - self.acc_data[0,0]):>8.2f} Hz")
-
-
-
-
-        if self.gyro_lpf_cutoff > 0:
-            self.filter_gyro()
-
-
-        # Other attributes
-        initial_orientation = Rotation.from_euler('xyz', [0, 0, 0], degrees=True).as_quat()
-
-        self.integrator = GyroIntegrator(self.gyro_data,zero_out_time=False,initial_orientation=initial_orientation)
-        self.integrator.integrate_all()
-        self.times = None
-        self.stab_transform = None
-
-
-        self.initial_offset = 0
-
-    def read_csv(self, csvfile):
-        data = []
-        with open(csvfile) as f:
-            reader = csv.reader(f, delimiter=",", quotechar='"')
-            next(reader, None)
-            for row in reader:
-                data.append(row)
-        data = np.array(data, dtype=np.float)
-        return data
-
-    def find_nearest(self, array, value):
-        idx = np.searchsorted(array, value, side="left")
-        if idx > 0 and (idx == len(array) or math.fabs(value - array[idx - 1]) < math.fabs(value - array[idx])):
-            return idx - 1
-        else:
-            return idx
 
 
 class MultiStabilizer(Stabilizer):
