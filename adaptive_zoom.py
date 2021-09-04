@@ -86,10 +86,16 @@ class AdaptiveZoom:
         return 1/fcorr #np.min([xminDist/output_width, yminDist/output_height])
 
     def compute(self, quaternions, output_dim, fps, smoothingFocus=2.0, tstart = False, tend = False, debug_plots=False, plot_blocking = False):
+
+        # if smoothingFocus == -1: Totally disable
+        # if smoothingFocus == -2: Find minimum sufficient crop
+
         #print(locals())
         #smoothingNumFrames = int(smoothingCenter * fps)
         #if smoothingNumFrames % 2 == 0:
         #    smoothingNumFrames = smoothingNumFrames+1
+
+
 
         smoothingFocusFrames = int(smoothingFocus * fps)
         if smoothingFocusFrames % 2 == 0:
@@ -140,9 +146,11 @@ class AdaptiveZoom:
                 plt.plot(fovSmooth)
                 plt.show(block=plot_blocking)
             fovValues = fovSmooth
-        elif smoothingFocus < 0: #disabled
-            maxF = np.max(fovValues)
+        elif smoothingFocus == -1: #disabled
+            maxF = np.min(fovValues)
             fovValues = np.repeat(maxF, fovValues.size )
+        elif smoothingFocus == -2: # apply nothing
+            fovValues = np.repeat(1, fovValues.size )
 
         return fovValues, cropCenterPositions
 
