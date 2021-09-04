@@ -1162,6 +1162,16 @@ class OpenCameraSensorsLog(GyrologReader):
 
     def guess_log_from_videofile(self, videofile):
         self.get_paths(videofile)
+        import cv2
+        vid = cv2.VideoCapture(videofile)
+        height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+        if height > width:
+            variant = "Portrait"
+        elif height < width:
+            variant = "Landscape"
+        self.set_variant(variant)
+        print("Detected variant:", variant)
         if os.path.isfile(self.gyro_path):
             return self.gyro_path # os.path.split(self.gyro_path)[-1]
         else:
@@ -1190,9 +1200,9 @@ class OpenCameraSensorsLog(GyrologReader):
         self.acc = self.read_csv(self.acc_path)
         self.has_acc = True
         if self.gyro.shape[0] > self.acc.shape[0]:
-            self.gyro = self.gyro[:,:self.acc.shape[0]]
+            self.gyro = self.gyro[:, :self.acc.shape[0]]
         else:
-            self.acc = self.acc[:,:self.gyro.shape[0]]
+            self.acc = self.acc[:, :self.gyro.shape[0]]
 
         return True
 
