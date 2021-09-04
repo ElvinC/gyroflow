@@ -434,7 +434,10 @@ class Stabilizer:
         N = len(self.transform_times)
         if N == 0:
             # no change
-            print("No valid syncpoints")
+            if self.rough_sync_search_interval == 0:
+                print("Sync skipped due to search interval being 0. Only do this if gyro is already synced with video.")
+            else:
+                print("No valid syncpoints")
             self.new_integrator = GyroIntegrator(self.gyro_data,zero_out_time=False, initial_orientation=self.initial_orientation, acc_data=self.acc_data)
         
         elif N == 1:
@@ -605,8 +608,8 @@ class Stabilizer:
         # Analyze these slices
         num_syncs = len(syncpoints)
 
-        print(f"Analyzing {num_syncs} slices")
         if self.rough_sync_search_interval != 0:
+            print(f"Analyzing {num_syncs} slices")
             for frame_index, n_frames in syncpoints:
                 self.multi_sync_add_slice(frame_index, n_frames, False)
 
