@@ -973,7 +973,6 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
             # add randomness in case it starts with a bad frame
             random_range = int(max(1, num_frames / 200))
-            print(random_range)
             n = int(n + random.randrange(-random_range, random_range))
             n = min(n, num_frames - 1)
             n = max(1, n)
