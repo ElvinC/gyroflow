@@ -1644,6 +1644,8 @@ class Stabilizer:
                 "audio.mp4"
             ]
             out.execute_ffmpeg_cmd(ffmpeg_command)
+
+            tmp_ext = "_audio." + outpath.split('.')[-1]
             ffmpeg_command = [
                 "-y",
                 "-i",
@@ -1658,15 +1660,19 @@ class Stabilizer:
                 "0:v:0",
                 "-map",
                 "1:a:0",
-                outpath + "_a.mp4",
+                outpath + tmp_ext,
             ]  # `-y` parameter is to overwrite outputfile if exists
 
             # execute FFmpeg command
             out.execute_ffmpeg_cmd(ffmpeg_command)
-            os.replace(outpath + "_a.mp4", outpath)
-            os.remove("audio.mp4")
+            if os.path.isfile(outpath + tmp_ext):
+                os.replace(outpath + tmp_ext, outpath)
+                print("Audio exported")
+            else:
+                print("Failed to export audio")
+            if os.path.isfile("audio.mp4"):
+                os.remove("audio.mp4")
 
-            print("Audio exported")
 
     def export_gyroflow_file(self, filename=None, out_size = (1920,1080), smoothingFocus=2.0, zoom=1.0):
 
