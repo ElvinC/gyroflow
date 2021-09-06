@@ -961,14 +961,22 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
     def start_lens_calibration(self):
         self.calibrator.new_calibration()
-        n_calibration_frames = 50
         cap = cv2.VideoCapture(self.infile_path)
         num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        n_calibration_frames = min(50, num_frames)
+
         print(f"Starting lens calibration with {num_frames} frames")
         t = datetime.now()
         good_frames = []
         for n in np.linspace(0, num_frames - 1, n_calibration_frames):
-            n = int(n)
+
+            # add randomness in case it starts with a bad frame
+            random_range = int(max(1, num_frames / 200))
+            print(random_range)
+            n = int(n + random.randrange(-random_range, random_range))
+            n = min(n, num_frames - 1)
+            n = max(1, n)
             cap.set(cv2.CAP_PROP_POS_FRAMES, n)
             ret, frame = cap.read()
             self.calibrator.num_processed_images += 1
