@@ -35,10 +35,11 @@ Here's a version that should work with windows 7:
 
 ### Mac executable:
 
-There was an issue with the important terminal not appearing in the macOS build, so a new one will be made. Stand by.
-<a href="#" class="btn btn--info btn--large">check back in a day or two</a>
+Extract, add +x with chmod and run with ./gyroflow from the terminal.
+<a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-macOS.zip" class="btn btn--info btn--large">gyroflow-0.3.0-beta-macOS.zip</a>
+
 ### Ubuntu executable:
-The Ubuntu version below can in theory be run by extracting, adding +X with chmod, and using ./gyroflow, but it's not really tested, and it might be easier for most Linux users to run the python program directly since the package is hilariously big for some reason.
+The Ubuntu version below can in theory be run by extracting, adding +x with chmod, and using ./gyroflow, but it's not really tested, and it might be easier for most Linux users to run the python program directly since the package is hilariously big for some reason.
 
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-ubuntu.tar.xz" class="btn btn--info btn--large">gyroflow-0.3.0-beta-ubuntu.tar.xz</a>
 ### Source code:

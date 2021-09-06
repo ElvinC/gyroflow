@@ -29,7 +29,8 @@ Nothing: Does nothing
 Sorry mate, the sensor is bouncing around so the gyro doesn't match the image anymore. Nothing can be done on the software side, but if you're feeling adventurous, there are supposedly options to lock the sensor in place with glue or 3D prints.
 
 
-
+## Trying to export gives `FileNotFoundError: [Errno 2] No such file or directory: '/xxx/tttt.mp4_a.mp4' -> '/xxx/tttt.mp4'`
+Can happen with some setups, try disabling audio export as a temporary fix.
 
 
 ## I get a weird JSON decode error during processing
