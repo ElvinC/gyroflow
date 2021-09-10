@@ -28,6 +28,9 @@ Nothing: Does nothing
 ## Trying to stabilize footage from my camera with IBIS results in footage that still wobbly sometimes.
 Sorry mate, the sensor is bouncing around so the gyro doesn't match the image anymore. Nothing can be done on the software side, but if you're feeling adventurous, there are supposedly options to lock the sensor in place with glue or 3D prints.
 
+## I want to try this with Sony metadata _or_ Gyroflow is unable to extract gyro data from GoPro files.
+Use this program: https://github.com/AdrianEddy/telemetry-parser by Adrian Eddy to convert the metadata to the blackbox format, and use that in Gyroflow.
+
 
 ## Trying to export gives `FileNotFoundError: [Errno 2] No such file or directory: '/xxx/tttt.mp4_a.mp4' -> '/xxx/tttt.mp4'`
 Can happen with some setups, try disabling audio export as a temporary fix.
