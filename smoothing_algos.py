@@ -496,10 +496,10 @@ class Aphobius2(SmoothingAlgo):
                              explanation="Variable that reduces smoothness during fast maneuvers", input_expo = 1, input_type="float")
 
         self.add_user_option("start", 0, 0, 1000000, ui_label = "Start time in seconds for maximum rotation angles calculation:",
-                             explanation="Variable that reduces smoothness during fast maneuvers", input_expo = 1, input_type="float")
+                             explanation="Start time in seconds for maximum rotation angles calculation", input_expo = 1, input_type="float")
 
         self.add_user_option("end", 1, 0, 1000000, ui_label = "End time in seconds for maximum rotation angles calculation:",
-                             explanation="Variable that reduces smoothness during fast maneuvers", input_expo = 1, input_type="float")
+                             explanation="End time in seconds for maximum rotation angles calculation", input_expo = 1, input_type="float")
 
     def smooth_orientations_internal(self, times, orientation_list):
         # To be overloaded
