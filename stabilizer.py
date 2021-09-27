@@ -570,8 +570,8 @@ class Stabilizer:
             syncpoints.append([5, max(60, int(num_frames-5-self.fps))])
 
         elif vid_length < 10: # two points
-            first_index = 30
-            last_index = num_frames - 30 - num_frames_analyze
+            first_index = round(self.trim[0] * self.fps)
+            last_index = round(self.trim[1] * self.fps) - 30 - num_frames_analyze
             syncpoints.append([first_index, num_frames_analyze])
             syncpoints.append([last_index, num_frames_analyze])
 
