@@ -2303,10 +2303,14 @@ def optical_flow(
     cap = cv2.VideoCapture(videofile)
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     time.sleep(0.05)
-    # Read first valid frame
-    ret = False
-    while not ret:
-        ret, prev = cap.read()
+
+    ret, prev = cap.read()
+
+    # if file cant be read return with huge error
+    if not ret:
+        print("Can't read this part of the file")
+        return 0, 999999, [], []
+
     if video_rotate_code != -1:
         prev = cv2.rotate(prev, video_rotate_code)
     prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
