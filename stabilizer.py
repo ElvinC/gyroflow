@@ -651,14 +651,22 @@ class Stabilizer:
             print("Auto sync failed to converge. Sorry about that")
             return False
 
-    def full_auto_sync_parallel(self, max_fitting_error=0.02):
+    def full_auto_sync_parallel(self, max_fitting_error=0.02, max_points=9, debug_plots=True):
+        if self.use_gyroflow_data_file:
+            self.update_smoothing()
+            return
+
+        self.multi_sync_init()
         n_frames = 30
         start = time.time()
-        ps = ParallelSync(stab, n_frames)
+        ps = ParallelSync(self, n_frames, max_syncs=max_points)
         sync_results = ps.begin_sync_parallel()
-        print(f"time needed for parallel auto sync: {time.time() - start:.2f} s")
+        print(f"Time needed for parallel auto sync: {time.time() - start:.2f} s")
         for sync_point, result in zip(ps.sync_points, sync_results):
             self.multi_sync_add_slice(sync_point[0], sync_point[1], *result, False)
+        if len(self.sync_inputs) == 1:
+            print("Only synced with one point")
+            return True
         return self.multi_sync_fit(max_fitting_error)
 
     def plot_sync(self, corrected_times, slicelength, show=False):
@@ -2401,7 +2409,7 @@ def optical_flow(
 
 
         else:
-            print("Frame {}".format(i))
+            print("Skipped frame {}".format(i))
 
     transforms = np.array(transforms)
 
@@ -2528,7 +2536,7 @@ def estimate_gyro_offset(
 
 
 class ParallelSync:
-    def __init__(self, stab, num_frames_analyze, debug_plots=True):
+    def __init__(self, stab, num_frames_analyze, max_syncs=9, debug_plots=True):
         self.videofile = stab.videopath
         self.offset = 0
 
@@ -2548,11 +2556,10 @@ class ParallelSync:
         self.gyro_rate = stab.integrator.gyro_sample_rate
         self.fps = stab.fps
         self.debug_plots = debug_plots
-        self.sync_points = stab.get_recommended_syncpoints(self.num_frames_analyze)
+        self.sync_points = stab.get_recommended_syncpoints(self.num_frames_analyze, max_points=max_syncs)
 
         self.process_dimension = stab.process_dimension
         self.video_rotate_code = stab.video_rotate_code
-
 
     def optical_flow(self, start_frame, analyze_length):
         return optical_flow(
