@@ -629,10 +629,20 @@ class Stabilizer:
             success = self.multi_sync_compute(max_fitting_error = max_fitting_error * 2, debug_plots=debug_plots) # larger bound
 
         # collecting gyro drift data
-        line = ",".join([self.videopath, str(self.gyro_rate), str(1 - self.gyro_rate / round(self.gyro_rate/100) * 100), str(self.gyro_coefficients.tolist()), str(self.fps)])
-        print(line)
-        with open("gyro_drift_offset.csv", 'a') as file:
-            file.write(line + '\n')
+        if self.gyro_coefficients is not None:
+            line = ",".join([self.videopath,
+                             str(self.gyro_rate),
+                             str(1 - ((round(self.gyro_rate/100) * 100) / self.gyro_rate)),
+                             str(self.gyro_coefficients[0]),
+                             str(self.gyro_coefficients[1]),
+                             str(self.fps)])
+            print(line)
+            file_name = "gyro_drift_offset.csv"
+            if not os.path.isfile(file_name):
+                with open(file_name, 'w') as file:
+                    file.write("videopath,gyro_rate,calculated_drift,sync_drift,sync_offseet,fps\n")
+            with open(file_name, 'a') as file:
+                file.write(line + '\n')
 
         if success:
             print("Auto sync complete")
