@@ -1174,11 +1174,11 @@ log_reader_classes = [GyroflowGyroLog,
                       RuncamData,
                       Insta360Log,
                       GPMFLog]
-
-print("Available log types")
-for alg in log_reader_classes:
-    print(alg().name)
 log_reader_names = [alg().name for alg in log_reader_classes]
+def print_available_log_types():
+    print("Available log types")
+    for alg in log_reader_classes:
+        print(alg().name)
 
 def get_log_reader_names():
     """List of available control algorithms in plaintext

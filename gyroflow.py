@@ -24,6 +24,7 @@ from datetime import datetime
 import gyrolog
 from UI_elements import sync_ui
 
+
 # area for environment variables
 try:
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
@@ -43,6 +44,7 @@ class Launcher(QtWidgets.QWidget):
     def __init__(self):
 
         super().__init__()
+        gyrolog.print_available_log_types()
 
         self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
