@@ -24,6 +24,7 @@ from datetime import datetime
 import gyrolog
 from UI_elements import sync_ui
 
+
 # area for environment variables
 try:
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
@@ -64,6 +65,7 @@ class Launcher(QtWidgets.QWidget):
     def __init__(self):
 
         super().__init__()
+        gyrolog.print_available_log_types()
 
         self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
@@ -988,14 +990,21 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
     def start_lens_calibration(self):
         self.calibrator.new_calibration()
-        n_calibration_frames = 50
         cap = cv2.VideoCapture(self.infile_path)
         num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        n_calibration_frames = min(50, num_frames)
+
         print(f"Starting lens calibration with {num_frames} frames")
         t = datetime.now()
         good_frames = []
         for n in np.linspace(0, num_frames - 1, n_calibration_frames):
-            n = int(n)
+
+            # add randomness in case it starts with a bad frame
+            random_range = int(max(1, num_frames / 200))
+            n = int(n + random.randrange(-random_range, random_range))
+            n = min(n, num_frames - 1)
+            n = max(1, n)
             cap.set(cv2.CAP_PROP_POS_FRAMES, n)
             ret, frame = cap.read()
             self.calibrator.num_processed_images += 1
@@ -2231,7 +2240,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync1_control.setValue(5)
         #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
         self.export_bitrate.setValue(max(int(self.video_info_dict["bitrate"]) / 1000, 20))
-        
+        print(self.stab)
 
         self.check_aspect()
 
@@ -2403,6 +2412,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         temp_log_reader.plot_gyro(blocking=stabilizer.BLOCKING_PLOTS)
 
+
     def reset_stab(self):
         #print("Reset stabilization class")
         if type(self.stab) != type(None):
@@ -2572,7 +2582,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         max_fitting_error = self.max_fitting_control.value()
         max_syncs = self.max_sync_control.value()
-        success = self.stab.full_auto_sync(max_fitting_error,max_syncs)
+        success = self.stab.full_auto_sync_parallel(max_fitting_error, max_syncs)
+        # success = self.stab.full_auto_sync(max_fitting_error, max_syncs)
 
         if not success:
             return
@@ -2596,6 +2607,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.has_player:
             self.update_player_maps()
         self.analyzed = True
+
+        if self.export_starttime.value() == 0:
+            self.export_starttime.setValue(self.stab.get_trim_start())
+        if self.export_stoptime.value() == int(self.video_info_dict["time"]):
+            self.export_stoptime.setValue(self.stab.get_trim_end(int(self.video_info_dict["time"])))
 
     def recompute_stab(self):
         """Update sync and stabilization
