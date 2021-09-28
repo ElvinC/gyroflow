@@ -1,4 +1,4 @@
-#from quaternion import quaternion
+from quaternion import quaternion_multiply
 import numpy as np
 from datetime import date
 import cv2
@@ -124,6 +124,8 @@ class Stabilizer:
         self.times = None
         self.stab_transform = None
         self.smoothing_algo = None
+        self.orientations = None
+        self.has_orientations = False
 
         self.initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
         self.initial_orientation[[0,1,2,3]] = self.initial_orientation[[3,0,1,2]]
@@ -1573,6 +1575,9 @@ class GPMFStabilizer(Stabilizer):
         self.gpmf = Extractor(gyro_path)
         self.gyro_data = self.gpmf.get_gyro(True)
 
+        # Combine CORI and IORI
+        self.orientations = np.array([quaternion_multiply(CORI, IORI) for CORI, IORI in zip(self.gpmf.get_cori(), self.gpmf.get_iori())])
+
         # Hero 6??
         if hero == 6:
             self.gyro_data[:,1] = self.gyro_data[:,1]
@@ -1607,6 +1612,7 @@ class GPMFStabilizer(Stabilizer):
 
         self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation)
         self.integrator.integrate_all(use_acc=False)
+
         self.times = None
         self.stab_transform = None
 
@@ -1755,9 +1761,17 @@ class MultiStabilizer(Stabilizer):
         initial_orientation = Rotation.from_euler('zxy', [0,0,np.pi/2]).as_quat()
         initial_orientation[[0,1,2,3]] = initial_orientation[[3,0,1,2]]
 
+        # self.orientations is one quaternion per frame, if available (gopro hero 8 and newer)
+        self.orientations = self.log_reader.get_orientations()
+        time_list = np.arange(self.orientations.shape[0]) * (1/self.fps) if type(self.orientations) != type(None) else None
 
-        self.integrator = GyroIntegrator(self.gyro_data,initial_orientation=initial_orientation, acc_data=self.acc_data)
-        self.integrator.integrate_all(use_acc=False)
+        self.integrator = GyroIntegrator(self.gyro_data, initial_orientation=initial_orientation, acc_data=self.acc_data, orientation_list=self.orientations, time_list=time_list)
+
+        if type(self.orientations) != type(None):
+            self.new_integrator = self.integrator
+        else:
+            self.integrator.integrate_all(use_acc=False)
+
         self.times = None
         self.stab_transform = None
 
