@@ -38,6 +38,27 @@ cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RE
                     "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
                     "Phone"]
 
+
+class QTimeSlider(QtWidgets.QSlider):
+    def __init__(self, parent = None):
+        super(QTimeSlider, self).__init__(QtCore.Qt.Horizontal, parent)
+     
+    def mousePressEvent(self, event):
+        #Jump to click position
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
+
+        #print(event)
+    def mouseReleaseEvent(self, event):
+        self.sliderReleased.emit()
+        #print(event)
+
+    def mouseMoveEvent(self, event):
+        #Jump to pointer position while moving
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
+
+
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
     """
@@ -354,7 +375,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
 
         # seek bar with value from 0-200
-        self.time_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.time_slider = QTimeSlider(self)
         self.time_slider.setMinimum(0)
         self.time_slider.setValue(0)
 
@@ -469,6 +490,12 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.is_seeking = True
         self.was_playing_before = self.thread.playing
         self.stop()
+
+        # Update timestamp
+        slider_val = self.time_slider.value()
+        frame_pos = slider_val * (max(self.num_frames, 1))/self.seek_ticks 
+        timestamp = frame_pos / self.fps 
+        self.time_stamp_display.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
 
     def stop_seek(self):
         self.is_seeking = False
@@ -938,7 +965,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
 
     def add_current_frame(self):
@@ -2792,21 +2819,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.export_gyroflow_file()
 
     def show_error(self, msg):
-        err_window = QtWidgets.QMessageBox(self)
-        err_window.setIcon(QtWidgets.QMessageBox.Critical)
-        err_window.setText(msg)
-        err_window.setWindowTitle("Something's gone awry")
-        err_window.show()
+        QtWidgets.QMessageBox.warning(self, "Something's gone awry", msg)
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     def get_available_encoders(self):
         if(get_valid_ffmpeg_path()):  # Helper function from VidGear
             ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
             return ffmpeg_encoders_sp.stdout
         else:
-            self.show_warning("Could not find FFmpeg installation")
+            self.show_error("FFmpeg not found. Some features won't work correctly. <a href='https://ffmpeg.org/download.html'>Download FFmpeg</a>")
             return ""
 
     def update_profile_select(self):
@@ -3028,7 +3051,7 @@ class StabUtility(StabUtilityBarebone):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     #def synchere1(self):
     #    self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
