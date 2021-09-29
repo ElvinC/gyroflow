@@ -8,8 +8,11 @@ import re
 import time
 import sys, inspect
 import logging
+
+import cv2
 from scipy import signal, interpolate
 from scipy.fft import fft, fftfreq
+
 
 import insta360_utility as insta360_util
 from blackbox_extract import BlackboxExtractor
@@ -1162,7 +1165,6 @@ class OpenCameraSensorsLog(GyrologReader):
 
     def guess_log_from_videofile(self, videofile):
         self.get_paths(videofile)
-        import cv2
         vid = cv2.VideoCapture(videofile)
         height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
         width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
