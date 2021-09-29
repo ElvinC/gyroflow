@@ -267,16 +267,17 @@ class VideoThread(QtCore.QThread):
         """
 
         self.cap = cv2.VideoCapture()
-
+        last_timestamp = time.time()
         while True:
             if self.playing or self.next_frame:
                 self.next_frame = False
                 self.this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
                 ret, self.frame = self.cap.read()
                 if ret:
-                    time.sleep(self.frame_delay)
                     self.update_frame()
-
+                    timestamp = time.time()
+                    time.sleep(max(0, self.frame_delay - (timestamp - last_timestamp)))
+                    last_timestamp = timestamp
 
             elif self.update_once:
                 self.update_once = False
@@ -2127,6 +2128,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_info_dict["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.video_info_dict["fps"] = cap.get(cv2.CAP_PROP_FPS)
         self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
+
+        self.video_viewer.thread.frame_delay = self.video_info_dict["fps"]
 
         self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
         try:
