@@ -6,6 +6,7 @@ import cv2
 import os
 import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
+from PySide2.QtGui import QPalette, QColor, Qt
 from matplotlib import colors
 from _version import __version__
 from vidgear.gears.helper import get_valid_ffmpeg_path
@@ -20,6 +21,8 @@ import bundled_images
 import insta360_utility as insta360_util
 import stabilizer
 import smoothing_algos
+import qdarkstyle
+import darkdetect
 from datetime import datetime
 import gyrolog
 from UI_elements import sync_ui
@@ -140,6 +143,7 @@ class Launcher(QtWidgets.QWidget):
         self.stretch_utility = None
 
         self.check_version(True)
+
 
     def open_calib_util(self):
         """Open the camera calibration utility in a new window
@@ -280,7 +284,6 @@ class VideoThread(QtCore.QThread):
 
             else:
                 time.sleep(1/20)
-
 
     def update_frame(self):
         """Opdate the current video frame shown
@@ -3111,12 +3114,16 @@ class StabUtility(StabUtilityBarebone):
         event.accept()
 
 
+def detect_dark_mode(qapp):
+    if darkdetect.isDark():
+        qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
+
 
 def main():
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
 
     app = QtWidgets.QApplication([])
-
+    detect_dark_mode(app)
     widget = Launcher() # Launcher()
     widget.resize(500, 500)
 
