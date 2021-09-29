@@ -1,0 +1,12 @@
+pandas
+numpy
+matplotlib
+scipy
+PySide2
+vidgear
+opencv-python
+orangebox
+hachoir
+construct
+sympy
+tqdm
