@@ -13,7 +13,6 @@ import pandas as pd
 
 for k, v in os.environ.items():
     if k.startswith("QT_") and "cv2" in v:
-        print("deleting" + os.environ[k])
         del os.environ[k]
 
 import platform
@@ -653,15 +652,21 @@ class Stabilizer:
             print("Auto sync failed to converge. Sorry about that")
             return False
 
-    def full_auto_sync_parallel(self, max_fitting_error=0.02, max_points=9, debug_plots=True):
+    def full_auto_sync_parallel(self, max_fitting_error=0.02, max_points=9, n_frames=30, sync_points=[], debug_plots=True):
         if self.use_gyroflow_data_file:
             self.update_smoothing()
             return
 
         self.multi_sync_init()
-        n_frames = 30
         start = time.time()
-        ps = ParallelSync(self, n_frames, max_syncs=max_points)
+
+        if max_points > 0:
+            sync_points += self.get_recommended_syncpoints(n_frames, max_points=max_points, debug_plots=debug_plots)
+
+        # Ensure sync points are sorted by frame number (not in order if `sync_points` was set)
+        sync_points.sort(key = lambda s : s[0])
+
+        ps = ParallelSync(self, sync_points)
         sync_results = ps.begin_sync_parallel()
         print(f"Time needed for parallel auto sync: {time.time() - start:.2f} s")
         for sync_point, result in zip(ps.sync_points, sync_results):
@@ -2550,7 +2555,7 @@ def estimate_gyro_offset(
 
 
 class ParallelSync:
-    def __init__(self, stab, num_frames_analyze, max_syncs=9, debug_plots=True):
+    def __init__(self, stab, sync_points, debug_plots=True):
         self.videofile = stab.videopath
         self.offset = 0
 
@@ -2561,7 +2566,6 @@ class ParallelSync:
         self.height = 2028
         self.width = 2704
         self.num_frames_skipped = stab.num_frames_skipped
-        self.num_frames_analyze = num_frames_analyze
 
         self.gyro_times = stab.integrator.get_raw_data("t")
         self.gyro_data = stab.integrator.get_raw_data("xyz")
@@ -2570,7 +2574,7 @@ class ParallelSync:
         self.gyro_rate = stab.integrator.gyro_sample_rate
         self.fps = stab.fps
         self.debug_plots = debug_plots
-        self.sync_points = stab.get_recommended_syncpoints(self.num_frames_analyze, max_points=max_syncs)
+        self.sync_points = sync_points
 
         self.process_dimension = stab.process_dimension
         self.video_rotate_code = stab.video_rotate_code
