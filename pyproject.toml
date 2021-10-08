@@ -15,7 +15,7 @@ orangebox = "^0.2.0"
 python-dateutil = "^2.8.1"
 sympy = "^1.7.1"
 PySide2 = "^5.15.2"
-vidgear = "^0.2.0"
+vidgear = "^0.2.2"
 scipy = "^1.6.0"
 pandas = "^1.3.2"
 

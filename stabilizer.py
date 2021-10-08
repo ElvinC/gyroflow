@@ -995,6 +995,7 @@ class Stabilizer:
                 "-vaapi_device": "/dev/dri/renderD128",
                 "-profile:v": vprofile,
                 "-b:v": "%sM" % bitrate_mbits,
+                "-vf": "format=nv12|vaapi,hwupload",
             }
         elif vcodec == "h264_videotoolbox":
             output_params = {
@@ -1482,6 +1483,7 @@ class OnlyUndistort:
                 "-vaapi_device": "/dev/dri/renderD128",
                 "-profile:v": vprofile,
                 "-b:v": "%sM" % bitrate_mbits,
+                "-vf": "format=nv12|vaapi,hwupload",
             }
         elif vcodec == "h264_videotoolbox":
             output_params = {
