@@ -10,7 +10,7 @@ import quaternion as quat
 import smoothing_algos
 
 class GyroIntegrator:
-    def __init__(self, gyro_data, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None, acc_scaling=1):
+    def __init__(self, gyro_data, orientation_list=None, time_list=None, time_scaling=1, gyro_scaling=1, zero_out_time=True, initial_orientation=None, acc_data=None, acc_scaling=1):
         """Initialize instance of gyroIntegrator for getting orientation from gyro data
 
         Args:
@@ -79,8 +79,8 @@ class GyroIntegrator:
             self.orientation = np.array([1, 0.0001, 0.0001, 0.0001])
 
         # Variables to save integration data
-        self.orientation_list = None
-        self.time_list = None
+        self.orientation_list = orientation_list
+        self.time_list = time_list
 
         # IMU reference vectors
         self.imuRefX = quat.vector(1,0,0)
@@ -91,7 +91,7 @@ class GyroIntegrator:
         # points upwards, since it's equivalent to an upwards acceleration at rest
         self.grav_vec = np.array([0,1,0]) # Per convention it's upwards
 
-        self.already_integrated = False
+        self.already_integrated = type(orientation_list) != type(None)
 
         self.smoothing_algo = None
 

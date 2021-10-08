@@ -31,7 +31,10 @@ class Extractor:
         self.num_gyro_samples = 0
         self.gyro_rate = 0 # gyro rate in Hz
         self.parsed_gyro = np.zeros((1,4)) # placeholder
-        self.parse_gyro()
+        self.parsed_cori = np.zeros((1,4)) # placeholder
+        self.parsed_iori = np.zeros((1,4)) # placeholder
+        self.has_cori = False
+        self.parse_gpmf()
 
         self.accl = []
 
@@ -48,9 +51,16 @@ class Extractor:
 
         video.release()
 
-    def parse_gyro(self):
+    def parse_gpmf(self):
+        cori = []
+        iori = []
+
         for frame in self.parsed:
             for stream in frame["DEVC"]["STRM"]:
+                if "CORI" in stream:
+                    cori += stream["CORI"]
+                if "IORI" in stream:
+                    iori += stream["IORI"]
                 if "GYRO" in stream:
                     #print(stream["STNM"]) # print stream name
                     self.gyro += stream["GYRO"]
@@ -76,7 +86,12 @@ class Extractor:
         self.parsed_gyro[:,3] = omega[:,0] # z
         self.parsed_gyro[:,1] = omega[:,1] # x
         self.parsed_gyro[:,2] = omega[:,2] # y
-        
+
+        if len(cori) and len(iori):
+            self.parsed_cori = np.array(cori) * (1, -1, 1, 1) / 0x7fff # Seems like a signed Int16BE
+            self.parsed_iori = np.array(iori) * (1, -1, 1, 1) / 0x7fff # Seems like a signed Int16BE
+            self.has_cori = True
+
     def parse_accl(self):
         for frame in self.parsed:
             for stream in frame["DEVC"]["STRM"]:
@@ -114,6 +129,12 @@ class Extractor:
         if with_timestanp:
             return self.parsed_accl
         return self.parsed_accl[:,1:]
+
+    def get_cori(self):
+        return self.parsed_cori
+
+    def get_iori(self):
+        return self.parsed_iori
 
     def get_video_length(self):
         return self.video_length

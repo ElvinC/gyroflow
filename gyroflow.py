@@ -24,6 +24,7 @@ from datetime import datetime
 import gyrolog
 from UI_elements import sync_ui
 
+
 # area for environment variables
 try:
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
@@ -37,12 +38,34 @@ cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RE
                     "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
                     "Phone"]
 
+
+class QTimeSlider(QtWidgets.QSlider):
+    def __init__(self, parent = None):
+        super(QTimeSlider, self).__init__(QtCore.Qt.Horizontal, parent)
+     
+    def mousePressEvent(self, event):
+        #Jump to click position
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
+
+        #print(event)
+    def mouseReleaseEvent(self, event):
+        self.sliderReleased.emit()
+        #print(event)
+
+    def mouseMoveEvent(self, event):
+        #Jump to pointer position while moving
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
+
+
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
     """
     def __init__(self):
 
         super().__init__()
+        gyrolog.print_available_log_types()
 
         self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
@@ -352,7 +375,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
 
         # seek bar with value from 0-200
-        self.time_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.time_slider = QTimeSlider(self)
         self.time_slider.setMinimum(0)
         self.time_slider.setValue(0)
 
@@ -467,6 +490,12 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.is_seeking = True
         self.was_playing_before = self.thread.playing
         self.stop()
+
+        # Update timestamp
+        slider_val = self.time_slider.value()
+        frame_pos = slider_val * (max(self.num_frames, 1))/self.seek_ticks 
+        timestamp = frame_pos / self.fps 
+        self.time_stamp_display.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
 
     def stop_seek(self):
         self.is_seeking = False
@@ -936,7 +965,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
 
     def add_current_frame(self):
@@ -961,14 +990,21 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
     def start_lens_calibration(self):
         self.calibrator.new_calibration()
-        n_calibration_frames = 50
         cap = cv2.VideoCapture(self.infile_path)
         num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        n_calibration_frames = min(50, num_frames)
+
         print(f"Starting lens calibration with {num_frames} frames")
         t = datetime.now()
         good_frames = []
         for n in np.linspace(0, num_frames - 1, n_calibration_frames):
-            n = int(n)
+
+            # add randomness in case it starts with a bad frame
+            random_range = int(max(1, num_frames / 200))
+            n = int(n + random.randrange(-random_range, random_range))
+            n = min(n, num_frames - 1)
+            n = max(1, n)
             cap.set(cv2.CAP_PROP_POS_FRAMES, n)
             ret, frame = cap.read()
             self.calibrator.num_processed_images += 1
@@ -2204,7 +2240,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync1_control.setValue(5)
         #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
         self.export_bitrate.setValue(max(int(self.video_info_dict["bitrate"]) / 1000, 20))
-        
+        print(self.stab)
 
         self.check_aspect()
 
@@ -2376,6 +2412,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         temp_log_reader.plot_gyro(blocking=stabilizer.BLOCKING_PLOTS)
 
+
     def reset_stab(self):
         #print("Reset stabilization class")
         if type(self.stab) != type(None):
@@ -2545,7 +2582,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         max_fitting_error = self.max_fitting_control.value()
         max_syncs = self.max_sync_control.value()
-        success = self.stab.full_auto_sync(max_fitting_error,max_syncs)
+        success = self.stab.full_auto_sync_parallel(max_fitting_error, max_syncs)
+        # success = self.stab.full_auto_sync(max_fitting_error, max_syncs)
 
         if not success:
             return
@@ -2569,6 +2607,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.has_player:
             self.update_player_maps()
         self.analyzed = True
+
+        if self.export_starttime.value() == 0:
+            self.export_starttime.setValue(self.stab.get_trim_start())
+        if self.export_stoptime.value() == int(self.video_info_dict["time"]):
+            self.export_stoptime.setValue(self.stab.get_trim_end(int(self.video_info_dict["time"])))
 
     def recompute_stab(self):
         """Update sync and stabilization
@@ -2776,21 +2819,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.export_gyroflow_file()
 
     def show_error(self, msg):
-        err_window = QtWidgets.QMessageBox(self)
-        err_window.setIcon(QtWidgets.QMessageBox.Critical)
-        err_window.setText(msg)
-        err_window.setWindowTitle("Something's gone awry")
-        err_window.show()
+        QtWidgets.QMessageBox.warning(self, "Something's gone awry", msg)
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     def get_available_encoders(self):
         if(get_valid_ffmpeg_path()):  # Helper function from VidGear
             ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
             return ffmpeg_encoders_sp.stdout
         else:
-            self.show_warning("Could not find FFmpeg installation")
+            self.show_error("FFmpeg not found. Some features won't work correctly. <a href='https://ffmpeg.org/download.html'>Download FFmpeg</a>")
             return ""
 
     def update_profile_select(self):
@@ -3012,7 +3051,7 @@ class StabUtility(StabUtilityBarebone):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     #def synchere1(self):
     #    self.sync1_control.setValue(self.video_viewer.get_current_timestamp())

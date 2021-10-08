@@ -11,9 +11,11 @@ import logging
 from scipy import signal, interpolate
 from scipy.fft import fft, fftfreq
 
+
 import insta360_utility as insta360_util
 from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor as GPMFExtractor
+from quaternion import quaternion_multiply
 
 
 # Generate 24 different (right handed) orientations using cross products
@@ -194,6 +196,7 @@ class GyrologReader:
         # The scaled data read from the file
         self.gyro = None # N*4 array with each column containing [t, gx, gy, gz]
         self.acc = None # N*4 array with each column containing [t, ax, ay, az]
+        self.orientations = None # N*4 array with each column containing [w, x, y, z], one for each frame
 
         # The transformed data according to the gyroflow convention
         self.standard_gyro = None
@@ -201,6 +204,7 @@ class GyrologReader:
 
         self.extracted = False
         self.has_acc = False
+        self.has_orientations = False
         # Assume same time reference and orientation used for both
 
         self.default_filter = -1
@@ -360,6 +364,11 @@ class GyrologReader:
     def get_acc(self):
         if self.extracted and self.has_acc:
             return self.acc
+        return None
+
+    def get_orientations(self):
+        if self.extracted and self.has_orientations:
+            return self.orientations
         return None
 
     def apply_rotation(self, rotmat, time_data):
@@ -948,7 +957,12 @@ class GPMFLog(GyrologReader):
             self.gyro = self.gpmf.get_gyro(True)
             self.gpmf.parse_accl()
             self.acc = self.gpmf.get_accl(True)
-            
+
+            if self.gpmf.has_cori:
+                # Combine CORI and IORI
+                self.orientations = np.array([quaternion_multiply(CORI, IORI) for CORI, IORI in zip(self.gpmf.get_cori(), self.gpmf.get_iori())])
+                self.has_orientations = True
+
             minlength = min(self.gyro.shape[0], self.acc.shape[0])
             maxlength = max(self.gyro.shape[0], self.acc.shape[0])
             # Make sure they match
@@ -1173,11 +1187,11 @@ log_reader_classes = [GyroflowGyroLog,
                       RuncamData,
                       Insta360Log,
                       GPMFLog]
-
-print("Available log types")
-for alg in log_reader_classes:
-    print(alg().name)
 log_reader_names = [alg().name for alg in log_reader_classes]
+def print_available_log_types():
+    print("Available log types")
+    for alg in log_reader_classes:
+        print(alg().name)
 
 def get_log_reader_names():
     """List of available control algorithms in plaintext
