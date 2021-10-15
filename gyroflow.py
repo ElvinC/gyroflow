@@ -2123,7 +2123,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             print("No file selected")
             return False
         self.infile_path = path[0]
-        self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
+        filename = self.infile_path.split("/")[-1]
+        self.user_settings.update("video_directory", "/".join(self.infile_path.split("/")[:-1]))
+        self.open_vid_button.setText("Video file: {}".format(filename))
+        self.setWindowTitle("Gyroflow Stabilizer {} - {}".format(__version__, filename))
         self.open_vid_button.setStyleSheet("font-weight:bold;")
 
         # Extract information about the clip
