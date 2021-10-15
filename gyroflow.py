@@ -2896,7 +2896,14 @@ class StabUtility(StabUtilityBarebone):
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
-        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
+        app_icon = QtGui.QIcon()
+        app_icon.addFile(':/media/icon16.png', QtCore.QSize(16, 16))
+        app_icon.addFile(':/media/icon24.png', QtCore.QSize(24, 24))
+        app_icon.addFile(':/media/icon32.png', QtCore.QSize(32, 32))
+        app_icon.addFile(':/media/icon48.png', QtCore.QSize(48, 48))
+        app_icon.addFile(':/media/icon64.png', QtCore.QSize(64, 64))
+        app_icon.addFile(':/media/icon.png', QtCore.QSize(256, 256))
+        self.setWindowIcon(app_icon)
         
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QHBoxLayout()
