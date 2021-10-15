@@ -2114,8 +2114,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.has_player:
             self.video_viewer.stop()
 
-
         dialog = QtWidgets.QFileDialog()
+        if os.path.isdir(self.user_settings.video_directory):
+            dialog.setDirectory(self.user_settings.video_directory)
         dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime", "application/octet-stream"])
         dialog.exec_()
         path = dialog.selectedFiles()
@@ -2152,6 +2153,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # Reset the stabilizer
         self.reset_stab()
+        self.reset_export()
 
         #no_suffix = os.path.splitext(self.infile_path)[0]
         # check if gyroflow data file exists
@@ -2207,6 +2209,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.update_gyro_input_settings()
         return True
 
+    def reset_export(self):
+        self.preset_resolution_combo.setCurrentIndex(0)
+
     def video_as_log_func(self):
         self.gyro_log_path = self.infile_path
         # check if Insta360
@@ -2232,6 +2237,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.preset_path = preset_path
             self.reset_stab()
             self.display_preset_info()
+            self.user_settings.update("camera_preset", self.preset_path)
 
 
     def display_video_info(self):
@@ -2272,6 +2278,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.display_preset_info()
+        self.user_settings.update("camera_preset", self.preset_path)
 
 
 
@@ -2738,7 +2745,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """Gives save location using filedialog
            and saves video to given location
         """
-
+        self.user_settings.update_export_settings(
+            self.display_preview.isChecked(),
+            self.export_audio.isChecked(),
+            self.preset_resolution_combo.currentIndex(),
+            self.enableAdaptiveZoom.isChecked(),
+            self.fov_smoothing.value(),
+            self.zoom.value(),
+            self.video_encoder_select.currentIndex(),
+            self.encoder_profile_select.currentIndex(),
+            True)
 
 
         out_size = (self.out_width_control.value(), self.out_height_control.value())
@@ -2891,7 +2907,6 @@ class StabUtility(StabUtilityBarebone):
         """
 
         super().__init__(False)
-
         self.preview_fov_scale = 3.0
 
         # Initialize UI
@@ -3044,8 +3059,25 @@ class StabUtility(StabUtilityBarebone):
         self.infile_path = ""
         self.show()
 
+        self.user_settings = UserSettings()
+        self.update_user_settings()
         
         self.main_setting_widget.show()
+
+    def update_user_settings(self):
+        self.display_preview.setChecked(self.user_settings.preview_render)
+        self.export_audio.setChecked(self.user_settings.audio_export)
+        self.preset_resolution_combo.setCurrentIndex(self.user_settings.output_dimensions)
+        self.enableAdaptiveZoom.setChecked(self.user_settings.adaptive_zoom)
+        self.fov_smoothing.setValue(self.user_settings.smoothing_window)
+        self.zoom.setValue(self.user_settings.zoom_factor)
+        self.video_encoder_select.setCurrentIndex(self.user_settings.video_encoder)
+        self.encoder_profile_select.setCurrentIndex(self.user_settings.encoder_profile)
+        if self.user_settings.camera_preset is not None and os.path.isfile(self.user_settings.camera_preset):
+            self.preset_path = self.user_settings.camera_preset
+            self.preset_search_input.setText(self.user_settings.camera_preset.replace("camera_presets/", ""))
+            self.display_preset_info()
+
 
     def open_video_with_player_func(self):
         """Open file using Qt filedialog
@@ -3101,6 +3133,7 @@ class StabUtility(StabUtilityBarebone):
     def trimend(self):
         self.export_stoptime.setValue(self.video_viewer.get_current_timestamp())
 
+
     def update_preview(self):
         if self.stab:
             self.stab.set_map_func_scale(self.preview_fov_scale)
@@ -3138,6 +3171,55 @@ class StabUtility(StabUtilityBarebone):
             self.stab.release()
         event.accept()
 
+class UserSettings:
+    def __init__(self):
+        self.filename = "user_settings.json"
+        self.video_directory = None
+        self.camera_preset = None
+        self.smoothing_preset = None
+        self.preview_render = True
+        self.audio_export = True
+        self.output_dimensions = 0
+        self.adaptive_zoom = True
+        self.smoothing_window = 4
+        self.zoom_factor = 1
+        self.video_encoder = 0
+        self.encoder_profile = 0
+        self.export_gyroflow_data = True
+
+        self.load()
+
+    def save(self):
+        with open(self.filename, 'w') as outfile:
+            json.dump(
+                self.__dict__,
+                outfile,
+                indent=4,
+                separators=(',', ': ')
+            )
+
+    def load(self):
+        try:
+            with open(self.filename, "r") as infile:
+                self.__dict__ = json.load(infile)
+        except Exception as e:
+            print("Can't load user settings.")
+
+    def update(self, attribute_name, data):
+        setattr(self, attribute_name, data)
+        self.save()
+
+    def update_export_settings(self, preview_render, audio_export, output_dimensions, adaptive_zoom, smoothing_window, zoom_factor, video_encoder, encoder_profile, export_gyroflow_data):
+        self.preview_render = preview_render
+        self.audio_export = audio_export
+        self.output_dimensions = output_dimensions
+        self.adaptive_zoom = adaptive_zoom
+        self.smoothing_window = smoothing_window
+        self.zoom_factor = zoom_factor
+        self.video_encoder = video_encoder
+        self.encoder_profile = encoder_profile
+        self.export_gyroflow_data = export_gyroflow_data
+        self.save()
 
 def detect_dark_mode(qapp):
     if darkdetect.isDark():
@@ -3168,6 +3250,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # us = UserSettings()
+    # us.update("video_directory", "TTT")
     # Pack to exe using:
     # pyinstaller --icon=media\icon.ico gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll -F
     # in my case:
