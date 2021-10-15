@@ -1959,6 +1959,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_audio.setChecked(True)
         self.export_controls_layout.addWidget(self.export_audio)
 
+        self.auto_save_gyroflow_data = QtWidgets.QCheckBox("Automatically save gyroflow data")
+        self.auto_save_gyroflow_data.setChecked(True)
+        self.export_controls_layout.addWidget(self.auto_save_gyroflow_data)
+
         self.export_debug_text = QtWidgets.QCheckBox("Render with extra info (for debugging)")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
@@ -2783,7 +2787,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if len(filename[0]) == 0:
             self.show_error("No output file given")
             return
-
+        if self.auto_save_gyroflow_data.isChecked():
+            self.stab.export_gyroflow_file()
         split_screen = self.split_screen_select.isChecked()
         #hardware_acceleration = self.hw_acceleration_select.isChecked()
         vcodec = self.video_encoder_select.currentText()
