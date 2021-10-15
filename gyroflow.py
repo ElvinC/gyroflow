@@ -21,6 +21,7 @@ import bundled_images
 import insta360_utility as insta360_util
 import stabilizer
 import smoothing_algos
+import ctypes
 import qdarkstyle
 import darkdetect
 from datetime import datetime
@@ -3121,8 +3122,17 @@ def detect_dark_mode(qapp):
     if darkdetect.isDark():
         qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
 
+def set_windows_taskbar_icon():
+    try:
+        myappid = 'gyroflow.video.stabilisation.' + __version__  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except AttributeError as exc:
+        # apparently not running windows
+        pass
+
 
 def main():
+    set_windows_taskbar_icon()
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
 
     app = QtWidgets.QApplication([])
