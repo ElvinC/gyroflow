@@ -2775,8 +2775,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             # Add "All files" option in case only one file format is supported to force the option list
             # to be present, if not it dissapears. Should probably look more into setMimeTypeFilters at a later stage
             export_file_filter+=";; All files (*)"
+        path = '/'.join(self.infile_path.split("/")[:-1])
+        new_file_path = os.path.join(path, "GF_" + self.infile_path.split("/")[-1])
+        counter = 1
+        while os.path.isfile(new_file_path):
+            new_file_path = os.path.join(path, f"GF_{counter}_{self.infile_path.split('/')[-1]}")
+            counter += 1
 
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", new_file_path, filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
         time.sleep(0.5) # Time to close file dialog
         # Handled in stabilizer
