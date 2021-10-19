@@ -1324,7 +1324,7 @@ class Stabilizer:
         raw_imu = np.round(self.new_integrator.get_raw_gyro_acc(), 5)
         gyroflow_data["raw_imu"] = raw_imu.tolist() # time is already corrected
 
-        gyroflow_data["stab_summary"] = self.smoothing_algo.get_summary()
+        gyroflow_data["stab_summary"] = self.smoothing_algo.get_print_summary()
 
         #get_interpolated_orientations
         interpolated_times, interpolated_orientations =  self.new_integrator.get_interpolated_orientations(start=0,interval = 1/self.fps)
