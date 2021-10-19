@@ -1393,16 +1393,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # lens preset
         #self.input_controls_layout.addWidget(QtWidgets.QLabel("Search preset"))
 
-        preset_full_paths = calibrate_video.get_all_preset_paths()
-        self.preset_trunc_paths = [pathname.lstrip("camera_presets/") for pathname in preset_full_paths]
-        #print(preset_trunc_paths)
-        completer = QtWidgets.QCompleter(self.preset_trunc_paths)
-        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        completer.setFilterMode(QtCore.Qt.MatchContains)  
+        camera_preset_full_paths = calibrate_video.get_all_preset_paths()
+        self.cam_preset_trunc_paths = [pathname.replace("camera_presets/", "", 1) for pathname in camera_preset_full_paths]
+
+
+        cam_preset_completer = QtWidgets.QCompleter(self.cam_preset_trunc_paths)
+        cam_preset_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        cam_preset_completer.setFilterMode(QtCore.Qt.MatchContains)
 
         self.preset_search_input = QtWidgets.QLineEdit()
-        self.preset_search_input.setPlaceholderText("Search preset")
-        self.preset_search_input.setCompleter(completer)
+        self.preset_search_input.setPlaceholderText("Search camera preset")
+        self.preset_search_input.setCompleter(cam_preset_completer)
         self.preset_search_input.textChanged.connect(self.preset_search_handler)
         self.input_controls_layout.addWidget(self.preset_search_input)
         
@@ -1766,9 +1767,27 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync_correction_button.clicked.connect(self.correct_sync)
         #self.sync_controls_layout.addWidget(self.sync_correction_button)
 
-
+        stab_preset_full_paths = calibrate_video.get_all_preset_paths("stabilization_presets")
+        self.stab_preset_trunc_paths = [pathname.replace("stabilization_presets/", "", 1) for pathname in stab_preset_full_paths]
+        #print(preset_trunc_paths)
+        stab_search_input_stab = QtWidgets.QCompleter(self.stab_preset_trunc_paths)
+        stab_search_input_stab.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        stab_search_input_stab.setFilterMode(QtCore.Qt.MatchContains)
         # Select method for doing low-pass filtering
+        self.preset_search_input_stab = QtWidgets.QLineEdit()
+        self.preset_search_input_stab.setPlaceholderText("Search stabilization preset")
+        self.preset_search_input_stab.setCompleter(stab_search_input_stab)
+        self.preset_search_input_stab.textChanged.connect(self.preset_search_handler_stab)
+        # self.stab_controls_layout.addWidget(self.preset_search_input_stab)
+
+
+        self.save_stab_preset = QtWidgets.QPushButton("Save stabilization preset")
+        self.save_stab_preset.setMinimumHeight(self.button_height)
+        self.save_stab_preset.clicked.connect(self.save_stab_preset_func)
+        # self.stab_controls_layout.addWidget(self.save_stab_preset)
+
         self.stab_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
+
         self.stabilization_algo_select = QtWidgets.QComboBox()
 
         self.stab_algo_names = smoothing_algos.get_stab_algo_names()
@@ -1987,9 +2006,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         bg_description.setWordWrap(True)
         self.export_controls_layout.addWidget(bg_description)
         colornames = list(colors.cnames.keys())
-        completer = QtWidgets.QCompleter(colornames + ["REPLICATE","HISTORY"])
+        cam_preset_completer = QtWidgets.QCompleter(colornames + ["REPLICATE","HISTORY"])
         self.bg_color_select = QtWidgets.QLineEdit()
-        self.bg_color_select.setCompleter(completer)
+        self.bg_color_select.setCompleter(cam_preset_completer)
         self.bg_color_select.setPlaceholderText(random.choice(colornames))
         self.bg_color_select.setText("REPLICATE")
         self.export_controls_layout.addWidget(self.bg_color_select)
@@ -2233,12 +2252,54 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
     def preset_search_handler(self):
         selected_text = self.preset_search_input.text()
-        if selected_text in self.preset_trunc_paths:
+        if selected_text in self.cam_preset_trunc_paths:
             preset_path = "camera_presets/" + selected_text
             self.preset_path = preset_path
             self.reset_stab()
             self.display_preset_info()
             self.user_settings.update("camera_preset", self.preset_path)
+
+    def preset_search_handler_stab(self):
+        selected_text = self.preset_search_input_stab.text()
+        if selected_text in self.stab_preset_trunc_paths:
+            preset_path = "stabilization_presets/" + selected_text
+            self.stab_preset_path = preset_path
+            # self.reset_stab()
+            # self.display_preset_info()
+            self.user_settings.update("smoothing_preset", self.stab_preset_path)
+            preset = self.stab_algo_instance_current.get_preset(preset_path)
+            if preset is None:
+                print("Failed to load preset.")
+                return
+            if preset['algo'] in self.stab_algo_names:
+                self.stabilization_algo_select.setCurrentText(preset['algo'])
+            else:
+                print("Smoothing algorithm not available. Failed to load preset.")
+            # self.stabilization_algo_select.setCurrentText(preset)
+            idx = self.stabilization_algo_select.currentIndex()
+            self.stab_algo_instance_current.get_ui_widget().setVisible(False)
+            # self.stab_algo_instance_current = self.stab_algo_instances[idx]
+            for opt in preset['options']:
+                self.stab_algo_instances[idx].set_user_option(opt, preset['options'][opt])
+                self.stab_algo_instances[idx].update_after_preset_load(opt, preset['options'][opt])
+                print(self.stab_algo_instances[idx].get_user_option_value(opt))
+
+            print(self.stab_algo_instances[idx].get_print_summary())
+            print(self.stab_algo_instance_current.get_print_summary())
+            self.stab_algo_instance_current = self.stab_algo_instances[idx]
+            print(self.stab_algo_instance_current.get_print_summary())
+            # self.stab_algo_instance_current = self.stab_algo_instances[idx]
+            self.stab_algo_instance_current.get_ui_widget().setVisible(True)
+            print(self.stab_algo_instance_current.get_print_summary())
+            print("test")
+
+    def save_stab_preset_func(self):
+        os.makedirs("stabilization_presets", exist_ok=True)
+        path = QtWidgets.QFileDialog.getSaveFileName(self, "Save smoothing preset file", "stabilization_presets", filter="JSON preset (*.json *.JSON)")[0]
+        self.stab_algo_instance_current.save_as_preset(path)
+
+
+        # stab_settings = StabPreset(self.stabilization_algo_select, {})
 
 
     def display_video_info(self):
