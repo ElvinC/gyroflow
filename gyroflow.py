@@ -398,13 +398,13 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.last_seek_time = time.time()
 
 
-        self.time_stamp_display = QtWidgets.QLabel("0 s (--:-- / --:--)")
-        self.time_stamp_display.setStyleSheet("font-size:12px;")
+        self.timecode = QtWidgets.QLabel("00:00:00:00 (--:-- s)")
+        self.timecode.setStyleSheet("font-size:12px;")
 
 
         self.control_layout.addWidget(self.play_button)
         self.control_layout.addWidget(self.time_slider)
-        self.control_layout.addWidget(self.time_stamp_display)
+        self.control_layout.addWidget(self.timecode)
 
         self.layout.addWidget(self.control_bar)
 
@@ -497,10 +497,11 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.stop()
 
         # Update timestamp
-        slider_val = self.time_slider.value()
-        frame_pos = slider_val * (max(self.num_frames, 1))/self.seek_ticks 
-        timestamp = frame_pos / self.fps 
-        self.time_stamp_display.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
+        frame_pos = self.time_slider.value()
+        # frame_pos = slider_val * (max(self.num_frames, 1))/self.seek_ticks
+        timestamp = frame_pos / self.fps
+        # self.timecode.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
+        self.timecode.setText(f"{self.get_timecode(timestamp)} ({self.time_string(self.video_length)})")
 
     def stop_seek(self):
         self.is_seeking = False
@@ -525,10 +526,8 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         was_playing = self.thread.playing
         if was_playing:
             self.stop()
-        print(self.time_slider.value())
-        selected_frame = int(self.num_frames * self.time_slider.value() / self.seek_ticks)
-        print(selected_frame)
-        self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, selected_frame)
+
+        self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, self.time_slider.value())
 
         # restart if it was playing
         if (was_playing or self.was_playing_before) and not self.is_seeking:
@@ -547,15 +546,15 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         if self.is_seeking:
             return
 
-        slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
         timestamp = frame_pos / self.fps 
         # update slider without triggering valueChange
         self.time_slider.blockSignals(True)
-        self.time_slider.setValue(slider_val)
-
-        self.time_stamp_display.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
-        
+        self.time_slider.setValue(max(frame_pos, 1))
+        self.timecode.setText(f"{self.get_timecode(timestamp)} ({self.time_string(self.video_length)})")
         self.time_slider.blockSignals(False)
+
+    def get_timecode(self, t):
+        return f"{int(t / 3600):02d}:{int(t / 60):02d}:{int(t) % 60:02d}:{int((t - int(t)) / self.fps * 1000):02d}"
 
     def time_string(self, t):
         return f"{int(t / 60):02d}:{int(t) % 60:02d}"
@@ -2137,8 +2136,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_info_dict["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.video_info_dict["fps"] = cap.get(cv2.CAP_PROP_FPS)
         self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
+        self.video_info_dict["n_frames"] = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
         self.video_viewer.thread.frame_delay = self.video_info_dict["fps"]
+        self.video_viewer.time_slider.setMaximum(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
         try:
@@ -3221,7 +3222,8 @@ class UserSettings:
         self.export_gyroflow_data = export_gyroflow_data
         self.save()
 
-def detect_dark_mode(qapp):
+
+def switch_to_dark_mode(qapp):
     if darkdetect.isDark():
         qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
 
@@ -3239,7 +3241,7 @@ def main():
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
 
     app = QtWidgets.QApplication([])
-    detect_dark_mode(app)
+    switch_to_dark_mode(app)
     widget = Launcher() # Launcher()
     widget.resize(500, 500)
 
