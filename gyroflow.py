@@ -3227,10 +3227,11 @@ def switch_to_dark_mode(qapp):
     if darkdetect.isDark():
         qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
 
+
 def set_windows_taskbar_icon():
     try:
-        myappid = 'gyroflow.video.stabilisation.' + __version__  # arbitrary string
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        appid = 'gyroflow.video.stabilisation.' + __version__  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(appid)
     except AttributeError as exc:
         # apparently not running windows
         pass
