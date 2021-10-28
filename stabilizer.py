@@ -289,15 +289,15 @@ class Stabilizer:
         self.sync_costs = []
 
 
-    def multi_sync_add_slice(self, slice_frame_start, slicelength, d1, cost1, times1, transforms1, debug_plots = True):
+    def multi_sync_add_slice(self, slice_frame_start, slicelength, d1, cost1, times1, transforms1, debug_plots = True, remove_bad = True):
 
         max_sync_cost_tot = 10 # > 10 is nogo.
         max_sync_cost = max_sync_cost_tot / 30 * slicelength
-        if cost1 > max_sync_cost:
+        if cost1 > max_sync_cost and remove_bad:
             print("Skipping slice due to large error")
             return cost1
 
-        elif np.sum((np.abs(transforms1 * self.fps) < 0.05)) >= (0.95 * transforms1.size):
+        elif np.sum((np.abs(transforms1 * self.fps) < 0.05)) >= (0.95 * transforms1.size) and remove_bad:
             print("Skipping slice due to lack of movement")
             return cost1
             # if more than 95% of the slice doesn't have significant movement (<3 deg/s)
@@ -772,7 +772,7 @@ class Stabilizer:
             self.integrator.gyro_sample_rate,
             self.fps,
             analyze_length=analyze_length,
-            debug_plots=True)
+            debug_plots=debug_plots)
 
 
     def estimate_gyro_offset(self, OF_times, OF_transforms, prev_pts_list, curr_pts_list, debug_plots = True):

@@ -733,7 +733,8 @@ class RuncamData(GyrologReader):
 
         self.variants = {
             "Runcam 5 Orange": [0],
-            "iFlight GOCam GR": [0]
+            "iFlight GOCam GR": [0],
+            "Other": [18]
         }
         self.variant = "Runcam 5 Orange"
 
@@ -806,7 +807,9 @@ class RuncamData(GyrologReader):
             for line in lines:
                 splitdata = [float(x) for x in line.split(",")]
                 t = splitdata[0]/1000
-
+                gx = splitdata[1] * gyroscale
+                gy = splitdata[2] * gyroscale
+                gz = splitdata[3] * gyroscale
                 # RC5
                 if self.variant=="Runcam 5 Orange":
                     gx = splitdata[3] * gyroscale
@@ -816,8 +819,10 @@ class RuncamData(GyrologReader):
                     gx = -splitdata[3] * gyroscale
                     gy = -splitdata[1] * gyroscale
                     gz = -splitdata[2] * gyroscale
-                
                 if has_acc:
+                    ax = splitdata[4] * acc_scale
+                    ay = splitdata[5] * acc_scale
+                    az = splitdata[6] * acc_scale
                     if self.variant=="Runcam 5 Orange":
                         ax = -splitdata[4] * acc_scale
                         ay = -splitdata[5] * acc_scale
