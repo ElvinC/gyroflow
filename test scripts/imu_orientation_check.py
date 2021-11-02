@@ -1,12 +1,16 @@
 import cv2
 import numpy as np
 import time
-import tqdm
+from tqdm import tqdm
+from calibrate_video import FisheyeCalibrator
 
 from scipy.spatial.transform import Rotation
 
 
-def optical_flow(videofile):
+def optical_flow(videofile, lens_preset):
+    undistort = FisheyeCalibrator()
+
+    undistort.load_calibration_json(lens_preset, True)
     frame_times = []
     frame_idx = []
     transforms = []
@@ -14,7 +18,7 @@ def optical_flow(videofile):
     curr_pts_lst = []
 
     cap = cv2.VideoCapture(videofile)
-    num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     time.sleep(0.05)
 
     ret, prev = cap.read()
@@ -23,6 +27,9 @@ def optical_flow(videofile):
     if not ret:
         print("Can't read this part of the file")
         return 0, 999999, [], []
+
+    prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
+    height, width, c = prev.shape
 
     for i in tqdm(range(num_frames), desc=f"Analyzing frames", colour="blue"):
         prev_pts = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=0.01, minDistance=30, blockSize=3)
@@ -50,10 +57,10 @@ def optical_flow(videofile):
 
 
             # TODO: Try getting undistort + homography working for more accurate rotation estimation
-            # src_pts = undistort.undistort_points(prev_pts, new_img_dim=(width, height))
-            # dst_pts = undistort.undistort_points(curr_pts, new_img_dim=(width, height))
-            src_pts = prev_pts_lst
-            dst_pts = curr_pts_lst
+            src_pts = undistort.undistort_points(prev_pts, new_img_dim=(width, height))
+            dst_pts = undistort.undistort_points(curr_pts, new_img_dim=(width, height))
+            # src_pts = prev_pts_lst
+            # dst_pts = curr_pts_lst
 
             filtered_src = []
             filtered_dst = []
@@ -85,7 +92,7 @@ def optical_flow(videofile):
 
             prev_gray = curr_gray
 
-            transforms.append(list(roteul/num_frames_skipped))
+            transforms.append(list(roteul))
 
 
         else:
@@ -94,3 +101,40 @@ def optical_flow(videofile):
     transforms = np.array(transforms)
 
     return transforms
+import pandas as pd
+import os
+import gyrolog
+import matplotlib.pyplot as plt
+video_file = r"D:\Cloud\git\gyroflow\OneR_1inch_gyro_samples\OneR_1inch_gyro_samples\Orentation_display_BACK\PRO_VID_20211102_143001_00_051.mp4"
+lens_preset = r"D:\Cloud\git\gyroflow\OneR_1inch_gyro_samples\Insta360_OneR_1inch_PRO_4K_30fps_16by9.json"
+transform_file = video_file + ".transform.csv"
+if not os.path.isfile(transform_file):
+    transforms = optical_flow(video_file, lens_preset)
+    df = pd.DataFrame(transforms)
+    df.to_csv(transform_file)
+else:
+    df = pd.read_csv(transform_file)
+
+df = df[df.x.abs() < 0.2]
+log_guess, log_type, variant = gyrolog.guess_log_type_from_video(video_file)
+print(variant)
+log_reader = gyrolog.get_log_reader_by_name(log_type)
+log_reader.set_variant("insta360 oner one-inch")
+log_reader.set_pre_filter(50)
+success = log_reader.extract_log(video_file)
+if success:
+    gyro = log_reader.standard_gyro
+else:
+    print("Failed to read gyro!")
+fps = 29.97
+fig, axes = plt.subplots(3, 2)
+axes[0, 0].plot(gyro[:, 0], gyro[:, 1])
+axes[1, 0].plot(gyro[:, 0], gyro[:, 2])
+axes[2, 0].plot(gyro[:, 0], gyro[:, 3])
+# axes[0, 0].plot(df.index / fps, df.x * fps)
+# axes[1, 0].plot(df.index / fps, df.y * fps)
+# axes[2, 0].plot(df.index / fps, df.z * fps)
+axes[0, 1].plot(df.index / fps, df.x * fps)
+axes[1, 1].plot(df.index / fps, df.y * fps)
+axes[2, 1].plot(df.index / fps, df.z * fps)
+plt.show()
