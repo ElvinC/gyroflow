@@ -1013,15 +1013,17 @@ class CalibratorUtility(QtWidgets.QMainWindow):
             ret, frame = cap.read()
             self.calibrator.num_processed_images += 1
             if ret:
+                scaled = cv2.resize(frame, (960, 720))
+                cv2.imshow('Chessboard detection', scaled)
+                cv2.waitKey(1)
                 print("\n\nFrame:", n)
-                rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
                 ret, message, corners = self.calibrator.add_calib_image(frame)
                 print(message)
                 self.update_calib_info()
                 if ret:
-                    cv2.drawChessboardCorners(rgbImage, self.calibrator.chessboard_size, corners, True)
-                    scaled = cv2.resize(rgbImage, (960, 720))
+                    cv2.drawChessboardCorners(frame, self.calibrator.chessboard_size, corners, True)
+                    scaled = cv2.resize(frame, (960, 720))
                     cv2.imshow('Chessboard detection', scaled)
                     cv2.waitKey(1)
                     rms = self.calibrator.compute_calibration()
