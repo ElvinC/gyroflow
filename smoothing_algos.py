@@ -6,6 +6,8 @@ from scipy import signal
 from scipy.spatial.transform import Rotation
 from PySide2 import QtCore, QtWidgets, QtGui
 
+import json
+
 class SmoothingAlgo:
     def __init__(self, name="Nothing"):
         self.name = name
@@ -103,10 +105,30 @@ class SmoothingAlgo:
     def slider_conv_func_inverse(self, minval, maxval, steps, expo, realval):
         return round(steps * ((realval - minval)/(maxval - minval))**(1/expo))
 
-    def get_summary(self):
+    def get_print_summary(self):
         # Get a readable summary of the smoothing method and settings
         summary = [self.name] + [f'{optionname}:{self.user_options[optionname]["value"]}' for optionname in self.user_options]
         return ",".join(summary)
+
+    def save_as_preset(self, file_path):
+        with open(file_path, 'w') as outfile:
+            json.dump({
+                "algo": self.name,
+                "options": {optionname: self.user_options[optionname]["value"] for optionname in
+                    self.user_options}},
+                outfile,
+                indent=4,
+                separators=(',', ': ')
+            )
+
+    def get_preset(self, file_path):
+        try:
+            with open(file_path, "r") as infile:
+                preset = json.load(infile)
+            return preset
+        except Exception as e:
+            print("Can't load smoothing preset.")
+
 
     def widget_input_update(self, optionname = ""):
         #print("Update option")
@@ -389,7 +411,7 @@ class RateSmoothing(SmoothingAlgo):
         # Return timelist, quaternion list
         return times, correction_quats
 
-class SmoothLimitedSlerp(SmoothingAlgo):
+class Aphobius(SmoothingAlgo):
     """Limited quaternion slerp
     """
     def __init__(self):
@@ -477,6 +499,122 @@ class SmoothLimitedSlerp(SmoothingAlgo):
 
         return times, final_orientation
 
+class Aphobius2(SmoothingAlgo):
+    """Velocity dampened quaternion slerp
+    """
+    def __init__(self):
+        super().__init__("Velocity dampened 3D smoothing (Aphobius 2.0)")
+
+        self.add_user_option("smoothness", 0.4, 0, 30, ui_label = "Smoothness (time constant: {0:.3f} s):",
+                             explanation="Smoothness time constant in seconds", input_expo = 3, input_type="slider")
+
+        self.add_user_option("pitchveldamp", 2, 0, 100, ui_label = "Pitch velocity dampening:",
+                             explanation="Variable that reduces smoothness during fast maneuvers", input_expo = 1, input_type="float")
+
+        self.add_user_option("yawveldamp", 2, 0, 100, ui_label = "Yaw velocity dampening:",
+                             explanation="Variable that reduces smoothness during fast maneuvers", input_expo = 1, input_type="float")
+
+        self.add_user_option("rollveldamp", 2, 0, 100, ui_label = "Roll velocity dampening:",
+                             explanation="Variable that reduces smoothness during fast maneuvers", input_expo = 1, input_type="float")
+
+        self.add_user_option("start", 0, 0, 1000000, ui_label = "Start time in seconds for maximum rotation angles calculation:",
+                             explanation="Start time in seconds for maximum rotation angles calculation", input_expo = 1, input_type="float")
+
+        self.add_user_option("end", 1, 0, 1000000, ui_label = "End time in seconds for maximum rotation angles calculation:",
+                             explanation="End time in seconds for maximum rotation angles calculation", input_expo = 1, input_type="float")
+
+    def smooth_orientations_internal(self, times, orientation_list):
+        # To be overloaded
+
+        # https://en.wikipedia.org/wiki/Exponential_smoothing
+        # the smooth value corresponds to the time constant
+
+        dt = 1 / self.gyro_sample_rate
+        alpha = 1
+        high_alpha = 1
+        smooth = self.get_user_option_value("smoothness")
+        if smooth > 0:
+            alpha = 1 - np.exp(-dt / smooth)
+            high_alpha = 1 - np.exp(-dt / (smooth * 0.1))
+
+        #region calculate low smooth
+        low_smooth = np.zeros(orientation_list.shape)
+        low_smooth[0] = orientation_list[0]
+
+        for i in range(1, self.num_data_points):
+            low_smooth[i] = quat.slerp(low_smooth[i-1], orientation_list[i],[high_alpha])[0]
+
+        for i in range(self.num_data_points-2, -1, -1):
+            low_smooth[i] = quat.slerp(low_smooth[i+1], low_smooth[i],[high_alpha])[0]
+        #endregion
+
+        #region calculate velocity
+        velocity = np.zeros((orientation_list.shape[0], 3))
+
+        for i in range(1, self.num_data_points):
+            dist = quat.rot_between(low_smooth[i-1], low_smooth[i])
+            velocity[i] = np.abs(quat.to_euler(dist)) / dt
+
+        # smooth velocity
+        for i in range(1, self.num_data_points):
+            velocity[i] = velocity[i-1] * (1 - high_alpha) + velocity[i] * high_alpha
+
+        for i in range(self.num_data_points-2, -1, -1):
+            velocity[i] = velocity[i+1] * (1 - high_alpha) + velocity[i] * high_alpha
+        #endregion
+
+        #region calculate velocity corrected smooth
+        pitch_vel_damp = self.get_user_option_value("pitchveldamp")
+        yaw_vel_damp = self.get_user_option_value("yawveldamp")
+        roll_vel_damp = self.get_user_option_value("rollveldamp")
+
+        velocity *= [pitch_vel_damp, yaw_vel_damp, roll_vel_damp]
+        velocity += 1
+
+        vel_corr_smooth = np.zeros(orientation_list.shape)
+        vel_corr_smooth[0] = orientation_list[0]
+
+        for i in range(1, self.num_data_points):
+            rot = quat.rot_between(vel_corr_smooth[i-1], orientation_list[i])
+            euler = quat.to_euler(rot)
+            euler[0] *= min(alpha * velocity[i,0], 1)
+            euler[1] *= min(alpha * velocity[i,1], 1)
+            euler[2] *= min(alpha * velocity[i,2], 1)
+            vel_corr_smooth[i] = quat.quaternion_multiply(vel_corr_smooth[i-1], quat.from_euler(euler))
+
+        for i in range(self.num_data_points-2, -1, -1):
+            rot = quat.rot_between(vel_corr_smooth[i+1], vel_corr_smooth[i])
+            euler = quat.to_euler(rot)
+            euler[0] *= min(alpha * (velocity[i,0] * pitch_vel_damp + 1), 1)
+            euler[1] *= min(alpha * (velocity[i,1] * yaw_vel_damp + 1), 1)
+            euler[2] *= min(alpha * (velocity[i,2] * roll_vel_damp + 1), 1)
+            vel_corr_smooth[i] = quat.quaternion_multiply(vel_corr_smooth[i+1], quat.from_euler(euler))
+        #endregion
+
+        #region calculate max distance
+        start = int(self.get_user_option_value("start") * self.gyro_sample_rate)
+        end = int(self.get_user_option_value("end") * self.gyro_sample_rate)
+
+        max_pitch = 0
+        max_yaw = 0
+        max_roll = 0
+
+        for i in range(start, min(end, self.num_data_points)):
+            dist = quat.rot_between(vel_corr_smooth[i], orientation_list[i])
+            euler_dist = quat.to_euler(dist)
+            if euler_dist[0] > max_pitch:
+                max_pitch = euler_dist[0]
+            if euler_dist[1] > max_yaw:
+                max_yaw = euler_dist[1]
+            if euler_dist[2] > max_roll:
+                max_roll = euler_dist[2]
+
+        print("Max pitch rotation: {0:.2f} Max yaw rotation: {1:.2f} Max roll rotation: {2:.2f}".format(np.rad2deg(max_pitch), np.rad2deg(max_yaw), np.rad2deg(max_roll)))
+        print("Modify dampening settings until you get the desired values (recommended around 6 on all axes)")
+        #endregion
+
+        return times, vel_corr_smooth
+
 class HorizonLock(SmoothingAlgo):
     """Keep horizon level
     """
@@ -545,7 +683,7 @@ smooth_algo_classes = []
 #    if inspect.isclass(obj):
 #        smooth_algo_classes.append(obj)
 
-smooth_algo_classes = [PlainSlerp, RateSmoothing, HorizonLock, SmoothLimitedSlerp, LimitedSlerp, SmoothingAlgo]
+smooth_algo_classes = [PlainSlerp, RateSmoothing, HorizonLock, Aphobius, Aphobius2, LimitedSlerp, SmoothingAlgo]
 
 smooth_algo_names = [alg().name for alg in smooth_algo_classes]
 

@@ -1,8 +1,8 @@
 import sys
 from PySide2 import QtCore, QtGui, QtWidgets
 from PySide2.QtCore import Qt
-from cv2 import detail_HomographyBasedEstimator
 import numpy as np
+
 
 class MultiSyncList(QtWidgets.QListWidget):
     def __init__(self, parent=None, stab=None):
@@ -114,6 +114,7 @@ class MultiSyncList(QtWidgets.QListWidget):
 
     def update_from_stab_data(self):
         # first, delete everything
+        self.item_data = []
         self.clear()
 
         if type(self.stab) == type(None):
@@ -138,6 +139,7 @@ class MultiSyncList(QtWidgets.QListWidget):
 
     def UI_reset(self):
         self.stab = None
+        self.item_data = []
         self.clear()
 
 class MultiSyncUI(QtWidgets.QWidget):

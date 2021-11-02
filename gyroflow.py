@@ -6,6 +6,7 @@ import cv2
 import os
 import numpy as np
 from PySide2 import QtCore, QtWidgets, QtGui
+from PySide2.QtGui import QPalette, QColor, Qt
 from matplotlib import colors
 from _version import __version__
 from vidgear.gears.helper import get_valid_ffmpeg_path
@@ -20,9 +21,13 @@ import bundled_images
 import insta360_utility as insta360_util
 import stabilizer
 import smoothing_algos
+import ctypes
+import qdarkstyle
+import darkdetect
 from datetime import datetime
 import gyrolog
 from UI_elements import sync_ui
+
 
 # area for environment variables
 try:
@@ -37,12 +42,34 @@ cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RE
                     "Blackmagic", "Casio", "Nikon", "Panasonic", "Sony", "Jvc", "Olympus", "Fujifilm",
                     "Phone"]
 
+
+class QTimeSlider(QtWidgets.QSlider):
+    def __init__(self, parent = None):
+        super(QTimeSlider, self).__init__(QtCore.Qt.Horizontal, parent)
+     
+    def mousePressEvent(self, event):
+        #Jump to click position
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
+
+        #print(event)
+    def mouseReleaseEvent(self, event):
+        self.sliderReleased.emit()
+        #print(event)
+
+    def mouseMoveEvent(self, event):
+        #Jump to pointer position while moving
+        self.setValue(QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), event.x(), self.width()))
+        self.sliderPressed.emit()
+
+
 class Launcher(QtWidgets.QWidget):
     """Main launcher with options to open different utilities
     """
     def __init__(self):
 
         super().__init__()
+        gyrolog.print_available_log_types()
 
         self.setWindowTitle("Gyroflow {} Launcher".format(__version__))
         self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
@@ -117,6 +144,7 @@ class Launcher(QtWidgets.QWidget):
         self.stretch_utility = None
 
         self.check_version(True)
+
 
     def open_calib_util(self):
         """Open the camera calibration utility in a new window
@@ -240,16 +268,17 @@ class VideoThread(QtCore.QThread):
         """
 
         self.cap = cv2.VideoCapture()
-
+        last_timestamp = time.time()
         while True:
             if self.playing or self.next_frame:
                 self.next_frame = False
                 self.this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
                 ret, self.frame = self.cap.read()
                 if ret:
-                    time.sleep(self.frame_delay)
                     self.update_frame()
-
+                    timestamp = time.time()
+                    time.sleep(max(0, self.frame_delay - (timestamp - last_timestamp)))
+                    last_timestamp = timestamp
 
             elif self.update_once:
                 self.update_once = False
@@ -257,7 +286,6 @@ class VideoThread(QtCore.QThread):
 
             else:
                 time.sleep(1/20)
-
 
     def update_frame(self):
         """Opdate the current video frame shown
@@ -352,7 +380,7 @@ class VideoPlayerWidget(QtWidgets.QWidget):
 
 
         # seek bar with value from 0-200
-        self.time_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, self)
+        self.time_slider = QTimeSlider(self)
         self.time_slider.setMinimum(0)
         self.time_slider.setValue(0)
 
@@ -370,13 +398,13 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.last_seek_time = time.time()
 
 
-        self.time_stamp_display = QtWidgets.QLabel("0 s (--:-- / --:--)")
-        self.time_stamp_display.setStyleSheet("font-size:12px;")
+        self.timecode = QtWidgets.QLabel("00:00:00:00 (--:-- s)")
+        self.timecode.setStyleSheet("font-size:12px;")
 
 
         self.control_layout.addWidget(self.play_button)
         self.control_layout.addWidget(self.time_slider)
-        self.control_layout.addWidget(self.time_stamp_display)
+        self.control_layout.addWidget(self.timecode)
 
         self.layout.addWidget(self.control_bar)
 
@@ -468,6 +496,13 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         self.was_playing_before = self.thread.playing
         self.stop()
 
+        # Update timestamp
+        frame_pos = self.time_slider.value()
+        # frame_pos = slider_val * (max(self.num_frames, 1))/self.seek_ticks
+        timestamp = frame_pos / self.fps
+        # self.timecode.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
+        self.timecode.setText(f"{self.get_timecode(timestamp)} ({self.time_string(self.video_length)})")
+
     def stop_seek(self):
         self.is_seeking = False
 
@@ -491,10 +526,8 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         was_playing = self.thread.playing
         if was_playing:
             self.stop()
-        print(self.time_slider.value())
-        selected_frame = int(self.num_frames * self.time_slider.value() / self.seek_ticks)
-        print(selected_frame)
-        self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, selected_frame)
+
+        self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, self.time_slider.value())
 
         # restart if it was playing
         if (was_playing or self.was_playing_before) and not self.is_seeking:
@@ -513,15 +546,15 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         if self.is_seeking:
             return
 
-        slider_val = int(frame_pos * self.seek_ticks / (max(self.num_frames, 1)))
         timestamp = frame_pos / self.fps 
         # update slider without triggering valueChange
         self.time_slider.blockSignals(True)
-        self.time_slider.setValue(slider_val)
-
-        self.time_stamp_display.setText(f"{timestamp:.2f} s ({self.time_string(timestamp)} / {self.time_string(self.video_length)})")
-        
+        self.time_slider.setValue(max(frame_pos, 1))
+        self.timecode.setText(f"{self.get_timecode(timestamp)} ({self.time_string(self.video_length)})")
         self.time_slider.blockSignals(False)
+
+    def get_timecode(self, t):
+        return f"{int(t / 3600):02d}:{int(t / 60):02d}:{int(t) % 60:02d}:{int((t - int(t)) / self.fps * 1000):02d}"
 
     def time_string(self, t):
         return f"{int(t / 60):02d}:{int(t) % 60:02d}"
@@ -936,7 +969,7 @@ class CalibratorUtility(QtWidgets.QMainWindow):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
 
     def add_current_frame(self):
@@ -961,14 +994,21 @@ class CalibratorUtility(QtWidgets.QMainWindow):
 
     def start_lens_calibration(self):
         self.calibrator.new_calibration()
-        n_calibration_frames = 50
         cap = cv2.VideoCapture(self.infile_path)
         num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        n_calibration_frames = min(50, num_frames)
+
         print(f"Starting lens calibration with {num_frames} frames")
         t = datetime.now()
         good_frames = []
         for n in np.linspace(0, num_frames - 1, n_calibration_frames):
-            n = int(n)
+
+            # add randomness in case it starts with a bad frame
+            random_range = int(max(1, num_frames / 200))
+            n = int(n + random.randrange(-random_range, random_range))
+            n = min(n, num_frames - 1)
+            n = max(1, n)
             cap.set(cv2.CAP_PROP_POS_FRAMES, n)
             ret, frame = cap.read()
             self.calibrator.num_processed_images += 1
@@ -1353,16 +1393,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         # lens preset
         #self.input_controls_layout.addWidget(QtWidgets.QLabel("Search preset"))
 
-        preset_full_paths = calibrate_video.get_all_preset_paths()
-        self.preset_trunc_paths = [pathname.lstrip("camera_presets/") for pathname in preset_full_paths]
-        #print(preset_trunc_paths)
-        completer = QtWidgets.QCompleter(self.preset_trunc_paths)
-        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        completer.setFilterMode(QtCore.Qt.MatchContains)  
+        camera_preset_full_paths = calibrate_video.get_all_preset_paths()
+        self.cam_preset_trunc_paths = [pathname.replace("camera_presets/", "", 1) for pathname in camera_preset_full_paths]
+
+
+        cam_preset_completer = QtWidgets.QCompleter(self.cam_preset_trunc_paths)
+        cam_preset_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        cam_preset_completer.setFilterMode(QtCore.Qt.MatchContains)
 
         self.preset_search_input = QtWidgets.QLineEdit()
-        self.preset_search_input.setPlaceholderText("Search preset")
-        self.preset_search_input.setCompleter(completer)
+        self.preset_search_input.setPlaceholderText("Search camera preset")
+        self.preset_search_input.setCompleter(cam_preset_completer)
         self.preset_search_input.textChanged.connect(self.preset_search_handler)
         self.input_controls_layout.addWidget(self.preset_search_input)
         
@@ -1726,9 +1767,27 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync_correction_button.clicked.connect(self.correct_sync)
         #self.sync_controls_layout.addWidget(self.sync_correction_button)
 
-
+        stab_preset_full_paths = calibrate_video.get_all_preset_paths("stabilization_presets")
+        self.stab_preset_trunc_paths = [pathname.replace("stabilization_presets/", "", 1) for pathname in stab_preset_full_paths]
+        #print(preset_trunc_paths)
+        stab_search_input_stab = QtWidgets.QCompleter(self.stab_preset_trunc_paths)
+        stab_search_input_stab.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        stab_search_input_stab.setFilterMode(QtCore.Qt.MatchContains)
         # Select method for doing low-pass filtering
+        self.preset_search_input_stab = QtWidgets.QLineEdit()
+        self.preset_search_input_stab.setPlaceholderText("Search stabilization preset")
+        self.preset_search_input_stab.setCompleter(stab_search_input_stab)
+        self.preset_search_input_stab.textChanged.connect(self.preset_search_handler_stab)
+        # self.stab_controls_layout.addWidget(self.preset_search_input_stab)
+
+
+        self.save_stab_preset = QtWidgets.QPushButton("Save stabilization preset")
+        self.save_stab_preset.setMinimumHeight(self.button_height)
+        self.save_stab_preset.clicked.connect(self.save_stab_preset_func)
+        # self.stab_controls_layout.addWidget(self.save_stab_preset)
+
         self.stab_controls_layout.addWidget(QtWidgets.QLabel("Smoothing method"))
+
         self.stabilization_algo_select = QtWidgets.QComboBox()
 
         self.stab_algo_names = smoothing_algos.get_stab_algo_names()
@@ -1918,6 +1977,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.export_audio.setChecked(True)
         self.export_controls_layout.addWidget(self.export_audio)
 
+        self.auto_save_gyroflow_data = QtWidgets.QCheckBox("Automatically save gyroflow data")
+        self.auto_save_gyroflow_data.setChecked(True)
+        self.export_controls_layout.addWidget(self.auto_save_gyroflow_data)
+
         self.export_debug_text = QtWidgets.QCheckBox("Render with extra info (for debugging)")
         self.export_debug_text.setChecked(False)
         self.export_controls_layout.addWidget(self.export_debug_text)
@@ -1943,9 +2006,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         bg_description.setWordWrap(True)
         self.export_controls_layout.addWidget(bg_description)
         colornames = list(colors.cnames.keys())
-        completer = QtWidgets.QCompleter(colornames + ["REPLICATE","HISTORY"])
+        cam_preset_completer = QtWidgets.QCompleter(colornames + ["REPLICATE","HISTORY"])
         self.bg_color_select = QtWidgets.QLineEdit()
-        self.bg_color_select.setCompleter(completer)
+        self.bg_color_select.setCompleter(cam_preset_completer)
         self.bg_color_select.setPlaceholderText(random.choice(colornames))
         self.bg_color_select.setText("REPLICATE")
         self.export_controls_layout.addWidget(self.bg_color_select)
@@ -2069,8 +2132,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.has_player:
             self.video_viewer.stop()
 
-
         dialog = QtWidgets.QFileDialog()
+        if os.path.isdir(self.user_settings.video_directory):
+            dialog.setDirectory(self.user_settings.video_directory)
         dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime", "application/octet-stream"])
         dialog.exec_()
         path = dialog.selectedFiles()
@@ -2078,7 +2142,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             print("No file selected")
             return False
         self.infile_path = path[0]
-        self.open_vid_button.setText("Video file: {}".format(self.infile_path.split("/")[-1]))
+        filename = self.infile_path.split("/")[-1]
+        self.user_settings.update("video_directory", "/".join(self.infile_path.split("/")[:-1]))
+        self.open_vid_button.setText("Video file: {}".format(filename))
+        self.setWindowTitle("Gyroflow Stabilizer {} - {}".format(__version__, filename))
         self.open_vid_button.setStyleSheet("font-weight:bold;")
 
         # Extract information about the clip
@@ -2088,6 +2155,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.video_info_dict["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.video_info_dict["fps"] = cap.get(cv2.CAP_PROP_FPS)
         self.video_info_dict["time"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.video_info_dict["fps"])
+        self.video_info_dict["n_frames"] = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+
+        self.video_viewer.thread.frame_delay = self.video_info_dict["fps"]
+        self.video_viewer.time_slider.setMaximum(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self.video_info_dict["aspect"] = 0 if self.video_info_dict["height"] == 0 else self.video_info_dict["width"]/self.video_info_dict["height"]
         try:
@@ -2102,6 +2173,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         # Reset the stabilizer
         self.reset_stab()
+        self.reset_export()
 
         #no_suffix = os.path.splitext(self.infile_path)[0]
         # check if gyroflow data file exists
@@ -2157,6 +2229,9 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.update_gyro_input_settings()
         return True
 
+    def reset_export(self):
+        self.preset_resolution_combo.setCurrentIndex(0)
+
     def video_as_log_func(self):
         self.gyro_log_path = self.infile_path
         # check if Insta360
@@ -2177,11 +2252,54 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
     def preset_search_handler(self):
         selected_text = self.preset_search_input.text()
-        if selected_text in self.preset_trunc_paths:
+        if selected_text in self.cam_preset_trunc_paths:
             preset_path = "camera_presets/" + selected_text
             self.preset_path = preset_path
             self.reset_stab()
             self.display_preset_info()
+            self.user_settings.update("camera_preset", self.preset_path)
+
+    def preset_search_handler_stab(self):
+        selected_text = self.preset_search_input_stab.text()
+        if selected_text in self.stab_preset_trunc_paths:
+            preset_path = "stabilization_presets/" + selected_text
+            self.stab_preset_path = preset_path
+            # self.reset_stab()
+            # self.display_preset_info()
+            self.user_settings.update("smoothing_preset", self.stab_preset_path)
+            preset = self.stab_algo_instance_current.get_preset(preset_path)
+            if preset is None:
+                print("Failed to load preset.")
+                return
+            if preset['algo'] in self.stab_algo_names:
+                self.stabilization_algo_select.setCurrentText(preset['algo'])
+            else:
+                print("Smoothing algorithm not available. Failed to load preset.")
+            # self.stabilization_algo_select.setCurrentText(preset)
+            idx = self.stabilization_algo_select.currentIndex()
+            self.stab_algo_instance_current.get_ui_widget().setVisible(False)
+            # self.stab_algo_instance_current = self.stab_algo_instances[idx]
+            for opt in preset['options']:
+                self.stab_algo_instances[idx].set_user_option(opt, preset['options'][opt])
+                self.stab_algo_instances[idx].update_after_preset_load(opt, preset['options'][opt])
+                print(self.stab_algo_instances[idx].get_user_option_value(opt))
+
+            print(self.stab_algo_instances[idx].get_print_summary())
+            print(self.stab_algo_instance_current.get_print_summary())
+            self.stab_algo_instance_current = self.stab_algo_instances[idx]
+            print(self.stab_algo_instance_current.get_print_summary())
+            # self.stab_algo_instance_current = self.stab_algo_instances[idx]
+            self.stab_algo_instance_current.get_ui_widget().setVisible(True)
+            print(self.stab_algo_instance_current.get_print_summary())
+            print("test")
+
+    def save_stab_preset_func(self):
+        os.makedirs("stabilization_presets", exist_ok=True)
+        path = QtWidgets.QFileDialog.getSaveFileName(self, "Save smoothing preset file", "stabilization_presets", filter="JSON preset (*.json *.JSON)")[0]
+        self.stab_algo_instance_current.save_as_preset(path)
+
+
+        # stab_settings = StabPreset(self.stabilization_algo_select, {})
 
 
     def display_video_info(self):
@@ -2204,7 +2322,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         #self.sync1_control.setValue(5)
         #self.sync2_control.setValue(int(self.video_info_dict["time"] - 5)) # 5 seconds before end
         self.export_bitrate.setValue(max(int(self.video_info_dict["bitrate"]) / 1000, 20))
-        
+        print(self.stab)
 
         self.check_aspect()
 
@@ -2222,6 +2340,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
 
         self.display_preset_info()
+        self.user_settings.update("camera_preset", self.preset_path)
 
 
 
@@ -2375,6 +2494,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             return
 
         temp_log_reader.plot_gyro(blocking=stabilizer.BLOCKING_PLOTS)
+
 
     def reset_stab(self):
         #print("Reset stabilization class")
@@ -2545,7 +2665,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         max_fitting_error = self.max_fitting_control.value()
         max_syncs = self.max_sync_control.value()
-        success = self.stab.full_auto_sync(max_fitting_error,max_syncs)
+        success = self.stab.full_auto_sync_parallel(max_fitting_error, max_syncs)
+        # success = self.stab.full_auto_sync(max_fitting_error, max_syncs)
 
         if not success:
             return
@@ -2569,6 +2690,11 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if self.has_player:
             self.update_player_maps()
         self.analyzed = True
+
+        if self.export_starttime.value() == 0:
+            self.export_starttime.setValue(self.stab.get_trim_start())
+        if self.export_stoptime.value() == int(self.video_info_dict["time"]):
+            self.export_stoptime.setValue(self.stab.get_trim_end(int(self.video_info_dict["time"])))
 
     def recompute_stab(self):
         """Update sync and stabilization
@@ -2681,7 +2807,16 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         """Gives save location using filedialog
            and saves video to given location
         """
-
+        self.user_settings.update_export_settings(
+            self.display_preview.isChecked(),
+            self.export_audio.isChecked(),
+            self.preset_resolution_combo.currentIndex(),
+            self.enableAdaptiveZoom.isChecked(),
+            self.fov_smoothing.value(),
+            self.zoom.value(),
+            self.video_encoder_select.currentIndex(),
+            self.encoder_profile_select.currentIndex(),
+            True)
 
 
         out_size = (self.out_width_control.value(), self.out_height_control.value())
@@ -2721,8 +2856,14 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             # Add "All files" option in case only one file format is supported to force the option list
             # to be present, if not it dissapears. Should probably look more into setMimeTypeFilters at a later stage
             export_file_filter+=";; All files (*)"
+        path = '/'.join(self.infile_path.split("/")[:-1])
+        new_file_path = os.path.join(path, "GF_" + self.infile_path.split("/")[-1])
+        counter = 1
+        while os.path.isfile(new_file_path):
+            new_file_path = os.path.join(path, f"GF_{counter}_{self.infile_path.split('/')[-1]}")
+            counter += 1
 
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", filter=export_file_filter)
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Export video", new_file_path, filter=export_file_filter)
         print("Output file: {}".format(filename[0]))
         time.sleep(0.5) # Time to close file dialog
         # Handled in stabilizer
@@ -2733,7 +2874,8 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         if len(filename[0]) == 0:
             self.show_error("No output file given")
             return
-
+        if self.auto_save_gyroflow_data.isChecked():
+            self.stab.export_gyroflow_file()
         split_screen = self.split_screen_select.isChecked()
         #hardware_acceleration = self.hw_acceleration_select.isChecked()
         vcodec = self.video_encoder_select.currentText()
@@ -2776,21 +2918,17 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         self.stab.export_gyroflow_file()
 
     def show_error(self, msg):
-        err_window = QtWidgets.QMessageBox(self)
-        err_window.setIcon(QtWidgets.QMessageBox.Critical)
-        err_window.setText(msg)
-        err_window.setWindowTitle("Something's gone awry")
-        err_window.show()
+        QtWidgets.QMessageBox.warning(self, "Something's gone awry", msg)
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     def get_available_encoders(self):
         if(get_valid_ffmpeg_path()):  # Helper function from VidGear
             ffmpeg_encoders_sp = subprocess.run([get_valid_ffmpeg_path(),'-encoders'], check=True, stdout=subprocess.PIPE, universal_newlines=True)
             return ffmpeg_encoders_sp.stdout
         else:
-            self.show_warning("Could not find FFmpeg installation")
+            self.show_error("FFmpeg not found. Some features won't work correctly. <a href='https://ffmpeg.org/download.html'>Download FFmpeg</a>")
             return ""
 
     def update_profile_select(self):
@@ -2831,12 +2969,18 @@ class StabUtility(StabUtilityBarebone):
         """
 
         super().__init__(False)
-
         self.preview_fov_scale = 3.0
 
         # Initialize UI
         self.setWindowTitle("Gyroflow Stabilizer {}".format(__version__))
-        self.setWindowIcon(QtGui.QIcon(':/media/icon.png'))
+        app_icon = QtGui.QIcon()
+        app_icon.addFile(':/media/icon16.png', QtCore.QSize(16, 16))
+        app_icon.addFile(':/media/icon24.png', QtCore.QSize(24, 24))
+        app_icon.addFile(':/media/icon32.png', QtCore.QSize(32, 32))
+        app_icon.addFile(':/media/icon48.png', QtCore.QSize(48, 48))
+        app_icon.addFile(':/media/icon64.png', QtCore.QSize(64, 64))
+        app_icon.addFile(':/media/icon.png', QtCore.QSize(256, 256))
+        self.setWindowIcon(app_icon)
         
         self.main_widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QHBoxLayout()
@@ -2977,8 +3121,25 @@ class StabUtility(StabUtilityBarebone):
         self.infile_path = ""
         self.show()
 
+        self.user_settings = UserSettings()
+        self.update_user_settings()
         
         self.main_setting_widget.show()
+
+    def update_user_settings(self):
+        self.display_preview.setChecked(self.user_settings.preview_render)
+        self.export_audio.setChecked(self.user_settings.audio_export)
+        self.preset_resolution_combo.setCurrentIndex(self.user_settings.output_dimensions)
+        self.enableAdaptiveZoom.setChecked(self.user_settings.adaptive_zoom)
+        self.fov_smoothing.setValue(self.user_settings.smoothing_window)
+        self.zoom.setValue(self.user_settings.zoom_factor)
+        self.video_encoder_select.setCurrentIndex(self.user_settings.video_encoder)
+        self.encoder_profile_select.setCurrentIndex(self.user_settings.encoder_profile)
+        if self.user_settings.camera_preset is not None and os.path.isfile(self.user_settings.camera_preset):
+            self.preset_path = self.user_settings.camera_preset
+            self.preset_search_input.setText(self.user_settings.camera_preset.replace("camera_presets/", ""))
+            self.display_preset_info()
+
 
     def open_video_with_player_func(self):
         """Open file using Qt filedialog
@@ -3012,7 +3173,7 @@ class StabUtility(StabUtilityBarebone):
         #self.err_window.close()
 
     def show_warning(self, msg):
-        QtWidgets.QMessageBox.critical(self, "Something's gone awry", msg)
+        QtWidgets.QMessageBox.warning(self, "Warning", msg)
 
     #def synchere1(self):
     #    self.sync1_control.setValue(self.video_viewer.get_current_timestamp())
@@ -3033,6 +3194,7 @@ class StabUtility(StabUtilityBarebone):
     
     def trimend(self):
         self.export_stoptime.setValue(self.video_viewer.get_current_timestamp())
+
 
     def update_preview(self):
         if self.stab:
@@ -3071,13 +3233,77 @@ class StabUtility(StabUtilityBarebone):
             self.stab.release()
         event.accept()
 
+class UserSettings:
+    def __init__(self):
+        self.filename = "user_settings.json"
+        self.video_directory = None
+        self.camera_preset = None
+        self.smoothing_preset = None
+        self.preview_render = True
+        self.audio_export = True
+        self.output_dimensions = 0
+        self.adaptive_zoom = True
+        self.smoothing_window = 4
+        self.zoom_factor = 1
+        self.video_encoder = 0
+        self.encoder_profile = 0
+        self.export_gyroflow_data = True
+
+        self.load()
+
+    def save(self):
+        with open(self.filename, 'w') as outfile:
+            json.dump(
+                self.__dict__,
+                outfile,
+                indent=4,
+                separators=(',', ': ')
+            )
+
+    def load(self):
+        try:
+            with open(self.filename, "r") as infile:
+                self.__dict__ = json.load(infile)
+        except Exception as e:
+            print("Can't load user settings.")
+
+    def update(self, attribute_name, data):
+        setattr(self, attribute_name, data)
+        self.save()
+
+    def update_export_settings(self, preview_render, audio_export, output_dimensions, adaptive_zoom, smoothing_window, zoom_factor, video_encoder, encoder_profile, export_gyroflow_data):
+        self.preview_render = preview_render
+        self.audio_export = audio_export
+        self.output_dimensions = output_dimensions
+        self.adaptive_zoom = adaptive_zoom
+        self.smoothing_window = smoothing_window
+        self.zoom_factor = zoom_factor
+        self.video_encoder = video_encoder
+        self.encoder_profile = encoder_profile
+        self.export_gyroflow_data = export_gyroflow_data
+        self.save()
+
+
+def switch_to_dark_mode(qapp):
+    if darkdetect.isDark():
+        qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
+
+
+def set_windows_taskbar_icon():
+    try:
+        appid = 'gyroflow.video.stabilisation.' + __version__  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(appid)
+    except AttributeError as exc:
+        # apparently not running windows
+        pass
 
 
 def main():
+    set_windows_taskbar_icon()
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
 
     app = QtWidgets.QApplication([])
-
+    switch_to_dark_mode(app)
     widget = Launcher() # Launcher()
     widget.resize(500, 500)
 
@@ -3088,6 +3314,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # us = UserSettings()
+    # us.update("video_directory", "TTT")
     # Pack to exe using:
     # pyinstaller --icon=media\icon.ico gyroflow.py --add-binary <path-to-python>\Python38\Lib\site-packages\cv2\opencv_videoio_ffmpeg430_64.dll -F
     # in my case:

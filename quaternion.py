@@ -136,6 +136,14 @@ def angle_between(q1, q2):
     angle = 2 * np.arccos(min(z[0], 1))
     return angle
 
+def to_euler(q):
+    rot = Rotation.from_quat([q[1], q[2], q[3], q[0]]).as_euler('xyz')
+    return vector(rot[0], rot[1], rot[2])
+
+def from_euler(v):
+    rot = Rotation.from_euler('xyz', [v[0], v[1], v[2]]).as_quat()
+    return quaternion(rot[3], rot[0], rot[1], rot[2])
+
 if __name__ == "__main__":
     import time
 
