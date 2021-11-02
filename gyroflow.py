@@ -2133,7 +2133,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
             self.video_viewer.stop()
 
         dialog = QtWidgets.QFileDialog()
-        if os.path.isdir(self.user_settings.video_directory):
+        if self.user_settings.video_directory is not None and os.path.isdir(self.user_settings.video_directory):
             dialog.setDirectory(self.user_settings.video_directory)
         dialog.setMimeTypeFilters(["video/mp4", "video/x-msvideo", "video/quicktime", "application/octet-stream"])
         dialog.exec_()
