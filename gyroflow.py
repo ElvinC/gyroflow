@@ -2665,7 +2665,7 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         max_fitting_error = self.max_fitting_control.value()
         max_syncs = self.max_sync_control.value()
-        success = self.stab.full_auto_sync_parallel(max_fitting_error, max_syncs)
+        success = self.stab.full_auto_sync_parallel(max_fitting_error, max_points=max_syncs, n_frames=OF_slice_length)
         # success = self.stab.full_auto_sync(max_fitting_error, max_syncs)
 
         if not success:
