@@ -106,14 +106,15 @@ import os
 import gyrolog
 import matplotlib.pyplot as plt
 video_file = r"D:\Cloud\git\gyroflow\OneR_1inch_gyro_samples\OneR_1inch_gyro_samples\Orentation_display_BACK\PRO_VID_20211102_143001_00_051.mp4"
+video_file = r"D:\Cloud\git\gyroflow\OneR_1inch_gyro_samples\OneR_1inch_gyro_samples\Orientation_display_FRONT\PRO_VID_20211102_143237_10_053.mp4"
 lens_preset = r"D:\Cloud\git\gyroflow\OneR_1inch_gyro_samples\Insta360_OneR_1inch_PRO_4K_30fps_16by9.json"
 transform_file = video_file + ".transform.csv"
 if not os.path.isfile(transform_file):
     transforms = optical_flow(video_file, lens_preset)
-    df = pd.DataFrame(transforms)
+    df = pd.DataFrame(transforms, columns=['x', 'y', 'z'])
     df.to_csv(transform_file)
 else:
-    df = pd.read_csv(transform_file)
+    df = pd.read_csv(transform_file, index_col=0)
 
 df = df[df.x.abs() < 0.2]
 log_guess, log_type, variant = gyrolog.guess_log_type_from_video(video_file)
