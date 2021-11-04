@@ -856,7 +856,6 @@ class Insta360Log(GyrologReader):
         self.variants = {
             "smo4k": [22],
             "insta360 oner": [22],
-            "insta360 oner one-inch": [22]
         }
 
         self.variant = "smo4k"
@@ -882,13 +881,10 @@ class Insta360Log(GyrologReader):
 
     def extract_log_internal(self, filename):
 
-        if self.variant=="smo4k":
+        if self.variant == "smo4k":
             self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
-        elif self.variant=="insta360 oner":
+        elif self.variant == "insta360 oner":
             self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[], revertIMU=False)
-        elif self.variant == "insta360 oner one-inch":
-            self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
-            self.gyro[:, 2] = - self.gyro[:, 2]
         else:
             # Assume SMO4K - For no real reason....
             self.gyro, self.acc = insta360_util.get_insta360_gyro_data(filename, filterArray=[])
