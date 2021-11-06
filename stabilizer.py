@@ -1089,7 +1089,7 @@ class Stabilizer:
         quit_button = False
 
         num_not_success = 0
-        num_not_success_lim = 5 # stop after 5 failures to read frame
+        num_not_success_lim = 20 # stop after 5 failures to read frame
 
         old_map_enable_setting = False
         if type(viewer_thread) != type(None) and display_preview:

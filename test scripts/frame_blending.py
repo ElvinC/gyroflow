@@ -3,7 +3,7 @@ import numpy as np
 import os
    
 # Create a VideoCapture object and read from input file
-f = 'D:/DCIM/100RUNCAM/RC_0005_210823153931.MP4'
+f = '../test_clips/solidcolor.mov'
 if os.path.isfile(f):
     print("IS FILE")
 else:
@@ -13,14 +13,18 @@ cap = cv2.VideoCapture(f,cv2.CAP_FFMPEG)
 #cap.set(cv2.CAP_PROP_POS_FRAMES, 60 * 10)
 
 ret, frame_out = cap.read()
+print(frame_out)
 frame_out = cv2.resize(frame_out, (1920,1080))
 
+cap.release()
+cv2.destroyAllWindows()
+exit()
 frame_out = (frame_out * 0).astype(np.float64)
 
 out = cv2.VideoWriter('outpy5.mp4',-1, 30, (1920,1080))
 
-mult = 60
-num_blend = 14
+mult = 1
+num_blend = 1
 
 diff = mult - num_blend
 
