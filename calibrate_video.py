@@ -403,7 +403,7 @@ class FisheyeCalibrator:
         return cv2.decomposeHomographyMat(H, scaled_K)
 
 
-    def recover_pose(self, pts1, pts2, new_img_dim = None):
+    def  recover_pose(self, pts1, pts2, new_img_dim = None):
         """ Find rotation matrices using epipolar geometry
         
         Args:

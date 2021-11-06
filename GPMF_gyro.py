@@ -74,10 +74,9 @@ class Extractor:
         omega = np.array(self.gyro) / self.gyro_scal
         self.num_gyro_samples = omega.shape[0]
 
-
-        self.gyro_rate = self.num_gyro_samples / self.video_length 
+        # gyro data gets written roughly every second
+        self.gyro_rate = self.num_gyro_samples / int(self.video_length)
         #print("Gyro rate: {} Hz, should be close to 200 or 400 Hz".format(self.gyro_rate))
-
 
         self.parsed_gyro = np.zeros((self.num_gyro_samples, 4))
         self.parsed_gyro[:,0] = np.arange(self.num_gyro_samples) * 1/self.gyro_rate
@@ -108,7 +107,7 @@ class Extractor:
         omega = np.array(self.accl) / self.accl_scal / 9.80665
         self.num_accl_samples = omega.shape[0]
 
-        self.accl_rate = self.num_accl_samples / self.video_length 
+        self.accl_rate = self.num_accl_samples / int(self.video_length)
         print("Accl rate: {} Hz, should be close to 200 or 400 Hz".format(self.accl_rate))
 
 
