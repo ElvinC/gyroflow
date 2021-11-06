@@ -15,6 +15,7 @@ title: "Gyroflow guide"
 * Navigate to the folder using a commandline and install dependencies using `poetry install`
 * Run the application using `poetry run python gyroflow.py`
 
+Alternatively the dependencies can be installed manually with pip.
 
 [Youtube channel with updates](https://www.youtube.com/channel/UCr0Hh-AUc4CU-36yTjx-lTA)
 

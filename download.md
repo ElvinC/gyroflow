@@ -35,7 +35,8 @@ Here's a version that should work with windows 7:
 
 ### Mac executable:
 
-Extract, add +x with chmod and run with ./gyroflow from the terminal.
+Extract the zip file. Navigate to the folder in the terminal and run `chmod +x ./gyroflow` to make it executable. Finally run with `./gyroflow`.
+
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-macOS.zip" class="btn btn--info btn--large">gyroflow-0.3.0-beta-macOS.zip</a>
 
 ### Ubuntu executable:

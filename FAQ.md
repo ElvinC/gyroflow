@@ -12,6 +12,9 @@ Make sure you have FFmpeg installed. If problem persist, export with debug info 
 ## I'm getting an error with `Unable to read multiple frames` when trying to render a video
 Sometimes there are a couple frames right at the beginning of video files which can't be read for some reason. Try setting the render range to a different part of the video from where the error occured.
 
+## I'm processing footage from the Runcam 5 Orange or iFlight GOCam with native gyro logging. Any tips?
+Yes! [Have a look here](https://docs.google.com/document/d/1mLrMd8itLYiGNdQh4oWqz-s3g16bfu-TkQNCS_ZqOnA/edit#).
+
 ## Which smoothing method should I use? Or: The render is all zoomed in!?!?
 Default, 3D smoothing: For general use, but doesn't work for fast moves (image movement is not limited)
 
