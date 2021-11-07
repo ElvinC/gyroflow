@@ -262,6 +262,8 @@ class VideoThread(QtCore.QThread):
         self.stretch_enable = False
         self.horizontal_stretch = 1
 
+        self.seek_frame = -1 # -1 when not seeking
+
     def run(self):
         """
         Run the videoplayer using the thread
@@ -270,6 +272,9 @@ class VideoThread(QtCore.QThread):
         self.cap = cv2.VideoCapture()
         last_timestamp = time.time()
         while True:
+            if self.seek_frame > -1:
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.seek_frame)
+                self.seek_frame = -1
             if self.playing or self.next_frame:
                 self.next_frame = False
                 self.this_frame_num = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -516,18 +521,19 @@ class VideoPlayerWidget(QtWidgets.QWidget):
         #if self.is_seeking:
         #    return
 
-        # prevent video overread using 0.2 sec cooldown
+        # prevent video overread using 1 sec cooldown
         timenow = time.time()
-        if (timenow - self.last_seek_time) < 0.5:
-            return
-
+        #if (timenow - self.last_seek_time) < 0.1:
+        #    print(timenow - self.last_seek_time)
+        #    time.sleep(0.1)
         self.last_seek_time = timenow
 
         was_playing = self.thread.playing
         if was_playing:
             self.stop()
 
-        self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, self.time_slider.value())
+        #self.thread.cap.set(cv2.CAP_PROP_POS_FRAMES, self.time_slider.value())
+        self.thread.seek_frame = self.time_slider.value()
 
         # restart if it was playing
         if (was_playing or self.was_playing_before) and not self.is_seeking:
