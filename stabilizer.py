@@ -29,6 +29,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors
 from vidgear.gears import WriteGear
 from vidgear.gears import helper as vidgearHelper
+from ffprobe import FFProbe
 import gyrolog
 import json
 import multiprocessing as mp
@@ -1252,8 +1253,18 @@ class Stabilizer:
         if type(viewer_thread) != type(None):
             viewer_thread.map_function_enable = old_map_enable_setting
 
-
         if audio:
+            audio_codec = "copy"
+            try:
+                metadata = FFProbe(self.videopath)
+                audio_streams = filter(lambda x: x.is_audio(), metadata.streams)
+                audio_stream = next(audio_streams)
+                if audio_stream.codec() == "pcm_s16le":  # This audio codec can't be put inside an MP4 file, so transcode is needed
+                    audio_codec = "aac"
+            except IOError as error:
+                if "ffprobe not found" in str(error):
+                    print("FFProbe not found, the audio stream will be not transcoded")
+
             time.sleep(.5)
             ffmpeg_command = [
                 "-y",
@@ -1265,7 +1276,7 @@ class Stabilizer:
                 str(tend / self.fps),
                 "-vn",
                 "-acodec",
-                "copy",
+                audio_codec,
                 "audio.mp4"
             ]
             out.execute_ffmpeg_cmd(ffmpeg_command)
