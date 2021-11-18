@@ -2677,8 +2677,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
 
         max_fitting_error = self.max_fitting_control.value()
         max_syncs = self.max_sync_control.value()
+        
+        # Causes multiple windows when packed to exe:
         success = self.stab.full_auto_sync_parallel(max_fitting_error, max_points=max_syncs, n_frames=OF_slice_length)
-        # success = self.stab.full_auto_sync(max_fitting_error, max_syncs)
+        #success = self.stab.full_auto_sync(max_fitting_error, max_syncs, debug_plots=False)
 
         if not success:
             return
@@ -3297,9 +3299,12 @@ class UserSettings:
 
 
 def switch_to_dark_mode(qapp):
-    if darkdetect.isDark():
-        qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
-
+    try:
+        if darkdetect.isDark():
+            qapp.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
+    except:
+        #print("Unable to detect dark mode")
+        pass
 
 def set_windows_taskbar_icon():
     try:
