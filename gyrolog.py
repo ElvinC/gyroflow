@@ -735,7 +735,8 @@ class RuncamData(GyrologReader):
             "Runcam 5 Orange": [0],
             "iFlight GOCam GR": [0],
             "Other": [18],
-            "Other (1000dps)": [18]
+            "Other (1000dps)": [18],
+            "Other (1000dps, reversed)": [4]
         }
         self.variant = "Runcam 5 Orange"
 
@@ -764,6 +765,7 @@ class RuncamData(GyrologReader):
         # Runcam 5 Orange
         rc5pattern = re.compile("RC_(\d{4})_.*\..*") # example: RC_0030_210719221659.MP4
         gocampattern = re.compile("IF-RC01_(\d{4})\..*") # example: IF-RC01_0011.MP4
+        genericpattern = re.compile("RC_(\d{4})\..*")
         
         if rc5pattern.match(fname):
             self.variant = "Runcam 5 Orange"
@@ -773,6 +775,10 @@ class RuncamData(GyrologReader):
         elif gocampattern.match(fname):
             self.variant = "iFlight GOCam GR"
             counter = int(gocampattern.match(fname).group(1))
+
+        elif genericpattern.match(fname):
+            self.variant = "Other (1000dps)"
+            counter = int(genericpattern.match(fname).group(1))
 
         else:
             return False
@@ -808,7 +814,7 @@ class RuncamData(GyrologReader):
             for line in lines:
                 splitdata = [float(x) for x in line.split(",")]
                 t = splitdata[0]/1000
-                multiplier = (2 if self.variant == "Other (1000dps)" else 1)
+                multiplier = (2 if "1000dps" in self.variant else 1)
                 gx = splitdata[1] * gyroscale * multiplier
                 gy = splitdata[2] * gyroscale * multiplier
                 gz = splitdata[3] * gyroscale * multiplier
