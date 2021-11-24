@@ -562,7 +562,7 @@ class GyrologReader:
         # For filtering tricky data with gyro spikes due to mems resonance (?)
 
         # average with threshold
-        kernel_size = 101
+        kernel_size = 201 # 0.2 second window
 
         out_data = np.zeros(data.shape)
         # Single sample spikes
@@ -577,10 +577,16 @@ class GyrologReader:
         out_data2 = np.zeros(data.shape)
 
         while i < out_data.shape[0] - offset:
-            neighbour_average = (np.sum(data[i - offset:i+offset]) - data[i]) / (kernel_size - 1)
+            data_slice = data[i - offset:i+offset]
+            neighbour_average = (np.sum(data_slice) - data[i]) / (kernel_size - 1)
             if abs(out_data[i] - neighbour_average) > high_threshold:
-                out_data2[i] = neighbour_average
-                #print(i)
+                median = np.median(data[i - offset:i+offset])
+                filtered_slice = data_slice[np.abs(data_slice - median) < high_threshold]
+                if filtered_slice.shape[0] == 0:
+                    out_data2[i] = 0
+                else:
+                    out_data2[i] = np.mean(filtered_slice) #neighbour_average
+
             else:
                 out_data2[i] = out_data[i]
             i+=1
@@ -1462,6 +1468,12 @@ def guess_log_type_from_log(logfile, check_data = False):
 
 
 if __name__ == "__main__":
+
+    reader = Insta360Log()
+    reader.extract_log("F:/Storage/ZBook backup/Users/elvin/Documents/code/gyroflow/test_clips/PRO_VID_20210111_144304_00_010.mp4")
+    reader.plot_gyro()
+    plt.show()
+    exit()
 
     tests = [
         "D:/Downloads/1123/gyroDate0018.csv",

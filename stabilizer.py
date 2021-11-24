@@ -420,7 +420,8 @@ class Stabilizer:
                                     chosen_coefs = coefs
                                     num_chosen = within_error.shape[0]
                                     chosen_indices = set(within_error)
-                            elif close_constant: # close to linear
+                            elif close_constant and (type(chosen_coefs) == type(None) or abs(coefs[0]) < abs(chosen_coefs[0])):
+                            	# close to linear or more linear than previous one
                                 chosen_coefs = coefs
                                 num_chosen = within_error.shape[0]
                                 chosen_indices = set(within_error)
