@@ -17,6 +17,8 @@ from blackbox_extract import BlackboxExtractor
 from GPMF_gyro import Extractor as GPMFExtractor
 from quaternion import quaternion_multiply
 
+import telemetry_parser
+
 
 # Generate 24 different (right handed) orientations using cross products
 def generate_rotmats():
@@ -1035,6 +1037,149 @@ class GPMFLog(GyrologReader):
 
         return True
 
+class ArdupilotLog(GyrologReader):
+    def __init__(self):
+        super().__init__("Ardupilot .bin.csv file")
+        self.filename_pattern = "(?i).*\.bin\.csv"
+        self.angle_setting = 0
+
+        self.variants = {
+            "default": [12],
+        }
+
+        self.variant = "default"
+        self.default_search_size = 10
+
+        self.post_init()
+
+    def check_log_type(self, filename):
+        fname = os.path.split(filename)[-1]
+        if self.filename_matches(fname):
+            # open and check first line
+            with open(filename, "r") as f:
+                firstline = f.readline().strip()
+                if firstline.startswith('GLOBAL_TimeMS,IMU_TimeUS,'):
+                    return True
+
+        return False
+        
+    def guess_log_from_videofile(self, videofile):
+        no_suffix = os.path.splitext(videofile)[0]
+        #path, fname = os.path.split(videofile)
+
+        log_suffixes = [".bin.csv"]
+        log_suffixes += [ex.upper() for ex in log_suffixes]
+        for suffix in log_suffixes:
+            if os.path.isfile(no_suffix + suffix):
+                logpath = no_suffix + suffix
+                #print("Automatically detected gyro log file: {}".format(logpath.split("/")[-1]))
+
+                if self.check_log_type(logpath):
+                    return logpath
+
+        return False
+
+    def extract_log_internal(self, filename):
+        with open(filename) as bblcsv:
+            gyro_index = None
+            acc_index = None
+            max_index = 0
+
+            csv_reader = csv.reader(bblcsv)
+            row = csv_reader.next()
+
+            stripped_row = [field.strip() for field in row]
+
+            t_index = stripped_row.index("IMU_TimeUS")
+
+            gyro_index = stripped_row.index('IMU_GyrX')
+            #print('Using filtered gyro data')
+
+            max_index = gyro_index + 2
+
+            if "IMU_AccX" in stripped_row:
+                acc_index = stripped_row.index("IMU_AccX")
+                max_index = acc_index + 2
+
+
+            data_list = []
+            acc_list = []
+            gyroscale = 1
+            acc_scale = 1/9.80665
+
+            last_t = 0
+            self.max_data_gab = 10
+            for row in csv_reader:
+                t = float(row[t_index])
+                if max_index<len(row) and (((0 < (t - last_t) < 1000000 * self.max_data_gab) or (last_t == 0))) :
+
+                    gx = float(row[gyro_index+1])
+                    gy = float(row[gyro_index+2])
+                    gz = float(row[gyro_index])
+                    last_t = t
+
+                    #data_list.append(f)
+                    data_list.append([t / 1000000, gx, gy, gz])
+                    if acc_index:
+                        ax = float(row[acc_index+1])
+                        ay = float(row[acc_index+2])
+                        az = float(row[acc_index])
+
+                        acc_list.append([t / 1000000, ax, ay, az])
+
+            self.gyro = np.array(data_list)
+            self.gyro[:,1:] *= gyroscale
+
+            if acc_index:
+                self.acc = np.array(acc_list)
+                self.acc[:,1:] *= acc_scale
+
+
+        return True
+
+class TelemetryParserLog(GyrologReader):
+
+    def __init__(self):
+        super().__init__("Telemetry Parser (other log types)")
+        self.filename_pattern = "(?i).*"
+
+        self.variants = {
+            "default": [16],
+        }
+
+        self.variant = "default"
+        self.default_search_size = 10
+
+        self.post_init()
+
+    def check_log_type(self, filename):
+
+        return False
+        
+    def guess_log_from_videofile(self, videofile):
+
+        return False
+
+    def extract_log_internal(self, filename):
+        tp = telemetry_parser.Parser(filename)
+        print('Camera: ', tp.camera)
+        print('Model: ', tp.model)
+        norm_imu = tp.normalized_imu()
+
+        data = np.array([(entry["timestamp"],) + entry["gyro"] + entry["accl"] for entry in norm_imu])
+
+        if len(data) == 0:
+            return False
+
+        data[:,0] /= 1000
+        data[:,1:4] *= 180 / np.pi
+        data[:,4:7] /= 9.80665
+
+        self.gyro = data[:,0:4]
+        self.acc = data[:,[0,4,5,6]]
+
+        return True
+
 class GyroflowGyroLog(GyrologReader):
     def __init__(self):
         super().__init__("Gyroflow IMU log")
@@ -1199,7 +1344,9 @@ log_reader_classes = [GyroflowGyroLog,
                       BlackboxRawData,
                       RuncamData,
                       Insta360Log,
-                      GPMFLog]
+                      GPMFLog,
+                      ArdupilotLog,
+                      TelemetryParserLog]
 log_reader_names = [alg().name for alg in log_reader_classes]
 def print_available_log_types():
     print("Available log types")

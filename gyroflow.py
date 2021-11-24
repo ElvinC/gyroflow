@@ -3257,7 +3257,7 @@ class UserSettings:
         self.audio_export = True
         self.output_dimensions = 0
         self.adaptive_zoom = True
-        self.smoothing_window = 4
+        self.smoothing_window = 40
         self.zoom_factor = 1
         self.video_encoder = 0
         self.encoder_profile = 0

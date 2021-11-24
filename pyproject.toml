@@ -21,6 +21,7 @@ pandas = "^1.3.2"
 qdarkstyle = "^3.0.0"
 ffprobe-python = "^1.0.3"
 darkdetect = "^0.5.1"
+telemetry_parser = "^0.1.7"
 
 [tool.poetry.dev-dependencies]
 
