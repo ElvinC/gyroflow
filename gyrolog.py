@@ -148,6 +148,8 @@ def generate_uptilt_mat(angle, degrees=False):
                        [0,np.sin(angle),np.cos(angle)]])
     return rotmat
 
+
+
 def show_orientation(rotmat):
     orig_lw = 4
     sensor_lw = 2
@@ -555,6 +557,39 @@ class GyrologReader:
 
         return True
         
+
+    def filter_spikes(self, data, sample_rate=1000, low_threshold = 0.3, high_threshold = 0.9):
+        # For filtering tricky data with gyro spikes due to mems resonance (?)
+
+        # average with threshold
+        kernel_size = 101
+
+        out_data = np.zeros(data.shape)
+        # Single sample spikes
+        for i in range(1, data.shape[0]-1):
+            if abs(data[i+1] - data[i-1]) < low_threshold and min(abs(data[i] - data[i+1]), abs(data[i] - data[i-1])) > high_threshold:
+                out_data[i] = (data[i+1] + data[i-1])/2
+            else:
+                out_data[i] = data[i]
+
+        offset = int(kernel_size/2)
+        i = offset
+        out_data2 = np.zeros(data.shape)
+
+        while i < out_data.shape[0] - offset:
+            neighbour_average = (np.sum(data[i - offset:i+offset]) - data[i]) / (kernel_size - 1)
+            if abs(out_data[i] - neighbour_average) > high_threshold:
+                out_data2[i] = neighbour_average
+                #print(i)
+            else:
+                out_data2[i] = out_data[i]
+            i+=1
+
+        sosgyro = signal.butter(10, 150, "lowpass", fs=sample_rate, output="sos")
+        out_data2 = signal.sosfiltfilt(sosgyro, out_data2, 0) # Filter along "vertical" time axis
+
+        return out_data2
+
 class BlackboxCSVData(GyrologReader):
     def __init__(self):
         super().__init__("Blackbox CSV file")
@@ -853,6 +888,11 @@ class RuncamData(GyrologReader):
                 data_list.append([t, gx, gy, gz])
 
         self.gyro = np.array(data_list)
+
+        # Filter spike glitches
+        if "1000dps" in self.variant:
+            self.gyro[:,2] = self.filter_spikes(self.gyro[:,2], 1000)
+    
         #sosgyro = signal.butter(1, 8, "lowpass", fs=500, output="sos")
 
         #self.gyro[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro[:,1:4], 0) # Filter along "vertical" time axis
@@ -1424,6 +1464,7 @@ def guess_log_type_from_log(logfile, check_data = False):
 if __name__ == "__main__":
 
     tests = [
+        "D:/Downloads/1123/gyroDate0018.csv",
         "test_clips/badbbl.bbl",
         "test_clips/Runcam/gyroDate0006.csv"
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl",
@@ -1436,9 +1477,9 @@ if __name__ == "__main__":
     #reader.plot_gyro()
 
     #reader = RuncamData()
-    success, logtype, variant = guess_log_type_from_log(tests[0])
-    reader = get_log_reader_by_name(logtype)
-    reader.set_variant(variant)
+    #success, logtype, variant = guess_log_type_from_log(tests[0])
+    reader = get_log_reader_by_name("Runcam CSV log")
+    reader.set_variant("Other (1000dps)")
     reader.extract_log(tests[0])
     reader.plot_gyro()
     plt.show()
