@@ -1090,7 +1090,7 @@ class ArdupilotLog(GyrologReader):
         self.angle_setting = 0
 
         self.variants = {
-            "default": [12],
+            "default": [15],
         }
 
         self.variant = "default"
@@ -1132,7 +1132,7 @@ class ArdupilotLog(GyrologReader):
             max_index = 0
 
             csv_reader = csv.reader(bblcsv)
-            row = csv_reader.next()
+            row = next(csv_reader)
 
             stripped_row = [field.strip() for field in row]
 
@@ -1159,17 +1159,17 @@ class ArdupilotLog(GyrologReader):
                 t = float(row[t_index])
                 if max_index<len(row) and (((0 < (t - last_t) < 1000000 * self.max_data_gab) or (last_t == 0))) :
 
-                    gx = float(row[gyro_index+1])
-                    gy = float(row[gyro_index+2])
-                    gz = float(row[gyro_index])
+                    gx = float(row[gyro_index])
+                    gy = float(row[gyro_index+1])
+                    gz = float(row[gyro_index+2])
                     last_t = t
 
                     #data_list.append(f)
                     data_list.append([t / 1000000, gx, gy, gz])
                     if acc_index:
-                        ax = float(row[acc_index+1])
-                        ay = float(row[acc_index+2])
-                        az = float(row[acc_index])
+                        ax = float(row[acc_index])
+                        ay = float(row[acc_index+1])
+                        az = float(row[acc_index+2])
 
                         acc_list.append([t / 1000000, ax, ay, az])
 
@@ -1469,14 +1469,9 @@ def guess_log_type_from_log(logfile, check_data = False):
 
 if __name__ == "__main__":
 
-    reader = Insta360Log()
-    reader.extract_log("F:/Storage/ZBook backup/Users/elvin/Documents/code/gyroflow/test_clips/PRO_VID_20210111_144304_00_010.mp4")
-    reader.plot_gyro()
-    plt.show()
-    exit()
 
     tests = [
-        "D:/Downloads/1123/gyroDate0018.csv",
+        "D:/Documents/Gyroflow/ardupilot/1 01.01.1970 7-00-00.bin.csv",
         "test_clips/badbbl.bbl",
         "test_clips/Runcam/gyroDate0006.csv"
         "C:/Users/TUDelftSID/Downloads/20210814 gocam/IF-RC01_0010.bbl",
@@ -1489,9 +1484,9 @@ if __name__ == "__main__":
     #reader.plot_gyro()
 
     #reader = RuncamData()
-    #success, logtype, variant = guess_log_type_from_log(tests[0])
-    reader = get_log_reader_by_name("Runcam CSV log")
-    reader.set_variant("Other (1000dps)")
+    success, logtype, variant = guess_log_type_from_log(tests[0])
+    reader = get_log_reader_by_name(logtype)
+    #reader.set_variant("Other (1000dps)")
     reader.extract_log(tests[0])
     reader.plot_gyro()
     plt.show()
