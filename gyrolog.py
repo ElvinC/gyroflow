@@ -779,7 +779,9 @@ class RuncamData(GyrologReader):
             "iFlight GOCam GR": [0],
             "Other": [18],
             "Other (1000dps)": [18],
-            "Other (1000dps, reversed)": [4]
+            "Other (1000dps, reversed)": [4],
+            "Th (2000dps)": [6]
+
         }
         self.variant = "Runcam 5 Orange"
 
@@ -852,12 +854,12 @@ class RuncamData(GyrologReader):
             gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
             acc_scale = 2 / 2**15 # +/- 2 g
 
-            
+            multiplier = (4 if "2000dps" in self.variant else (2 if "1000dps" in self.variant else 1))
 
             for line in lines:
                 splitdata = [float(x) for x in line.split(",")]
-                t = splitdata[0]/1000
-                multiplier = (2 if "1000dps" in self.variant else 1)
+                t = splitdata[0]/1000                
+
                 gx = splitdata[1] * gyroscale * multiplier
                 gy = splitdata[2] * gyroscale * multiplier
                 gz = splitdata[3] * gyroscale * multiplier
@@ -1471,6 +1473,7 @@ if __name__ == "__main__":
 
 
     tests = [
+        "D:/Documents/Gyroflow/Runcam/12/gyroDate0012.csv",
         "D:/Documents/Gyroflow/ardupilot/1 01.01.1970 7-00-00.bin.csv",
         "test_clips/badbbl.bbl",
         "test_clips/Runcam/gyroDate0006.csv"
