@@ -1093,10 +1093,7 @@ class ArdupilotLog(GyrologReader):
 
         self.variants = {
             "IMU": [15],
-            "RATE": [8],
-            "RATE2": [10],
-            "RATE3": [20],
-            "RATE4": [22]
+            "RATE": [20]
         }
 
         self.variant = "RATE"
