@@ -1092,10 +1092,14 @@ class ArdupilotLog(GyrologReader):
         self.angle_setting = 0
 
         self.variants = {
-            "default": [15],
+            "IMU": [15],
+            "RATE": [8],
+            "RATE2": [10],
+            "RATE3": [20],
+            "RATE4": [22]
         }
 
-        self.variant = "default"
+        self.variant = "RATE"
         self.default_search_size = 10
 
         self.post_init()
@@ -1106,7 +1110,7 @@ class ArdupilotLog(GyrologReader):
             # open and check first line
             with open(filename, "r") as f:
                 firstline = f.readline().strip()
-                if firstline.startswith('GLOBAL_TimeMS,IMU_TimeUS,'):
+                if firstline.startswith('GLOBAL_TimeMS,'):
                     return True
 
         return False
@@ -1138,42 +1142,59 @@ class ArdupilotLog(GyrologReader):
 
             stripped_row = [field.strip() for field in row]
 
-            t_index = stripped_row.index("IMU_TimeUS")
-
-            gyro_index = stripped_row.index('IMU_GyrX')
-            #print('Using filtered gyro data')
-
-            max_index = gyro_index + 2
-
-            if "IMU_AccX" in stripped_row:
-                acc_index = stripped_row.index("IMU_AccX")
-                max_index = acc_index + 2
-
+            tscale = 1000000
 
             data_list = []
             acc_list = []
             gyroscale = 1
             acc_scale = 1/9.80665
 
+            if "IMU_TimeUS" in stripped_row:
+                t_index = stripped_row.index("IMU_TimeUS")
+            elif "RATE_TimeUS" in stripped_row:
+                t_index = stripped_row.index("RATE_TimeUS")
+                gyroscale = np.pi / 180 # deg to rad
+            else:
+                tscale = 1000
+                t_index = 0
+
+
+            if "IMU_GyrX" in stripped_row:
+                idx = stripped_row.index('IMU_GyrX')
+                gyro_index = [idx, idx+1, idx+2]
+            elif "RATE_R" in stripped_row:
+                gyro_index = [stripped_row.index('RATE_R'),stripped_row.index('RATE_P'),stripped_row.index('RATE_Y')]
+
+            #print('Using filtered gyro data')
+
+            max_index = max(gyro_index)
+
+            if "IMU_AccX" in stripped_row:
+                acc_index = stripped_row.index("IMU_AccX")
+                max_index = acc_index + 2
+
+
+
+
             last_t = 0
             self.max_data_gab = 10
             for row in csv_reader:
                 t = float(row[t_index])
-                if max_index<len(row) and (((0 < (t - last_t) < 1000000 * self.max_data_gab) or (last_t == 0))) :
+                if max_index<len(row) and (((0 < (t - last_t) < tscale * self.max_data_gab) or (last_t == 0))) :
 
-                    gx = float(row[gyro_index])
-                    gy = float(row[gyro_index+1])
-                    gz = float(row[gyro_index+2])
+                    gx = float(row[gyro_index[0]])
+                    gy = float(row[gyro_index[1]])
+                    gz = float(row[gyro_index[2]])
                     last_t = t
 
                     #data_list.append(f)
-                    data_list.append([t / 1000000, gx, gy, gz])
+                    data_list.append([t / tscale, gx, gy, gz])
                     if acc_index:
                         ax = float(row[acc_index])
                         ay = float(row[acc_index+1])
                         az = float(row[acc_index+2])
 
-                        acc_list.append([t / 1000000, ax, ay, az])
+                        acc_list.append([t / tscale, ax, ay, az])
 
             self.gyro = np.array(data_list)
             self.gyro[:,1:] *= gyroscale
