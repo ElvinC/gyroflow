@@ -105,8 +105,7 @@ def find_gpmd_minf_atom(parser):
                         #print("    {}".format(tag))
                         if tag.value != 'gmhd':
                             continue
-                        if b'gpmd' in minf_field['data'].value:
-                            return minf_atom
+                        return minf_atom
         except MissingField:
             pass
         try:
