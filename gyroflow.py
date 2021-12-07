@@ -36,6 +36,7 @@ try:
 except:
     pass
 
+PARALLEL_SYNC = False
 
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
 cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Arri",
@@ -2679,8 +2680,10 @@ class StabUtilityBarebone(QtWidgets.QMainWindow):
         max_syncs = self.max_sync_control.value()
         
         # Causes multiple windows when packed to exe:
-        success = self.stab.full_auto_sync_parallel(max_fitting_error, max_points=max_syncs, n_frames=OF_slice_length)
-        #success = self.stab.full_auto_sync(max_fitting_error, max_syncs, debug_plots=False)
+        if PARALLEL_SYNC:
+            success = self.stab.full_auto_sync_parallel(max_fitting_error, max_points=max_syncs, n_frames=OF_slice_length)
+        else:
+            success = self.stab.full_auto_sync(max_fitting_error, max_syncs, debug_plots=False)
 
         if not success:
             return

@@ -780,7 +780,9 @@ class RuncamData(GyrologReader):
             "Other": [18],
             "Other (1000dps)": [18],
             "Other (1000dps, reversed)": [4],
-            "Th (2000dps)": [6]
+            "Th (1000dps)": [-1, [[1,  0,  0],  # Non-standard
+                                [ 0,  1,  0],
+                                [ 0,  0, -1]]]
 
         }
         self.variant = "Runcam 5 Orange"
@@ -811,6 +813,7 @@ class RuncamData(GyrologReader):
         rc5pattern = re.compile("RC_(\d{4})_.*\..*") # example: RC_0030_210719221659.MP4
         gocampattern = re.compile("IF-RC01_(\d{4})\..*") # example: IF-RC01_0011.MP4
         genericpattern = re.compile("RC_(\d{4})\..*")
+        thpattern = re.compile("Thumb(\d{4})\..*")
         
         if rc5pattern.match(fname):
             self.variant = "Runcam 5 Orange"
@@ -824,11 +827,13 @@ class RuncamData(GyrologReader):
         elif genericpattern.match(fname):
             self.variant = "Other (1000dps)"
             counter = int(genericpattern.match(fname).group(1))
-
+        elif thpattern.match(fname):
+            self.variant = "Th (1000dps)"
+            counter = int(thpattern.match(fname).group(1))
         else:
             return False
 
-        lognames = [f"RC_GyroData{counter:04d}.csv", f"gyroDate{counter:04d}.csv"] # different firmwares
+        lognames = [f"RC_GyroData{counter:04d}.csv", f"gyroDate{counter:04d}.csv", f"Thumb{counter:04d}.csv"] # different firmwares
         for logname in lognames:
             logpath = videofile.rstrip(fname) + logname
             print(logpath)
@@ -1491,6 +1496,7 @@ if __name__ == "__main__":
 
 
     tests = [
+        "D:/Documents/Gyroflow/Insta360/modified/PRO_VID_20211203_235447_00_001.mp4",
         "D:/Documents/Gyroflow/Runcam/12/gyroDate0012.csv",
         "D:/Documents/Gyroflow/ardupilot/1 01.01.1970 7-00-00.bin.csv",
         "test_clips/badbbl.bbl",
