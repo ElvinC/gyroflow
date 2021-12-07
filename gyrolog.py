@@ -1237,7 +1237,7 @@ class TelemetryParserLog(GyrologReader):
         print('Model: ', tp.model)
         norm_imu = tp.normalized_imu()
 
-        data = np.array([(entry["timestamp"],) + entry["gyro"] + entry["accl"] for entry in norm_imu])
+        data = np.array([(entry["timestamp_ms"],) + entry["gyro"] + entry["accl"] for entry in norm_imu])
 
         if len(data) == 0:
             return False

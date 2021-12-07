@@ -2061,7 +2061,11 @@ class OpticalStabilizer:
 
 
             frame_id = (int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)))
-            frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
+            
+            frame_id = (int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
+            frame_time = frame_id / fps
+            
+            #frame_time = (self.cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
 
             succ, curr = self.cap.read()
 
