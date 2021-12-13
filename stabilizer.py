@@ -2382,10 +2382,11 @@ def optical_flow(
             prev = cv2.rotate(prev, video_rotate_code)
 
         frame_id = (int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
-        frame_time = frame_id / fps
+        frame_time = (frame_id - 1) / fps
 
         # This can give offset during stabilization
         #(cap.get(cv2.CAP_PROP_POS_MSEC)/1000)
+        #print(cap.get(cv2.CAP_PROP_POS_MSEC)/1000 - frame_time)
 
         #if i % 10 == 0:
         #    print("Analyzing frame: {}/{}".format(i,analyze_length))
