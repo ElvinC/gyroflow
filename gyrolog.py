@@ -19,6 +19,9 @@ from quaternion import quaternion_multiply
 
 import telemetry_parser
 
+# for ArduPilot bin log parsing
+from pymavlink import mavutil
+
 
 # Generate 24 different (right handed) orientations using cross products
 def generate_rotmats():
@@ -1208,6 +1211,107 @@ class ArdupilotLog(GyrologReader):
 
         return True
 
+class ArdupilotBinLog(GyrologReader):
+    def __init__(self):
+        super().__init__("Ardupilot .bin log")
+        self.filename_pattern = "(?i).*\.(?:bin|BIN)"
+        self.angle_setting = 0
+
+        self.variants = {
+            "IMU": [20],
+            "RATE": [20],
+            "GFLO": [20]
+        }
+
+        self.variant = "GFLO"
+        self.default_search_size = 10
+
+        self.post_init()
+
+    def check_log_type(self, filename):
+        fname = os.path.split(filename)[-1]
+        if self.filename_matches(fname):
+            # we could check the file properly, but its very slow
+            return True
+        return False
+
+    def guess_log_from_videofile(self, videofile):
+        no_suffix = os.path.splitext(videofile)[0]
+
+        log_suffixes = [".bin",".BIN"]
+        for suffix in log_suffixes:
+            if os.path.isfile(no_suffix + suffix):
+                logpath = no_suffix + suffix
+
+                if self.check_log_type(logpath):
+                    return logpath
+
+        return False
+
+    def extract_log_internal(self, filename):
+
+        log = mavutil.mavlink_connection(filename, planner_format=True,
+                                                    notimestamps=False,
+                                                    robust_parsing=False,
+                                                    dialect='ardupilotmega',
+                                                    zero_time_base=False)
+
+        # gives a priority for log types, will only use one at a time
+        formats = {
+            "GFLO": [0],
+            "RATE": [1],
+            "IMU": [2],
+        }
+
+        format = None
+        for fmt in log.formats.values():
+            if fmt.name in formats.keys():
+                if format == None or (formats[fmt.name] < formats[format]):
+                    format = fmt.name
+
+        self.variant = format
+
+        gyro_list = []
+        acc_list = []
+        while True:
+            m = log.recv_match(type=format)
+            if m is None:
+                break
+            m = m.to_dict()
+
+            if m['mavpackettype'] == 'GFLO':
+                gyro_list.append([m[x] for x in ["TimeUS","GyrX","GyrY","GyrZ"]])
+                acc_list.append([m[x] for x in ["TimeUS","AccX","AccY","AccY"]])
+
+            elif m['mavpackettype'] == 'RATE':
+                gyro_list.append([m[x] for x in ["TimeUS","R","P","Y"]])
+
+            elif m['mavpackettype'] == 'IMU':
+                if m["I"] == 0:
+                    # only use first IMU
+                    gyro_list.append([m[x] for x in ["TimeUS","GyrX","GyrY","GyrZ"]])
+                    acc_list.append([m[x] for x in ["TimeUS","AccX","AccY","AccY"]])
+
+
+        if len(gyro_list) == 0:
+            return False
+
+        gyroscale = 1
+        if format == 'RATE':
+            gyroscale = np.pi / 180
+
+        self.gyro = np.array(gyro_list)
+        self.gyro[:,0] *= 1/1000000
+        self.gyro[:,1:] *= gyroscale
+
+        if len(acc_list) > 0:
+            self.acc = np.array(acc_list)
+            self.acc[:,0] *= 1/1000000
+            self.acc[:,1:] *= 1/9.80665
+            has_acc = True
+
+        return True
+
 class TelemetryParserLog(GyrologReader):
 
     def __init__(self):
@@ -1417,6 +1521,7 @@ log_reader_classes = [GyroflowGyroLog,
                       Insta360Log,
                       GPMFLog,
                       ArdupilotLog,
+                      ArdupilotBinLog,
                       TelemetryParserLog]
 log_reader_names = [alg().name for alg in log_reader_classes]
 def print_available_log_types():
