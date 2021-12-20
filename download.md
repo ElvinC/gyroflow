@@ -23,7 +23,12 @@ Here are the downloads for the latest stable-ish release. If you want the latest
 * Bunch of bug fixes
 * [New video tutorial/update!](https://youtu.be/f4YD5pGmnxM)
 
-### Windows executable:
+### Windows executable (dev branch):
+Get the latest development builds with support for newer cameras such as the Runcam Split HD and other fun stuff:
+
+<a href="https://github.com/ElvinC/gyroflow/actions" class="btn btn--info btn--large">Dev builds</a>
+
+### Windows executable (0.3.0):
 Only works with Windows 8 and up.
 
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-win64.exe" class="btn btn--info btn--large">gyroflow-0.3.0-beta-win64.exe</a>
@@ -31,7 +36,6 @@ Only works with Windows 8 and up.
 Here's a version that should work with windows 7:
 
 <a href="https://github.com/ElvinC/gyroflow/releases/download/0.3.0-beta/gyroflow-0.3.0-beta-win7-64.exe" class="btn btn--info btn--large">gyroflow-0.3.0-beta-win7-64.exe</a>
-
 
 ### Mac executable:
 
