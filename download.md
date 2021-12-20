@@ -26,7 +26,7 @@ Here are the downloads for the latest stable-ish release. If you want the latest
 ### Windows executable (dev branch):
 Get the latest development builds with support for newer cameras such as the Runcam Split HD and other fun stuff:
 
-<a href="https://github.com/ElvinC/gyroflow/actions" class="btn btn--info btn--large">Dev builds</a>
+<a href="https://github.com/ElvinC/gyroflow/actions/workflows/main.yml" class="btn btn--info btn--large">Dev builds</a>
 
 ### Windows executable (0.3.0):
 Only works with Windows 8 and up.
