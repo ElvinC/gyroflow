@@ -27,7 +27,7 @@ jobs:
 
     - name: Package application
       run: |
-        pyinstaller --icon=src\media\icon.ico -F src\gyroflow.py
+        pyinstaller --icon=media\icon.ico -F gyroflow.py
         ren dist\gyroflow.exe gyroflow-dev.exe
 
     - uses: actions/upload-artifact@v2
