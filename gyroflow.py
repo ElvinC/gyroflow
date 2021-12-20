@@ -36,7 +36,7 @@ try:
 except:
     pass
 
-PARALLEL_SYNC = True
+PARALLEL_SYNC = False
 
 # https://en.wikipedia.org/wiki/List_of_digital_camera_brands
 cam_company_list = ["GoPro", "Runcam", "Insta360", "Caddx", "Foxeer", "DJI", "RED", "Canon", "Arri",
