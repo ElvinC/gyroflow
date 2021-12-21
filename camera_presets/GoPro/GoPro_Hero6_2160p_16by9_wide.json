@@ -1,11 +1,11 @@
 {
-    "name": "GoPro_Hero6__2160p 4/3 wide",
+    "name": "GoPro_Hero6__2160p 16/9 wide",
     "note": "",
     "calibrated_by": "JMRobles",
     "camera_brand": "GoPro",
     "camera_model": "Hero6",
     "lens_model": "",
-    "camera_setting": "2160p 4/3 wide",
+    "camera_setting": "2160p 16/9 wide",
     "calibrator_version": "0.3.0-beta/dev",
     "date": "2021-08-08",
     "calib_dimension": {
