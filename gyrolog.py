@@ -916,6 +916,119 @@ class RuncamData(GyrologReader):
         return True
 
 
+
+class CaddxData(GyrologReader):
+    def __init__(self):
+        super().__init__("Caddx CSV log")
+        self.filename_pattern = ".*\.csv"
+
+        self.variants = {
+            "Standard": [0]
+        }
+        self.variant = "Standard"
+
+        self.default_filter = 70
+        self.default_search_size = 4 # usually within +/- 1 second
+
+        self.post_init()
+
+
+    def check_log_type(self, filename):
+        fname = os.path.split(filename)[-1]
+        firstlines = ["time,x,y,z,ax,ay,az", "time,rx,ry,rz,ax,ay,az", "time,x,y,z"] # Different firmware versions
+        if self.filename_matches(fname):
+            # open and check first line
+            with open(filename, "r") as f:
+                firstline = f.readline().strip()
+                #print(firstline)
+                if firstline in firstlines:
+                    return True
+
+        return False
+
+    def guess_log_from_videofile(self, videofile):
+        path, fname = os.path.split(videofile)
+
+        # Runcam 5 Orange
+        pattern = re.compile("NORM(\d{4}).*\..*")
+
+        if pattern.match(fname):
+            self.variant = "Standard"
+            counter = int(pattern.match(fname).group(1))
+        else:
+            return False
+
+        logpath = videofile.rstrip(fname) + f"NORM{counter:04d}0001.CSV"
+        if os.path.isfile(logpath):
+            if self.check_log_type(logpath):
+                return logpath
+        
+        return False
+
+
+    def extract_log_internal(self, filename):
+
+        with open(filename) as csvfile:
+            next(csvfile)
+
+            lines = csvfile.readlines()
+
+            has_acc = len(lines[0].split(",")) == 7
+
+            data_list = []
+            acc_list = []
+            #gyroscale = 0.070 * np.pi/180 # plus minus 2000 dps 16 bit two's complement. 70 mdps/LSB per datasheet.
+            gyroscale = 500 / 2**15 * np.pi/180 # 500 dps
+            acc_scale = 2 / 2**15 # +/- 2 g
+
+            multiplier = (4 if "2000dps" in self.variant else (2 if "1000dps" in self.variant else 1))
+
+            for line in lines:
+                splitdata = [float(x) for x in line.split(",")]
+                t = splitdata[0]/1000                
+
+                gx = splitdata[1] * gyroscale * multiplier
+                gy = splitdata[2] * gyroscale * multiplier
+                gz = splitdata[3] * gyroscale * multiplier
+                # RC5
+                if self.variant=="Runcam 5 Orange":
+                    gx = splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = splitdata[2] * gyroscale
+                elif self.variant == "Standard":
+                    gx = -splitdata[3] * gyroscale
+                    gy = -splitdata[1] * gyroscale
+                    gz = splitdata[2] * gyroscale
+                if has_acc:
+                    ax = splitdata[4] * acc_scale
+                    ay = splitdata[5] * acc_scale
+                    az = splitdata[6] * acc_scale
+
+                    acc_list.append([t, ax, ay, az])
+
+                # accelerometer
+
+                # Z: roll
+                # X: yaw
+                # y: pitch
+
+                data_list.append([t, gx, gy, gz])
+
+        self.gyro = np.array(data_list)
+
+        # Filter spike glitches
+        if "1000dps" in self.variant:
+            self.gyro[:,2] = self.filter_spikes(self.gyro[:,2], 1000)
+    
+        #sosgyro = signal.butter(1, 8, "lowpass", fs=500, output="sos")
+
+        #self.gyro[:,1:4] = signal.sosfiltfilt(sosgyro, self.gyro[:,1:4], 0) # Filter along "vertical" time axis
+
+        if has_acc:
+            self.acc = np.array(acc_list)
+
+        return True
+
 class Insta360Log(GyrologReader):
     def __init__(self):
         super().__init__("Insta360 IMU metadata")
@@ -1414,6 +1527,7 @@ log_reader_classes = [GyroflowGyroLog,
                       BlackboxCSVData,
                       BlackboxRawData,
                       RuncamData,
+                      CaddxData,
                       Insta360Log,
                       GPMFLog,
                       ArdupilotLog,
