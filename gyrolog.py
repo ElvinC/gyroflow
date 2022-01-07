@@ -1333,10 +1333,10 @@ class ArdupilotBinLog(GyrologReader):
         self.variants = {
             "IMU": [20],
             "RATE": [20],
-            "GFLO": [20]
+            "VSTB": [20]
         }
 
-        self.variant = "GFLO"
+        self.variant = "VSTB"
         self.default_search_size = 10
 
         self.post_init()
@@ -1371,7 +1371,7 @@ class ArdupilotBinLog(GyrologReader):
 
         # gives a priority for log types, will only use one at a time
         formats = {
-            "GFLO": [0],
+            "VSTB": [0],
             "RATE": [1],
             "IMU": [2],
         }
@@ -1392,7 +1392,7 @@ class ArdupilotBinLog(GyrologReader):
                 break
             m = m.to_dict()
 
-            if m['mavpackettype'] == 'GFLO':
+            if m['mavpackettype'] == 'VSTB':
                 gyro_list.append([m[x] for x in ["TimeUS","GyrX","GyrY","GyrZ"]])
                 acc_list.append([m[x] for x in ["TimeUS","AccX","AccY","AccY"]])
 
