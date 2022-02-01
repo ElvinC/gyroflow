@@ -1,5 +1,5 @@
 ---
-title: "Gyroflow 0.3.0-beta is out!"
+title: "Redirecting to new URL..."
 layout: splash
 date: 2016-03-23T11:48:41-04:00
 header:
@@ -12,7 +12,7 @@ header:
     - label: "Download"
       url: "/download/"
       class: "btn--primary"
-excerpt: "Breaking news: The world's most tedious stabilization software could lose that title"
+excerpt: "Go to gyroflow.xyz"
 intro: 
   - excerpt: "Ever wanted to be smooth like [insert favourite FPV pilot] without the skills or budget? This tool probably won't do that, but it might do something..."
 feature_row:
