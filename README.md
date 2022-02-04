@@ -3,9 +3,13 @@
 ## Gyroflow has been totally revamped and rewritten with release v1.0.0! [Trailer/Video announcement](https://www.youtube.com/watch?v=w0yInv2a38Y)
 The new code is available at [https://github.com/gyroflow/gyroflow](https://github.com/gyroflow/gyroflow). This repository contains the legacy Python version of Gyroflow.
 
-## [In-depth video guide for 0.3.x-beta](https://youtu.be/f4YD5pGmnxM)
+Join the [Gyroflow Discord server](https://discord.gg/BBJ2UVAr2D) for discussion and support.
+
 
 ## [Website with more info](http://gyroflow.xyz/)
+
+
+## [In-depth video guide for 0.3.x-beta](https://youtu.be/f4YD5pGmnxM)
 
 A program built around Python, OpenCV, and PySide2 for video stabilization using gyroscope data.
 
@@ -26,7 +30,8 @@ Note: Try the dev branch for the newest features.
 ## Other things to check out:
 * [BlackboxToGPMF](https://github.com/Cleric-K/BlackboxToGPMF/tree/gui) by Cleric-K and Attilafustos. Tool for adding GoPro metadata and blackbox data to non-GoPro cameras for use with Reelsteady GO. Initial discussion [here](https://github.com/ElvinC/gyroflow/issues/1).
 * [blackbox2gpmf](https://github.com/jaromeyer/blackbox2gpmf) by Jaromeyer. Tool for adding blackbox gyro data to Hero 7 files for Reelsteady Go.
-* [Discord server](https://discord.gg/Rs4GBPm) maintained by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for discussion about gyroflow, BlackboxToGPMF, blackbox2gpmf and other related projects.
+* [Gyroflow Discord server](https://discord.gg/BBJ2UVAr2D)
+* [RSGoBlackbox Discord server](https://discord.gg/Rs4GBPm) maintained by [Nicecrash](https://www.youtube.com/channel/UCl3M972T7GbxnEucYHzZ05g) for discussion about gyroflow, BlackboxToGPMF, blackbox2gpmf and other related projects.
 * [FPV Stabilization Tools Facebook group](https://www.facebook.com/groups/fpvtools) maintained by Attilafustos.
 
 
