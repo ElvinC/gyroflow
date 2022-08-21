@@ -1,13 +1,10 @@
-# Gyroflow - Video stabilization using gyroscope data targeting drone footage
+# Warning: This is the legacy version, find the project here: https://github.com/gyroflow/gyroflow
 
-## Gyroflow has been totally revamped and rewritten with release v1.0.0! [Trailer/Video announcement](https://www.youtube.com/watch?v=w0yInv2a38Y)
-The new code is available at [https://github.com/gyroflow/gyroflow](https://github.com/gyroflow/gyroflow). This repository contains the legacy Python version of Gyroflow.
+# Gyroflow - Video stabilization using gyroscope data targeting drone footage
 
 Join the [Gyroflow Discord server](https://discord.gg/BBJ2UVAr2D) for discussion and support.
 
-
 ## [Website with more info](http://gyroflow.xyz/)
-
 
 ## [In-depth video guide for 0.3.x-beta](https://youtu.be/f4YD5pGmnxM)
 
